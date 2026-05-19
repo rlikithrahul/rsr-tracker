@@ -672,7 +672,7 @@ function renderDash() {
     <div class="stat-card stat-gold"><div class="stat-label">Active Projects</div><div class="stat-val">${pp.length}</div><div class="stat-sub">all contractors</div></div>
     <div class="stat-card stat-gold"><div class="stat-label">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">total released</div></div>
     <div class="stat-card stat-gold"><div class="stat-label">Interest Accruing</div><div class="stat-val int-val" style="font-size:17px">${fmt(intr)}</div><div class="stat-sub">@ 24% p.a.</div></div>
-    <div class="stat-card stat-gold"><div class="stat-label">Need Attention</div><div class="stat-val" style="color:${attn>0?'var(--red)":'var(--green)'}">${attn}</div><div class="stat-sub">caution or stop</div></div>`;
+    <div class="stat-card stat-gold"><div class="stat-label">Need Attention</div><div class="stat-val" style="color:${attn>0?'var(--red)':'var(--green)'}">${attn}</div><div class="stat-sub">caution or stop</div></div>`;
 
   if (!isConnected) {
     document.getElementById('dash-setup-banner').innerHTML=`
