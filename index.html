@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>RSR Constructions — Project Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -430,7 +430,7 @@ tr:hover td{background:var(--surface2)}
 // SUPABASE CONFIG — FILL IN AFTER SETUP
 // ═══════════════════════════════════════════════════
 const SUPABASE_URL = 'https://qflczjaugzaryfcfcqor.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_f-V4oHOA1iLJ2qwbwFCChw_3OjMlrvC';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmbGN6amF1Z3phcnlmY2ZjcW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzM1MDQsImV4cCI6MjA5NDc0OTUwNH0.IrBrqM-VSIBeOGUzBqjmZmEcKUseuJhIE3koCSNnc5g';
 const OWNER_PASSWORD_KEY = 'rsr_owner_password';
 
 let sb = null;
@@ -452,13 +452,11 @@ async function init() {
   appData = defaultState();
   if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     try {
-      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      const test = await sb.from('settings').select('*').limit(1);
-      if (test.error) throw test.error;
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       await loadFromDB();
       isConnected = true;
     } catch(e) {
-      console.error('Supabase error:', e);
+      console.error('Supabase connection failed:', e.message || e);
       loadLocal();
     }
   } else {
