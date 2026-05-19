@@ -430,7 +430,7 @@ tr:hover td{background:var(--surface2)}
 // SUPABASE CONFIG — FILL IN AFTER SETUP
 // ═══════════════════════════════════════════════════
 const SUPABASE_URL = 'https://qflczjaugzaryfcfcqor.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmbGN6amF1Z3phcnlmY2ZjcW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzM1MDQsImV4cCI6MjA5NDc0OTUwNH0.IrBrqM-VSIBeOGUzBqjmZmEcKUseuJhIE3koCSNnc5g';
+const SUPABASE_ANON_KEY = 'sb_publishable_f-V4oHOA1iLJ2qwbwFCChw_3OjMlrvC';
 const OWNER_PASSWORD_KEY = 'rsr_owner_password';
 
 let sb = null;
@@ -449,9 +449,12 @@ let isConnected = false;
 // ═══════════════════════════════════════════════════
 
 async function init() {
+  appData = defaultState();
   if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     try {
       sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const test = await sb.from('settings').select('*').limit(1);
+      if (test.error) throw test.error;
       await loadFromDB();
       isConnected = true;
     } catch(e) {
@@ -579,7 +582,7 @@ function showLoginErr(msg) {
 
 async function ownerLogin() {
   const pass = document.getElementById('owner-pass').value;
-  if (isConnected) await loadFromDB();
+  try { if (isConnected) await loadFromDB(); } catch(e) {}
   if (pass === appData.ownerPassword) {
     currentUser={role:'owner',name:'RSR Admin'};
     enterOwner();
@@ -591,7 +594,7 @@ async function ownerLogin() {
 async function contractorLogin() {
   const name = document.getElementById('cl-name').value.trim();
   const pass = document.getElementById('cl-pass').value;
-  if (isConnected) await loadFromDB();
+  try { if (isConnected) await loadFromDB(); } catch(e) {}
   const found = appData.contractors.find(c=>
     c.name.trim().toLowerCase()===name.toLowerCase() && c.password===pass
   );
