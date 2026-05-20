@@ -155,6 +155,8 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 </style>
 </head>
 <body>
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2744;color:#fff;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:all 0.3s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.3);white-space:nowrap"></div>
+<div id="save-spinner" style="position:fixed;top:70px;right:16px;background:rgba(26,39,68,.9);color:#fff;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;z-index:9998;display:none">💾 Saving…</div>
 
 <nav class="nav" id="main-nav" style="display:none">
   <div class="nav-logo">
@@ -336,6 +338,17 @@ let bqc = 0, atab = 0, dpid = null, rfpid = null, vpid = null;
 let photos = [];
 let dbOK = false;
 
+// Session persistence helpers
+function saveSession(user) {
+  try { sessionStorage.setItem('rsr_session', JSON.stringify(user)); } catch(e){}
+}
+function loadSession() {
+  try { const s=sessionStorage.getItem('rsr_session'); return s?JSON.parse(s):null; } catch(e){return null;} 
+}
+function clearSession() {
+  try { sessionStorage.removeItem('rsr_session'); } catch(e){}
+}
+
 function mkDefault() {
   return { contractors:[], projects:[], ownerPw:'RSR@2024' };
 }
@@ -388,8 +401,16 @@ async function dbSaveCont(c) {
 
 async function dbSaveProj(p) {
   if (!dbOK) { saveLocal(); return; }
-  try { await sbReq('projects', 'POST', {id:p.id, data:p, created_at:new Date().toISOString()}); }
-  catch(e) { console.error('Save proj:', e.message); saveLocal(); }
+  showSpinner(true);
+  try {
+    await sbReq('projects', 'POST', {id:p.id, data:p, created_at:new Date().toISOString()});
+    showSpinner(false);
+  } catch(e) {
+    console.error('Save proj:', e.message);
+    showSpinner(false);
+    saveLocal();
+    toast('Save failed — check connection','error');
+  }
 }
 
 async function dbSavePw(val) {
@@ -412,9 +433,25 @@ async function init() {
   } else {
     loadLocal();
   }
+  // Restore session after data is loaded
+  const saved = loadSession();
+  if (saved) {
+    CU = saved;
+    if (CU.role === 'owner') enterOwner();
+    else enterCont();
+  }
 }
 
 // UTILS
+function toast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=type==='error'?'#c0392b':type==='ok'?'#1a7a3a':'#1a2744';
+  el.style.opacity='1';el.style.transform='translateX(-50%) translateY(0)';
+  setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(-50%) translateY(20px)';},2800);
+}
+function showSpinner(v){document.getElementById('save-spinner').style.display=v?'block':'none';}
+
 const fmt = n => '₹' + Math.round(n).toLocaleString('en-IN');
 const pct = n => (Math.round(n*10)/10) + '%';
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -469,7 +506,7 @@ function selRole(r){
 async function ownerLogin(){
   const pw=document.getElementById('owner-pw').value;
   if(dbOK){ try{ await loadDB(); }catch(e){} }
-  if(pw===D.ownerPw){ CU={role:'owner',name:'RSR Admin'}; enterOwner(); }
+  if(pw===D.ownerPw){ CU={role:'owner',name:'RSR Admin'}; saveSession(CU); enterOwner(); }
   else showErr('Incorrect password.');
 }
 
@@ -478,12 +515,12 @@ async function contLogin(){
   const pw=document.getElementById('cl-pw').value;
   if(dbOK){ try{ await loadDB(); }catch(e){} }
   const f=D.contractors.find(c=>c.name.trim().toLowerCase()===name.toLowerCase()&&c.password===pw);
-  if(f){ CU={role:'contractor',id:f.id,name:f.name}; enterCont(); }
+  if(f){ CU={role:'contractor',id:f.id,name:f.name}; saveSession(CU); enterCont(); }
   else showErr('Name or password incorrect. Contact RSR office.');
 }
 
 function logout(){
-  CU=null; SP('page-login');
+  CU=null; clearSession(); SP('page-login');
   document.getElementById('main-nav').style.display='none';
   document.getElementById('bnav').style.display='none';
   ['owner-pw','cl-name','cl-pw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -617,21 +654,39 @@ function renderDetail(id){
   const rel=totRel(p),max=maxF(p),el=eligR(p),hw=hdroom(p),s=pStat(p);
   const lv=(p.verifications||[]).slice(-1)[0];
   const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed);
+  const allUpdates=(p.contractorUpdates||[]).slice().reverse();
   let ah='';
   if(s==='red') ah=`<div class="alert al-red">🔴 Hard Stop — Do NOT release more funds until more work is verified.</div>`;
   else if(s==='amber') ah=`<div class="alert al-amber">🟡 Caution — Verify site before next release.</div>`;
   else ah=`<div class="alert al-green">🟢 On Track — Available headroom: ${fmt(hw)}</div>`;
+
+  // Pending (unreviewed) updates block
   const pendHtml=pend.length?`<div class="card" style="border-color:var(--navy);border-top:3px solid var(--gold)">
     <div class="st" style="color:var(--navy)">📸 Contractor Updates — Needs Review (${pend.length})</div>
     ${pend.map(u=>`<div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:8px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
-        <button class="btn btn-sm btn-gold" onclick="markRev('${id}','${u.id}')">✓ Reviewed</button>
+        <button class="btn btn-sm btn-gold" onclick="markRev('${id}','${u.id}')">✓ Mark Reviewed</button>
       </div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${u.notes||'No notes'}</div>
       ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--navy)">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
       ${u.photos&&u.photos.length?`<div class="pgrid">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.data}')"><img src="${ph.data}" alt="${ph.name}"><div class="pcap">${ph.name}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos</div>'}
+      <div style="margin-top:10px;font-size:12px;color:var(--text3)">💡 After reviewing, click "📋 Record Verification" above to update the official verified quantities.</div>
     </div>`).join('')}</div>`:'';
+
+  // All updates log (permanent — includes reviewed ones)
+  const allUpdHtml=allUpdates.length?`<div class="card"><div class="st">All Site Updates (${allUpdates.length} total)</div>
+    ${allUpdates.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
+        <span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed':'⏳ Pending'}</span>
+      </div>
+      ${u.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}
+      ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:6px;font-weight:600;color:var(--navy)">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
+      ${u.photos&&u.photos.length?`<div class="pgrid" style="grid-template-columns:repeat(4,1fr)">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.data}')"><img src="${ph.data}" alt="${ph.name}"><div class="pcap">${ph.name}</div></div>`).join('')}</div>`:''}
+    </div>`).join('')}
+  </div>`:'';
+
   const brows=(p.boq||[]).map(item=>{
     const vd=lv?(lv.items[item.id]||0):0;
     const vp=item.qty?Math.round(vd/item.qty*100):0;
@@ -668,8 +723,10 @@ function renderDetail(id){
     </div>
     <div class="card"><div class="st">BOQ & Verification ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3)">— Last: ${lv.date}</span>`:''}</div>
       <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Unit</th><th style="text-align:center">BOQ Qty</th><th style="text-align:center">Verified</th><th>Progress</th><th style="text-align:right">Value</th></tr></thead><tbody>${brows}</tbody></table></div>
+      ${!lv?`<div class="alert al-amber" style="margin-top:12px">⚠️ No verification recorded yet. Use "📋 Record Verification" to update verified quantities — this controls the eligible funding.</div>`:''}
     </div>
-    <div class="card"><div class="st">Verification Log</div>${verLog}</div>`;
+    <div class="card"><div class="st">Verification Log</div>${verLog}</div>
+    ${allUpdHtml}`;
 }
 
 function markRev(pid,uid_val){
@@ -709,7 +766,7 @@ function saveVer(){
   (p.boq||[]).forEach(item=>{const v=parseFloat(document.getElementById('vi-'+item.id)?.value)||0;items[item.id]=Math.min(v,item.qty);});
   if(!p.verifications) p.verifications=[];
   p.verifications.push({id:uid(),date,notes,verifiedBy,photos:ph,items});
-  dbSaveProj(p).then(()=>{CM('modal-ver');renderDetail(vpid);});
+  dbSaveProj(p).then(()=>{CM('modal-ver');renderDetail(vpid);toast('✅ Verification saved — BOQ progress updated','ok');});
 }
 
 // RELEASE FUNDS
@@ -751,7 +808,7 @@ function confirmRF(){
   if(amt>hw+500){alert('Amount exceeds headroom '+fmt(hw));return;}
   if(!p.releases) p.releases=[];
   p.releases.push({id:uid(),date,amount:amt,notes,method});
-  dbSaveProj(p).then(()=>{CM('modal-rf');if(dpid===rfpid)renderDetail(rfpid);else renderDash();});
+  dbSaveProj(p).then(()=>{CM('modal-rf');toast('✅ Funds released: '+fmt(amt),'ok');if(dpid===rfpid)renderDetail(rfpid);else renderDash();});
 }
 
 // CONTRACTORS
@@ -788,6 +845,7 @@ function saveContractor(){
     CM('modal-nc');
     ['nc-name','nc-phone','nc-pw','nc-notes'].forEach(id=>document.getElementById(id).value='');
     renderConts();
+    toast('✅ Contractor added','ok');
   });
 }
 
@@ -854,7 +912,7 @@ function saveProject(){
     boq,verifications:[],releases:[],contractorUpdates:[],
     createdAt:new Date().toISOString()};
   D.projects.push(proj);
-  dbSaveProj(proj).then(()=>{CM('modal-np');ownerTab(0);});
+  dbSaveProj(proj).then(()=>{CM('modal-np');toast('✅ Project created','ok');ownerTab(0);});
 }
 
 // PASSWORD
@@ -914,11 +972,12 @@ function cOpenProj(id){
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Progress shown is as physically verified by RSR, not your reported quantities.</div>
     </div>
     <div class="card"><div class="st">Your Previous Updates</div>
-      ${myUpd.length?myUpd.map(u=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between"><span style="font-weight:700">${u.date}</span><span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed':'⏳ Pending'}</span></div>
-        <div style="font-size:13px;color:var(--text2);margin-top:4px">${u.notes||'—'}</div>
-        ${u.photos&&u.photos.length?`<div style="font-size:12px;color:var(--text3);margin-top:4px">📷 ${u.photos.length} photo(s)</div>`:''}
-      </div>`).join(''):'<div style="font-size:13px;color:var(--text3)">No updates yet.</div>'}
+      ${myUpd.length?myUpd.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-weight:700">${u.date}</span><span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed by RSR':'⏳ Pending review'}</span></div>
+        ${u.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}
+        ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;color:var(--navy);font-weight:600;margin-bottom:6px">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
+        ${u.photos&&u.photos.length?`<div class="pgrid" style="grid-template-columns:repeat(3,1fr)">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.data}')"><img src="${ph.data}" alt="${ph.name}"><div class="pcap">${ph.name}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos attached</div>'}
+      </div>`).join(''):'<div style="font-size:13px;color:var(--text3)">No updates yet. Tap the button above to submit your first update.</div>'}
     </div>`;
 }
 
@@ -956,11 +1015,27 @@ function cOpenUpd(id){
 
 function handlePhotos(evt,pid){
   const files=Array.from(evt.target.files);
-  let done=0;
-  files.forEach(file=>{
-    if(file.size>5*1024*1024){alert(file.name+' is too large. Max 5MB.');return;}
+  const MAX=5; // max 5 photos
+  if(photos.length+files.length>MAX){alert('Maximum 5 photos per update.');return;}
+  files.slice(0,MAX-photos.length).forEach(file=>{
+    if(file.size>15*1024*1024){alert(file.name+' is too large. Max 15MB.');return;}
     const r=new FileReader();
-    r.onload=e=>{photos.push({name:file.name,data:e.target.result});done++;if(done===files.length)renderPhotoPreview();};
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        // Resize to max 600px wide for fast uploads
+        const maxW=600;
+        const scale=img.width>maxW?maxW/img.width:1;
+        canvas.width=Math.round(img.width*scale);
+        canvas.height=Math.round(img.height*scale);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        const compressed=canvas.toDataURL('image/jpeg',0.6); // 60% quality JPEG
+        photos.push({name:file.name,data:compressed});
+        renderPhotoPreview();
+      };
+      img.src=e.target.result;
+    };
     r.readAsDataURL(file);
   });
 }
@@ -979,7 +1054,12 @@ function submitUpd(pid){
   (p.boq||[]).forEach(item=>{const v=parseFloat(document.getElementById('cu-q-'+item.id)?.value)||0;if(v>0)quantities[item.id]=Math.min(v,item.qty);});
   if(!p.contractorUpdates) p.contractorUpdates=[];
   p.contractorUpdates.push({id:uid(),date,notes,quantities,photos:photos.map(ph=>({name:ph.name,data:ph.data})),reviewed:false,submittedBy:CU.name,contractorId:CU.id});
-  dbSaveProj(p).then(()=>{document.getElementById('cu-ok').classList.remove('hidden');photos=[];setTimeout(()=>cOpenProj(pid),1800);});
+  dbSaveProj(p).then(()=>{
+    document.getElementById('cu-ok').classList.remove('hidden');
+    photos=[];
+    toast('✅ Update submitted to RSR!','ok');
+    setTimeout(()=>cOpenProj(pid),1800);
+  });
 }
 
 function lightbox(src){
