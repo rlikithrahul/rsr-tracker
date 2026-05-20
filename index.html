@@ -827,7 +827,7 @@ function addBOQRow(){
   const id='b'+bqc;
   const row=document.createElement('div');
   row.className='brow'; row.id='br-'+id;
-  row.innerHTML=`<input type="text" id="bd-${id}" placeholder="Item description"><input type="text" id="bu-${id}" placeholder="Unit" value="Cum"><input type="number" id="bq-${id}" placeholder="Qty" step="0.1"><input type="number" id="br-${id}" placeholder="Rate ₹" step="0.01"><button type="button" class="bdel" onclick="document.getElementById('br-${id}').remove()">✕</button>`;
+  row.innerHTML=`<input type="text" id="bd-${id}" placeholder="Item description"><input type="text" id="bu-${id}" placeholder="Unit" value="Cum"><input type="number" id="bq-${id}" placeholder="Qty" step="0.1"><input type="number" id="brate-${id}" placeholder="Rate ₹" step="0.01"><button type="button" class="bdel" onclick="document.getElementById('br-${id}').remove()">✕</button>`;
   document.getElementById('np-boq').appendChild(row);
 }
 
@@ -841,7 +841,7 @@ function saveProject(){
     const desc=document.getElementById('bd-'+rid)?.value?.trim();
     const unit=document.getElementById('bu-'+rid)?.value?.trim()||'Nos';
     const qty=parseFloat(document.getElementById('bq-'+rid)?.value)||0;
-    const rate=parseFloat(document.getElementById('br-'+rid)?.value)||0;
+    const rate=parseFloat(document.getElementById('brate-'+rid)?.value)||0;
     if(desc&&qty&&rate) boq.push({id:uid(),desc,unit,qty,rate});
   });
   if(!boq.length){alert('Add at least one BOQ item with qty and rate.');return;}
