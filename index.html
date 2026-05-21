@@ -632,9 +632,15 @@ function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }
 function totRel(p){ return (p.releases||[]).reduce((s,r)=>s+r.amount,0); }
 function verPct(p){
+  // Based on RSR physical verification only — controls funding
   const lv=(p.verifications||[]).slice(-1)[0]; if(!lv) return 0;
   const tv=(p.boq||[]).reduce((s,i)=>s+i.qty*i.rate,0); if(!tv) return 0;
   return (p.boq||[]).reduce((s,i)=>s+(lv.items[i.id]||0)*i.rate,0)/tv*100;
+}
+function reportedPct(p){
+  // Based on contractor-reported quantities (from reviewed updates) — for display only
+  const tv=(p.boq||[]).reduce((s,i)=>s+i.qty*i.rate,0); if(!tv) return 0;
+  return (p.boq||[]).reduce((s,i)=>s+((p.reportedItems||{})[i.id]||0)*i.rate,0)/tv*100;
 }
 function eligR(p){ return Math.min(verPct(p)/100*maxF(p),maxF(p)); }
 function hdroom(p){ return Math.max(0,eligR(p)-totRel(p)); }
@@ -782,9 +788,10 @@ function renderDash(){
       </div>
       <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
         <div>
-          <div class="prog"><div class="prog-lbl"><span>Work verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
+          <div class="prog"><div class="prog-lbl"><span style="color:var(--amber)">Contractor reported</span><span style="color:var(--amber)">${pct(reportedPct(p))}</span></div><div class="prog-track" style="background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${Math.min(reportedPct(p),100)}%"></div></div></div>
+          <div class="prog"><div class="prog-lbl"><span>RSR verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
           <div class="prog"><div class="prog-lbl"><span>Cap used (${fmt(rel)} / ${fmt(max)})</span><span>${pct(rp)}</span></div><div class="prog-track"><div class="prog-fill ${s==='red'?'pf-red':s==='amber'?'pf-amber':'pf-green'}" style="width:${rp}%"></div></div></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last verified: '+lv.date:'No verification yet'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last site verified: '+lv.date:'No site verification yet'}</div>
         </div>
         <div style="font-size:12px">
           <div class="fr" style="font-size:12px"><span class="fl">Agreement</span><span class="fv">${fmt(agAmt(p))}</span></div>
@@ -875,13 +882,38 @@ function renderDetail(id){
   </div>`:'';
 
   const brows=(p.boq||[]).map(item=>{
-    const vd=lv?(lv.items[item.id]||0):0;
-    const vp=item.qty?Math.round(vd/item.qty*100):0;
-    return `<tr><td>${item.desc}</td><td style="text-align:center">${item.unit}</td>
+    const rd = (p.reportedItems||{})[item.id]||0; // contractor reported (after review)
+    const vd = lv?(lv.items[item.id]||0):0;        // RSR physically verified
+    const rpct = item.qty?Math.round(rd/item.qty*100):0;
+    const vpct = item.qty?Math.round(vd/item.qty*100):0;
+    return `<tr>
+      <td><strong>${item.desc}</strong></td>
+      <td style="text-align:center">${item.unit}</td>
       <td style="text-align:center;font-weight:600">${item.qty}</td>
-      <td style="text-align:center;font-weight:700;color:var(--navy)">${vd}</td>
-      <td style="min-width:110px"><div style="display:flex;align-items:center;gap:6px"><div class="prog-track" style="flex:1;height:5px"><div class="prog-fill ${vp>=90?'pf-green':vp>=50?'pf-amber':'pf-red'}" style="width:${vp}%"></div></div><span style="font-size:11px;font-weight:700;min-width:32px;text-align:right">${vp}%</span></div></td>
-      <td style="text-align:right;font-weight:700">${fmt(item.qty*item.rate)}</td></tr>`;}).join('');
+      <td style="text-align:center">
+        <div style="font-weight:700;color:var(--amber)">${rd}</div>
+        <div style="font-size:10px;color:var(--amber);margin-top:1px">${rpct}%</div>
+      </td>
+      <td style="text-align:center">
+        <div style="font-weight:700;color:var(--navy)">${vd}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:1px">${vpct}%</div>
+      </td>
+      <td style="min-width:120px">
+        <div style="margin-bottom:3px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="font-size:9px;color:var(--amber);width:52px">Reported</div>
+            <div class="prog-track" style="flex:1;height:4px;background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${rpct}%"></div></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="font-size:9px;color:var(--navy);width:52px">Verified</div>
+            <div class="prog-track" style="flex:1;height:4px"><div class="prog-fill ${vpct>=90?'pf-green':vpct>=50?'pf-amber':'pf-red'}" style="width:${vpct}%"></div></div>
+          </div>
+        </div>
+      </td>
+      <td style="text-align:right;font-weight:700">${fmt(item.qty*item.rate)}</td>
+    </tr>`;}).join('');
   const relLog=(p.releases||[]).slice().reverse().map(r=>`<div class="fr"><span class="fl">${r.date}<br><span style="font-size:11px">${r.notes||''} · ${r.method||''} ${r.ref?'· Ref: '+r.ref:''}</span></span><span class="fv">${fmt(r.amount)}</span></div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No releases yet.</div>';
   const verLog=(p.verifications||[]).slice().reverse().map(v=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-weight:700;font-size:13px">${v.date}</span><span style="font-size:12px;color:var(--text3)">by ${v.verifiedBy||'owner'}</span></div><div style="font-size:13px;color:var(--text2)">${v.notes||'—'}</div></div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
   document.getElementById('detail-wrap').innerHTML=`
@@ -908,9 +940,26 @@ function renderDetail(id){
       </div>
       <div class="card"><div class="st">Fund Releases</div>${relLog}</div>
     </div>
-    <div class="card"><div class="st">BOQ & Verification ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3)">— Last: ${lv.date}</span>`:''}</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Unit</th><th style="text-align:center">BOQ Qty</th><th style="text-align:center">Verified</th><th>Progress</th><th style="text-align:right">Value</th></tr></thead><tbody>${brows}</tbody></table></div>
-      ${!lv?`<div class="alert al-amber" style="margin-top:12px">⚠️ No verification recorded yet. Click "📋 Record Verification" above after reviewing the contractor's update — this is what updates the verified quantities and unlocks more funding.</div>`:''}
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="st" style="margin:0;border:none;padding:0">BOQ Progress ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3);font-size:11px">— Last verified: ${lv.date}</span>`:''}</div>
+        <div style="display:flex;gap:12px;font-size:11px;font-weight:600">
+          <span style="color:var(--amber)">🟡 Contractor Reported</span>
+          <span style="color:var(--navy)">🔵 RSR Verified</span>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Item</th><th>Unit</th>
+        <th style="text-align:center">BOQ Qty</th>
+        <th style="text-align:center;color:var(--amber)">Reported</th>
+        <th style="text-align:center;color:var(--navy)">RSR Verified</th>
+        <th>Progress</th>
+        <th style="text-align:right">Value</th>
+      </tr></thead><tbody>${brows}</tbody></table></div>
+      <div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">
+        <strong style="color:var(--amber)">Reported</strong> = quantities accepted when you click "Mark Reviewed" on contractor updates.&nbsp;&nbsp;
+        <strong style="color:var(--navy)">RSR Verified</strong> = quantities you physically confirmed on site — controls funding eligibility.
+      </div>
     </div>
     <div class="card"><div class="st">Verification Log</div>${verLog}</div>
     ${allUpdHtml}`;
@@ -919,11 +968,21 @@ function renderDetail(id){
 async function markRev(pid,uid_val){
   const p=GP(pid); if(!p)return;
   const u=(p.contractorUpdates||[]).find(x=>x.id===uid_val);
-  if(u) u.reviewed=true;
+  if(!u) return;
+  u.reviewed=true;
+  // Update reported quantities — take the maximum of existing reported and this update's quantities
+  // (since contractor reports cumulative, we always take their latest claim)
+  if(!p.reportedItems) p.reportedItems={};
+  (p.boq||[]).forEach(item=>{
+    const claimed = u.quantities?.[item.id]||0;
+    const existing = p.reportedItems[item.id]||0;
+    // Take the higher of the two (cumulative reporting — can only go up)
+    p.reportedItems[item.id] = Math.max(claimed, existing);
+  });
   try {
     await saveProjectDB(p);
     renderDetail(pid);
-    toast('✓ Marked reviewed','ok');
+    toast('✓ Reviewed — reported quantities updated','ok');
   } catch(e){ toast('Save failed','error'); }
 }
 
@@ -1197,11 +1256,21 @@ async function cOpenProj(id){
     <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:16px" onclick="cOpenUpd('${id}')">
       📸 Update Progress + Upload Photos
     </button>
-    <div class="card"><div class="st">Work Status (RSR Verified)</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Total</th><th>Verified</th><th>Progress</th></tr></thead><tbody>
-      ${(p.boq||[]).map(item=>{const vd=lv?(lv.items[item.id]||0):0;const vp=item.qty?Math.round(vd/item.qty*100):0;return`<tr><td>${item.desc}</td><td style="text-align:center">${item.qty} ${item.unit}</td><td style="text-align:center;font-weight:700;color:var(--navy)">${vd} ${item.unit}</td><td><div style="display:flex;align-items:center;gap:6px"><div class="prog-track" style="flex:1;height:5px"><div class="prog-fill pf-navy" style="width:${vp}%"></div></div><span style="font-size:11px;font-weight:700">${vp}%</span></div></td></tr>`;}).join('')}
+    <div class="card"><div class="st">Work Status</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Total</th><th style="color:var(--amber)">You Reported</th><th style="color:var(--navy)">RSR Verified</th><th>Progress</th></tr></thead><tbody>
+      ${(p.boq||[]).map(item=>{
+        const rd=(p.reportedItems||{})[item.id]||0;
+        const vd=lv?(lv.items[item.id]||0):0;
+        const vpct=item.qty?Math.round(vd/item.qty*100):0;
+        return`<tr>
+          <td>${item.desc}</td>
+          <td style="text-align:center">${item.qty} ${item.unit}</td>
+          <td style="text-align:center;font-weight:700;color:var(--amber)">${rd} ${item.unit}</td>
+          <td style="text-align:center;font-weight:700;color:var(--navy)">${vd} ${item.unit}</td>
+          <td><div style="display:flex;align-items:center;gap:6px"><div class="prog-track" style="flex:1;height:5px"><div class="prog-fill pf-navy" style="width:${vpct}%"></div></div><span style="font-size:11px;font-weight:700">${vpct}%</span></div></td>
+        </tr>`;}).join('')}
       </tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Progress shown is as physically verified by RSR, not your reported quantities.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px"><span style="color:var(--amber);font-weight:600">You Reported</span> = quantities RSR has accepted from your updates. &nbsp;<span style="color:var(--navy);font-weight:600">RSR Verified</span> = physically confirmed on site — controls your funding.</div>
     </div>
     <div class="card"><div class="st">Your Previous Updates</div>
       ${myUpd.length?myUpd.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
