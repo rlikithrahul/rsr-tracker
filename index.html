@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<meta name="theme-color" content="#1a2744">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RSR Tracker">
+<link rel="manifest" id="pwa-manifest">
 <title>RSR Constructions</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -20,23 +25,36 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* NAV */
-.nav{background:var(--navy);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.nav-logo{display:flex;align-items:center;gap:10px}
-.nav-logo img{height:36px;width:36px;border-radius:50%;border:2px solid var(--gold);object-fit:cover}
-.nav-logo-text{font-size:16px;font-weight:700;color:#fff}.nav-logo-text span{color:var(--gold)}
-.nav-right{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
-.nav-role{background:rgba(201,168,76,.2);color:var(--gold);border:1px solid rgba(201,168,76,.4);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
-.nav-uname{color:rgba(255,255,255,.8);font-size:13px;font-weight:500}
+.nav{background:var(--navy);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);overflow:hidden}
+.nav-logo{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.nav-logo-circle{height:32px;width:32px;border-radius:50%;border:2px solid var(--gold);background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231a2744%22/><text x=%2250%22 y=%2258%22 font-size=%2228%22 fill=%22%23c9a84c%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-weight=%22900%22>RSR</text></svg>') center/cover;flex-shrink:0}
+.nav-logo-text{font-size:15px;font-weight:700;color:#fff;white-space:nowrap}.nav-logo-text span{color:var(--gold)}
+.nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.nav-role{background:rgba(201,168,76,.2);color:var(--gold);border:1px solid rgba(201,168,76,.4);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.nav-uname{color:rgba(255,255,255,.8);font-size:12px;font-weight:500;white-space:nowrap}
 .nav-links{display:flex;gap:2px}
-.nav-link{padding:6px 12px;border-radius:var(--rs);font-size:13px;font-weight:500;cursor:pointer;color:rgba(255,255,255,.6);transition:all .15s;white-space:nowrap}
+.nav-link{padding:6px 10px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;color:rgba(255,255,255,.6);transition:all .15s;white-space:nowrap;background:none;border:none;font-family:'Inter',sans-serif}
 .nav-link:hover{color:#fff;background:rgba(255,255,255,.1)}
 .nav-link.active{color:var(--gold);background:rgba(201,168,76,.15)}
-.btn-out{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);padding:5px 12px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-out{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.9);padding:5px 10px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0}
 .btn-out:hover{background:rgba(255,255,255,.2)}
-.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:1px solid rgba(255,255,255,.1);z-index:100;padding:6px 0 10px}
-@media(max-width:640px){.bnav{display:flex}.nav-links{display:none}.wrap{padding-bottom:75px}}
-.bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:rgba(255,255,255,.4);font-size:10px;font-weight:500;padding:3px 0;background:none;border:none;font-family:'Inter',sans-serif}
-.bn.active{color:var(--gold)}.bn-icon{font-size:20px;line-height:1}
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:1px solid rgba(255,255,255,.1);z-index:100;padding:6px 0 env(safe-area-inset-bottom,8px)}
+@media(max-width:640px){
+  .bnav{display:flex}
+  .nav-links{display:none}
+  .nav-uname{display:none}
+  .wrap{padding-bottom:80px}
+  .nav{padding:0 10px}
+  .frow{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .card{padding:14px}
+}
+@media(max-width:400px){
+  .nav-logo-text{font-size:13px}
+  .nav-role{font-size:10px;padding:2px 6px}
+}
+.bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:rgba(255,255,255,.4);font-size:10px;font-weight:500;padding:4px 0;background:none;border:none;font-family:'Inter',sans-serif}
+.bn.active{color:var(--gold)}.bn-icon{font-size:22px;line-height:1}
 
 /* LOGIN */
 .login-bg{min-height:100vh;background:var(--navy);display:flex;align-items:center;justify-content:center;padding:20px}
@@ -142,12 +160,39 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
 /* PHOTOS */
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+@media(max-width:480px){.pgrid{grid-template-columns:repeat(2,1fr)}}
 .pitem{aspect-ratio:4/3;border-radius:var(--rs);overflow:hidden;background:var(--surface2);border:1px solid var(--border);position:relative;cursor:pointer}
 .pitem img{width:100%;height:100%;object-fit:cover}
-.pitem.loading{display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px}
-.pcap{position:absolute;bottom:0;left:0;right:0;background:rgba(26,39,68,.7);color:#fff;font-size:10px;padding:4px 6px}
+.pcap{position:absolute;bottom:0;left:0;right:0;background:rgba(26,39,68,.75);color:#fff;font-size:9px;padding:3px 5px;line-height:1.3}
 .padd{aspect-ratio:4/3;border-radius:var(--rs);border:2px dashed var(--border);background:var(--surface2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;gap:4px}
-.padd:hover{border-color:var(--gold);color:#7a5200}.padd-icon{font-size:26px}
+.padd:hover,.padd:active{border-color:var(--gold);color:#7a5200}.padd-icon{font-size:26px}
+
+/* GPS TAG */
+.gps-tag{font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;margin-top:4px;display:inline-flex;align-items:center;gap:4px}
+.gps-tag.got{color:var(--green);border-color:#b8dfc0;background:var(--green-bg)}
+.gps-tag.fail{color:var(--amber);border-color:#f5d5a0;background:var(--amber-bg)}
+
+/* PHOTO REQUIRED INDICATOR */
+.photo-req{background:var(--red-bg);border:1px solid #f0bdb8;border-radius:var(--rs);padding:10px 14px;font-size:13px;color:var(--red);font-weight:600;margin-bottom:10px;display:none}
+.photo-req.show{display:block}
+
+/* MOBILE TOUCH IMPROVEMENTS */
+@media(max-width:640px){
+  .btn{padding:10px 16px;font-size:13px}
+  .btn-full{padding:14px;font-size:15px}
+  .vinput{width:75px;font-size:14px}
+  .vrow{gap:6px}
+  .ppill{padding:14px}
+  .card-hdr{flex-direction:column;gap:10px}
+  .card-acts{width:100%;justify-content:flex-start}
+  table{font-size:12px}
+  th,td{padding:8px 6px}
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:12px}
+  .stat-val{font-size:18px}
+  .modal-footer-mobile{flex-direction:column}
+  .modal-footer-mobile .btn{width:100%;justify-content:center}
+}
 
 /* MISC */
 .empty{text-align:center;padding:48px 20px}
@@ -172,7 +217,29 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 .busy.show{display:flex}
 .busy-sp{width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite}
 
-.pw{position:relative}.pw input{padding-right:40px}
+./* DAYBOOK CALENDAR */
+.cal-wrap{margin-bottom:0}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-title{font-size:16px;font-weight:700;color:var(--navy)}
+.cal-nav{display:flex;gap:6px}
+.cal-nav button{background:none;border:1px solid var(--border);border-radius:var(--rs);padding:5px 12px;cursor:pointer;font-size:14px;color:var(--text2)}
+.cal-nav button:hover{background:var(--surface2);color:var(--navy)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day-name{text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;padding:4px 0}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;font-weight:600;cursor:default;position:relative;transition:transform .1s}
+.cal-day.empty{background:transparent}
+.cal-day.future{background:var(--surface2);color:var(--text3);font-weight:400}
+.cal-day.today-marker{outline:2px solid var(--navy);outline-offset:1px}
+.cal-day.uploaded{background:#eaf5ee;color:#1a7a3a;cursor:pointer}
+.cal-day.uploaded:hover{transform:scale(1.1)}
+.cal-day.missing{background:#fdf0ee;color:#c0392b;cursor:pointer}
+.cal-day.missing:hover{transform:scale(1.08)}
+.cal-day.no-data{background:var(--surface2);color:var(--text3)}
+.cal-legend{display:flex;gap:16px;margin-top:10px;font-size:12px;flex-wrap:wrap}
+.cal-legend-item{display:flex;align-items:center;gap:6px}
+.cal-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+pw{position:relative}.pw input{padding-right:40px}
 .pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)}
 
 /* ACTION MENU (3-dot) */
@@ -218,13 +285,13 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 <!-- TOP NAV (hidden until logged in) -->
 <nav class="nav" id="main-nav" style="display:none">
   <div class="nav-logo">
-    <div style="height:36px;width:36px;border-radius:50%;border:2px solid var(--gold);background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231a2744%22/><text x=%2250%22 y=%2258%22 font-size=%2228%22 fill=%22%23c9a84c%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-weight=%22900%22>RSR</text></svg>') center/cover"></div>
+    <div class="nav-logo-circle"></div>
     <span class="nav-logo-text">RSR <span>Constructions</span></span>
   </div>
   <div class="nav-right">
     <div class="nav-links" id="nav-links"></div>
-    <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()" title="Refresh data">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+    <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()" title="Refresh">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
     </button>
     <span class="nav-role" id="nav-role">Owner</span>
     <span class="nav-uname" id="nav-uname"></span>
@@ -237,7 +304,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   <button class="bn active" onclick="ownerTab(0)"><div class="bn-icon">📊</div><div>Dashboard</div></button>
   <button class="bn" onclick="ownerTab(1)"><div class="bn-icon">🏗️</div><div>Projects</div></button>
   <button class="bn" onclick="ownerTab(2)"><div class="bn-icon">👷</div><div>Contractors</div></button>
-  <button class="bn" onclick="ownerTab(3)"><div class="bn-icon">💰</div><div>Funds</div></button>
+  <button class="bn" onclick="ownerTab(3)"><div class="bn-icon">📂</div><div>Tally</div></button>
 </nav>
 
 <!-- LOGIN PAGE -->
@@ -285,7 +352,10 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
     <!-- Dashboard tab -->
     <div class="osec" id="sec-dash">
       <div class="pg-hdr"><div class="pg-title">Dashboard</div>
-        <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="exportAllData()" title="Export all project and finance data to Excel">📥 Export</button>
+          <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+        </div>
       </div>
       <div id="dash-banner"></div>
       <div class="stats" id="dash-stats"></div>
@@ -312,8 +382,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
     <!-- Funds tab -->
     <div class="osec hidden" id="sec-funds">
-      <div class="pg-hdr"><div class="pg-title">Fund Releases</div></div>
-      <div id="funds-wrap"></div>
+      <div id="tally-wrap"></div>
     </div>
 
     <!-- Project detail (full-page) -->
@@ -329,6 +398,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
     <div id="cp-home"></div>
     <div id="cp-proj" class="hidden"></div>
     <div id="cp-upd" class="hidden"></div>
+    <div id="cp-funds" class="hidden"></div>
   </div>
 </div>
 
@@ -379,6 +449,10 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   <div class="frow">
     <div class="fg"><label>Agreement Date</label><input type="date" id="np-date"></div>
     <div class="fg"><label>Location / Site</label><input type="text" id="np-loc" placeholder="e.g. Gajuwaka, Vizag"></div>
+  <div class="fg"><label>Tally Cost Centre Name <span style="color:var(--text3);font-weight:400;text-transform:none">(exact name from Tally — used for auto-import)</span></label>
+    <input type="text" id="np-cc" placeholder="e.g. K KRISHNA FISHER MAN CC ROAD WARD 18" style="font-family:monospace;font-size:13px">
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Copy-paste the exact Cost Centre name from Tally. This is how the app matches Tally transactions to this project.</div>
+  </div>
   </div>
   <div class="st" style="margin-top:18px">BOQ Items *</div>
   <div class="brow" style="font-size:11px;color:var(--text3);font-weight:600">
@@ -392,12 +466,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   </div>
 </div></div>
 
-<!-- Release Funds -->
-<div class="mov" id="modal-rf">
-<div class="mbox" style="max-width:460px">
-  <div class="mhdr"><h2>💰 Release Funds</h2><button class="mx" onclick="CM('modal-rf')">✕</button></div>
-  <div id="rf-body"></div>
-</div></div>
 
 <!-- Record Verification -->
 <div class="mov" id="modal-ver">
@@ -417,6 +485,36 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   <div style="display:flex;gap:8px;justify-content:flex-end">
     <button class="btn" onclick="CM('modal-pw')">Cancel</button>
     <button class="btn btn-navy" onclick="changePw()">Update Password</button>
+  </div>
+</div></div>
+
+<!-- Change Contractor Password (Owner only) -->
+<div class="mov" id="modal-cpw">
+<div class="mbox" style="max-width:400px">
+  <div class="mhdr"><h2>🔑 Change Contractor Password</h2><button class="mx" onclick="CM('modal-cpw')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:16px">You are changing the password for: <strong id="cpw-name"></strong></div>
+  <div class="fg"><label>New Password (min 4 characters)</label><input type="password" id="cpw-new" placeholder="Enter new password"></div>
+  <div class="fg"><label>Confirm New Password</label><input type="password" id="cpw-confirm" placeholder="Repeat new password"></div>
+  <div id="cpw-err" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-cpw')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveContractorPw()">Update Password</button>
+  </div>
+</div></div>
+
+<!-- Owner Notes -->
+<div class="mov" id="modal-notes">
+<div class="mbox" style="max-width:520px">
+  <div class="mhdr"><h2>📝 Owner Notes</h2><button class="mx" onclick="CM('modal-notes')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:14px">Private notes — only visible to RSR Admin. Contractors never see this.</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:600;margin-bottom:8px" id="notes-project-name"></div>
+  <div class="fg">
+    <textarea id="notes-text" rows="8" placeholder="e.g. Contractor is running slow on this site. Material shortage reported on 15 May. Payment from GVMC expected by end of month. Watch the excavation quantities — contractor tends to overclaim..."></textarea>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Tip: Date your notes so you can track history. e.g. "21-May: Visited site, work 40% done."</div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-notes')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveOwnerNotes()">Save Notes</button>
   </div>
 </div></div>
 
@@ -499,6 +597,7 @@ let autoRefreshTimer = null;
 let editReleasePid = null, editReleaseId = null;
 let reviewUpdPid = null, reviewUpdId = null;
 let settlePid = null;
+let gpsData = null; // {lat, lng, accuracy, area, time}
 
 // ═══════════════════════════════════════════════════════
 // SESSION (persists across page refresh)
@@ -584,7 +683,13 @@ async function compressImage(file) {
 // ═══════════════════════════════════════════════════════
 // DATA LOAD / SAVE
 // ═══════════════════════════════════════════════════════
+// ─── LAZY FETCH ARCHITECTURE ─────────────────────────
+// On login: fetch contractor list + project summaries (lightweight)
+// On project open: fetch full project data (heavy: updates, photos, releases)
+const projectCache = {}; // id -> full project data, fetched on demand
+
 async function loadDB() {
+  // Full load for initial/refresh — kept for compatibility
   const [c, p, s] = await Promise.all([
     sbReq('contractors?order=created_at', 'GET'),
     sbReq('projects?order=created_at', 'GET'),
@@ -592,8 +697,58 @@ async function loadDB() {
   ]);
   D.contractors = (c||[]).map(r => ({...r.data, id:r.id}));
   D.projects = (p||[]).map(r => ({...r.data, id:r.id}));
+  // Clear cache on full reload so fresh data is fetched on next project open
+  Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = (s||[]).find(x => x.key === OPW_KEY);
   if (pw) D.ownerPw = pw.value;
+}
+
+async function loadDBSummary() {
+  // LAZY: Only load what we need for the dashboard and list views
+  // Contractors: always small, load fully
+  // Projects: load full data but skip contractorUpdates photos (we strip them server-side by not sending photo arrays... 
+  //   actually Supabase sends everything in data blob. So we fetch all but cache and re-use on project open.
+  //   True lazy load: on project open, re-fetch single project fresh from DB.
+  const [c, p, s] = await Promise.all([
+    sbReq('contractors?order=created_at', 'GET'),
+    sbReq('projects?order=created_at', 'GET'),
+    sbReq('settings', 'GET')
+  ]);
+  D.contractors = (c||[]).map(r => ({...r.data, id:r.id}));
+  // Store lightweight summary (strip heavy arrays for initial render)
+  D.projects = (p||[]).map(r => {
+    const proj = {...r.data, id:r.id};
+    // Keep releases and verifications (needed for financials on dashboard)
+    // Strip contractorUpdates photos from summary to reduce memory
+    if(proj.contractorUpdates) {
+      proj.contractorUpdates = proj.contractorUpdates.map(u => ({
+        ...u,
+        photos: u.photos ? u.photos.map(ph => ({...ph, _lazy:true})) : [] // mark as lazy
+      }));
+    }
+    return proj;
+  });
+  Object.keys(projectCache).forEach(k => delete projectCache[k]);
+  const pw = (s||[]).find(x => x.key === OPW_KEY);
+  if (pw) D.ownerPw = pw.value;
+}
+
+async function fetchProjectFull(id) {
+  // Fetch fresh full data for one project (called when opening detail view)
+  if(!dbOK) return GP(id); // offline: use cached
+  try {
+    const rows = await sbReq(`projects?id=eq.${id}`, 'GET');
+    if(rows && rows[0]) {
+      const fresh = {...rows[0].data, id:rows[0].id};
+      // Update in D.projects
+      const idx = D.projects.findIndex(p=>p.id===id);
+      if(idx>=0) D.projects[idx]=fresh;
+      else D.projects.push(fresh);
+      projectCache[id] = fresh;
+      return fresh;
+    }
+  } catch(e) { console.error('fetchProjectFull failed:', e); }
+  return GP(id);
 }
 
 async function saveContractorDB(c) {
@@ -618,28 +773,51 @@ async function savePwDB(val) {
 // INIT
 // ═══════════════════════════════════════════════════════
 async function init() {
+  setupPWAManifest();
+  registerServiceWorker();
   setSplashText('Connecting to database…');
+
+  // Check if offline
+  if(!navigator.onLine){
+    dbOK = false;
+    setSplashText('Offline mode — loading cached data…');
+    // Try to restore from session even offline
+    const saved = loadSession();
+    if(saved){
+      CU = saved;
+      hideSplash();
+      if(CU.role==='owner') enterOwner();
+      else enterCont();
+      toast('📵 Offline mode — showing cached data','error',4000);
+      checkOfflineQueue().catch(()=>{});
+    } else {
+      hideSplash();
+      toast('⚠️ No internet. Please connect and try again.','error',5000);
+    }
+    return;
+  }
+
   try {
-    await loadDB();
+    await loadDBSummary();
     dbOK = true;
   } catch(e) {
     console.error('DB failed:', e);
     dbOK = false;
   }
 
-  // Restore session if any
   const saved = loadSession();
-  if (saved && dbOK) {
+  if (saved) {
     CU = saved;
     hideSplash();
     if (CU.role === 'owner') enterOwner();
-    else enterCont();
+    else {
+      enterCont();
+      checkOfflineQueue().catch(()=>{}); // check and sync any offline updates (async)
+      if(dbOK) setTimeout(syncOfflineQueue, 2000);
+    }
   } else {
     hideSplash();
-    // Show login screen
-    if (!dbOK) {
-      toast('⚠️ Database unreachable — please check internet','error',5000);
-    }
+    if (!dbOK) toast('⚠️ Database unreachable — check internet','error',5000);
   }
 }
 
@@ -652,9 +830,9 @@ function hideSplash(){ const s=document.getElementById('splash'); if(s)s.style.d
 function startAutoRefresh(){
   stopAutoRefresh();
   autoRefreshTimer = setInterval(async () => {
-    if (!CU || !dbOK) return;
+    if (!CU || !dbOK || !navigator.onLine) return;
     try {
-      await loadDB();
+      await loadDBSummary();
       // Re-render current view silently
       if (CU.role === 'owner') {
         if (dpid) renderDetail(dpid);
@@ -727,15 +905,40 @@ function reportedPct(p){
 function eligR(p){ return Math.min(verPct(p)/100*maxF(p),maxF(p)); }
 function hdroom(p){ return Math.max(0,eligR(p)-totRel(p)); }
 function pStat(p){
-  const rel=totRel(p),max=maxF(p),el=eligR(p);
-  if(rel>=max*0.97) return 'red';
-  if(rel>=el*0.92&&el>0) return 'amber';
+  const rel=totRel(p),max=maxF(p);
+  if(!max) return 'green';
+  const pct=rel/max;
+  if(pct>=1.0) return 'overcap';
+  if(pct>=0.85) return 'red';
+  if(pct>=0.70) return 'orange';
+  if(pct>=0.65) return 'caution3';
+  if(pct>=0.60) return 'caution2';
+  if(pct>=0.55) return 'caution1';
   return 'green';
 }
-function sBadge(s){
-  if(s==='red') return '<span class="badge bg-red">🔴 Hard Stop</span>';
-  if(s==='amber') return '<span class="badge bg-amber">🟡 Caution</span>';
-  return '<span class="badge bg-green">🟢 On Track</span>';
+function sBadge(s,p){
+  const rel=p?totRel(p):0,max=p?maxF(p):0;
+  const pct=max>0?rel/max:0;
+  const pp=Math.round(pct*100);
+  if(pct>=1.0) return `<span class="badge bg-red">🚨 Over Cap (${pp}%)</span>`;
+  if(pct>=0.85) return `<span class="badge bg-red">🔴 High Risk (${pp}%)</span>`;
+  if(pct>=0.70) return `<span class="badge bg-amber">🟠 Cap Reached (${pp}%)</span>`;
+  if(pct>=0.65) return `<span class="badge bg-amber">🟡 Caution 3 (${pp}%)</span>`;
+  if(pct>=0.60) return `<span class="badge bg-amber">🟡 Caution 2 (${pp}%)</span>`;
+  if(pct>=0.55) return `<span class="badge bg-amber">🟡 Caution 1 (${pp}%)</span>`;
+  return `<span class="badge bg-green">🟢 On Track (${pp}%)</span>`;
+}
+function capAlert(p){
+  const rel=totRel(p),max=maxF(p);
+  if(!max) return '';
+  const pct=rel/max,pp=Math.round(pct*100);
+  if(pct>=1.0) return `<div class="alert al-red">🚨 Over Cap — ${pp}% used. Coordinate with RSR immediately.</div>`;
+  if(pct>=0.85) return `<div class="alert al-red">🔴 High Risk — ${pp}% used. RSR monitoring closely.</div>`;
+  if(pct>=0.70) return `<div class="alert al-amber">🟠 70% Cap Reached — ${pp}% used. Only verified work can justify further funding.</div>`;
+  if(pct>=0.65) return `<div class="alert al-amber">🟡 Caution 3 — ${pp}% used. Work progress must keep pace with funds.</div>`;
+  if(pct>=0.60) return `<div class="alert al-amber">🟡 Caution 2 — ${pp}% used. Review work completion vs funds deployed.</div>`;
+  if(pct>=0.55) return `<div class="alert al-amber">🟡 Caution 1 — ${pp}% used. Early warning — ensure site is on schedule.</div>`;
+  return '';
 }
 function intr(p){
   return (p.releases||[]).reduce((s,r)=>{
@@ -795,7 +998,7 @@ function enterOwner(){
   document.getElementById('nav-role').textContent='Owner';
   document.getElementById('nav-uname').textContent='RSR Admin';
   document.getElementById('nav-links').innerHTML=
-    ['Dashboard','Projects','Contractors','Funds'].map((t,i)=>
+    ['Dashboard','Projects','Contractors','Tally'].map((t,i)=>
       `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
     ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>';
   document.getElementById('bnav').style.display='flex';
@@ -809,9 +1012,64 @@ function enterCont(){
   rb.textContent='Contractor'; rb.style.background='rgba(255,255,255,.15)'; rb.style.color='#fff';
   document.getElementById('nav-uname').textContent=CU.name;
   document.getElementById('nav-links').innerHTML='';
-  document.getElementById('bnav').style.display='none';
-  SP('page-cont'); renderCHome();
+  // Show contractor-specific bottom nav
+  const bnav = document.getElementById('bnav');
+  bnav.style.display='flex';
+  bnav.innerHTML=`
+    <button class="bn active" id="cbn-0" onclick="cTab(0)"><div class="bn-icon">🏗️</div><div>My Sites</div></button>
+    <button class="bn" id="cbn-1" onclick="cTab(1)"><div class="bn-icon">💰</div><div>My Funds</div></button>`;
+  SP('page-cont'); cTab(0);
   startAutoRefresh();
+}
+
+function cTab(i){
+  document.querySelectorAll('[id^="cbn-"]').forEach((b,j)=>b.classList.toggle('active',j===i));
+  if(i===0){ renderCHome(); document.getElementById('cp-funds').classList.add('hidden'); }
+  if(i===1){ renderCFunds(); ['cp-home','cp-proj','cp-upd'].forEach(id=>document.getElementById(id).classList.add('hidden')); }
+}
+
+function renderCFunds(){
+  const el=document.getElementById('cp-funds');
+  el.classList.remove('hidden');
+  const myProjects = D.projects.filter(p=>p.contractorId===CU.id);
+  if(!myProjects.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">No projects assigned yet.</div></div>';
+    return;
+  }
+  // Per-project fund summary — contractor sees amount deployed, not full transaction log
+  let totalDeployed=0, totalSettled=0;
+  myProjects.forEach(p=>{totalDeployed+=totRel(p);totalSettled+=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);});
+  const outstanding=Math.max(0,totalDeployed-totalSettled);
+
+  el.innerHTML=`
+    <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">My Funds</h2>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:20px">Summary of funds deployed across your projects.</p>
+    <div class="stats" style="grid-template-columns:1fr 1fr;margin-bottom:20px">
+      <div class="stat"><div class="stat-lbl">Total Received</div><div class="stat-val" style="font-size:18px">${fmt(totalDeployed)}</div><div class="stat-sub">all projects</div></div>
+      <div class="stat"><div class="stat-lbl">Outstanding</div><div class="stat-val" style="font-size:18px;color:${outstanding>0?'var(--red)':'var(--green)'}">${fmt(outstanding)}</div><div class="stat-sub">balance owed to RSR</div></div>
+    </div>
+    ${myProjects.map(p=>{
+      const rel=totRel(p),max=maxF(p),settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
+      const capPct=max>0?Math.round(rel/max*100):0;
+      const alert=capAlert(p);
+      return `<div class="card">
+        <div class="card-hdr">
+          <div><div class="card-title">${p.name}</div><div class="card-sub">${p.type} · #${p.tender}</div></div>
+          ${sBadge(pStat(p),p)}
+        </div>
+        ${alert}
+        <div class="fr"><span class="fl">Funds Received</span><span class="fv">${fmt(rel)}</span></div>
+        <div class="fr"><span class="fl">Max Allowed (70% of agreement)</span><span class="fv">${fmt(max)}</span></div>
+        <div class="fr"><span class="fl">Cap Used</span><span class="fv" style="color:${capPct>=70?'var(--red)':capPct>=55?'var(--amber)':'var(--green)'}">${capPct}%</span></div>
+        <div class="fr"><span class="fl">Government Payment Received</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
+        <div class="fr"><span class="fl">Balance Owed to RSR</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
+        <div style="margin-top:10px">
+          <div class="prog-lbl"><span style="font-size:12px">Funding used</span><span style="font-size:12px">${capPct}% of cap</span></div>
+          <div class="prog-track" style="height:8px"><div class="prog-fill ${capPct>=85?'pf-red':capPct>=55?'pf-amber':'pf-green'}" style="width:${Math.min(capPct,100)}%"></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Contact RSR office for detailed transaction history.</div>
+      </div>`;
+    }).join('')}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -885,18 +1143,17 @@ function dashCardHTML(p){
     <div class="card-hdr">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span class="card-title">${p.name}</span>${sBadge(s)}
+          <span class="card-title">${p.name}</span>${sBadge(s,p)}
         </div>
         <div class="card-sub">${p.type} · ${p.location||'—'} · ${c?c.name:'—'} · #${p.tender}</div>
       </div>
       <div class="card-acts">
         <button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button>
-        <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">Release</button>
         <div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pm-${p.id}')">⋮</button>
           <div class="amenu" id="pm-${p.id}">
             <button class="amenu-item" onclick="openDetail('${p.id}')">📋 View Detail</button>
-            <button class="amenu-item" onclick="openRF('${p.id}')">💰 Release Funds</button>
+            <button class="amenu-item" onclick="openOwnerNotes('${p.id}')">📝 Owner Notes${p.ownerNotes?' ●':''}</button>
             <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Payment</button>
             <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
           </div>
@@ -939,7 +1196,7 @@ function renderProjects(){
     <td><div style="font-weight:700;color:var(--navy)">${p.name}</div><div style="font-size:11px;color:var(--text3)">#${p.tender}</div></td>
     <td>${p.type}</td><td>${c?c.name:'—'}</td>
     <td class="fv">${fmt(agAmt(p))}</td><td class="fv">${fmt(totRel(p))}</td>
-    <td>${pct(verPct(p))}</td><td>${sBadge(pStat(p))}</td>
+    <td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td>
     <td><button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button></td>
   </tr>`;}).join('')}</tbody></table></div>`;
 }
@@ -952,10 +1209,10 @@ async function openDetail(id){
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   document.querySelectorAll('.nav-link').forEach(e=>e.classList.remove('active'));
   document.getElementById('sec-detail').classList.remove('hidden');
-  // Re-fetch fresh data on every detail open so owner sees latest contractor updates
-  if (dbOK) {
-    try { await loadDB(); } catch(e){}
-  }
+  // Show loading state immediately
+  document.getElementById('detail-wrap').innerHTML='<div class="loading" style="padding:40px;text-align:center;color:var(--text3)"><div style="font-size:24px;margin-bottom:8px">⏳</div>Loading project…</div>';
+  // Lazy fetch full project data
+  await fetchProjectFull(id);
   renderDetail(id);
 }
 
@@ -967,9 +1224,9 @@ function renderDetail(id){
   const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed);
   const allUpdates=(p.contractorUpdates||[]).slice().reverse();
   let ah='';
-  if(s==='red') ah=`<div class="alert al-red">🔴 Hard Stop — Do NOT release more funds until more work is verified.</div>`;
-  else if(s==='amber') ah=`<div class="alert al-amber">🟡 Caution — Verify site before next release.</div>`;
-  else ah=`<div class="alert al-green">🟢 On Track — Available headroom: ${fmt(hw)}</div>`;
+  if(s==='red') ah=`<div class="alert al-red">🚨 Warning: Funding is at ${Math.round(totRel(p)/maxF(p)*100)}% of agreement cap. Tally imports continue but review urgently.</div>`;
+  else if(s==='amber') ah=`<div class="alert al-amber">🟡 Caution: ${Math.round(totRel(p)/maxF(p)*100)}% of funding cap used. Monitor closely.</div>`;
+  else ah=`<div class="alert al-green">🟢 On Track — ${Math.round(totRel(p)/maxF(p)*100)}% of cap used. Available: ${fmt(hw)}</div>`;
 
   // Pending (unreviewed) block — full review controls
   const pendHtml=pend.length?`<div class="card" style="border-color:var(--navy);border-top:3px solid var(--gold)">
@@ -980,7 +1237,7 @@ function renderDetail(id){
       </div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${u.notes||'No notes'}</div>
       ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--navy)">Claimed: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
-      ${u.photos&&u.photos.length?`<div class="pgrid">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.url}')"><img src="${ph.url}" loading="lazy" alt=""><div class="pcap">${ph.name||'photo'}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos</div>'}
+      ${u.photos&&u.photos.length?`<div class="pgrid">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.url}')"><img src="${ph.url}" loading="lazy" alt=""><div class="pcap">${ph.gps?'📍 '+ph.gps.area+' · '+(ph.captureTime||ph.gps.time):ph.captureTime?'🕐 '+ph.captureTime:'photo'}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos</div>'}
       <div class="upd-actions">
         <button class="btn btn-gold btn-sm" onclick="openReviewUpd('${id}','${u.id}')">📋 Review & Approve</button>
         <button class="btn-reject" onclick="(()=>{reviewUpdPid='${id}';reviewUpdId='${u.id}';document.getElementById('ru-notes').value='';rejectUpdate();})()">✗ Quick Reject</button>
@@ -1048,18 +1305,21 @@ function renderDetail(id){
     </tr>`;}).join('');
   const relLog=(p.releases||[]).slice().reverse().map(r=>`
     <div class="fr">
-      <span class="fl">${r.date}<br><span style="font-size:11px">${r.notes||''} · ${r.method||''} ${r.ref?'· Ref: '+r.ref:''}</span></span>
+      <span class="fl">${r.date}<br>
+        <span style="font-size:11px">${r.notes||''} · Vch #${r.ref||'—'} · ${r.method||''}</span><br>
+        ${r.source==='tally'||r.source==='tally-manual'?'<span style="font-size:10px;background:rgba(26,39,68,.1);color:var(--navy);padding:1px 6px;border-radius:4px;font-weight:600">📂 Tally</span>':'<span style="font-size:10px;background:var(--amber-bg);color:var(--amber);padding:1px 6px;border-radius:4px;font-weight:600">✏️ Manual</span>'}
+      </span>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="fv">${fmt(r.amount)}</span>
-        <div class="amenu-wrap">
+        ${r.source!=='tally'?`<div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('rm-${r.id}')">⋮</button>
           <div class="amenu" id="rm-${r.id}">
             <button class="amenu-item" onclick="openEditRelease('${id}','${r.id}')">✏️ Edit</button>
             <button class="amenu-item danger" onclick="deleteRelease('${id}','${r.id}')">🗑️ Delete</button>
           </div>
-        </div>
+        </div>`:''}
       </div>
-    </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No releases yet.</div>';
+    </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No transactions yet. Import from Tally to populate.</div>';
 
   const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
   const settleLog=(p.settlements||[]).slice().reverse().map(s=>`<div class="settle-row"><span>🏦 ${s.date} · ${s.mode} ${s.ref?'· '+s.ref:''} · ${s.notes||''}</span><strong style="color:var(--green)">${fmt(s.amount)}</strong></div>`).join('');
@@ -1085,7 +1345,7 @@ function renderDetail(id){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
         <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
-        <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">💰 Release</button>
+        <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')" title="Private owner notes">📝 Notes${p.ownerNotes?` <span style="width:7px;height:7px;background:var(--gold);border-radius:50%;display:inline-block;margin-left:2px"></span>`:''}</button>
         <div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('detail-menu')">⋮</button>
           <div class="amenu" id="detail-menu">
@@ -1103,12 +1363,13 @@ function renderDetail(id){
         <div class="fr"><span class="fl">Bid %</span><span class="fv">${p.bidPct>0?'+':''}${p.bidPct}%</span></div>
         <div class="fr"><span class="fl">Agreement Amount</span><span class="fv">${fmt(agAmt(p))}</span></div>
         <div class="fr"><span class="fl">Max Fundable (70%)</span><span class="fv">${fmt(max)}</span></div>
-        <div class="fr"><span class="fl">Total Released</span><span class="fv">${fmt(rel)}</span></div>
+        <div class="fr"><span class="fl">Total Deployed</span><span class="fv">${fmt(rel)}</span></div>
+        <div class="fr"><span class="fl">Cap Used</span><span class="fv" style="color:${rel/max>=0.85?'var(--red)':rel/max>=0.65?'var(--amber)':'var(--green)'}">${Math.round(rel/max*100)||0}%</span></div>
         <div class="fr"><span class="fl">Total Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
         <div class="fr"><span class="fl">Outstanding</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
-        <div class="fr"><span class="fl">Eligible Now</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-        <div class="fr"><span class="fl">Headroom</span><span class="fv" style="color:${s==='red'?'var(--red)':s==='amber'?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
+        <div class="fr"><span class="fl">Eligible (verified work)</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
         <div class="fr"><span class="fl">Interest Accrued</span><span class="int-val">${fmt(intr(p))}</span></div>
+        ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
       </div>
       <div class="card">
         <div class="st">Fund Releases</div>${relLog}
@@ -1137,6 +1398,14 @@ function renderDetail(id){
       </div>
     </div>
     <div class="card"><div class="st">Verification Log</div>${verLog}</div>
+    ${p.ownerNotes?`<div class="card" style="border-left:4px solid var(--gold)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="st" style="margin:0;border:none;padding:0;color:var(--gold)">📝 Owner Notes (Private)</div>
+        <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')">Edit</button>
+      </div>
+      <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6">${p.ownerNotes}</div>
+      ${p.ownerNotesUpdated?`<div style="font-size:11px;color:var(--text3);margin-top:8px">Last updated: ${new Date(p.ownerNotesUpdated).toLocaleString('en-IN')}</div>`:''}
+    </div>`:''}
     ${allUpdHtml}`;
 }
 
@@ -1202,53 +1471,6 @@ async function saveVer(){
 // ═══════════════════════════════════════════════════════
 // RELEASE FUNDS
 // ═══════════════════════════════════════════════════════
-function openRF(id){
-  rfpid=id; const p=GP(id);
-  const rel=totRel(p),max=maxF(p),el=eligR(p),hw=hdroom(p),s=pStat(p);
-  let ah='';
-  if(s==='red') ah=`<div class="alert al-red">🔴 Hard Stop — 70% cap reached.</div>`;
-  else if(hw<50000) ah=`<div class="alert al-amber">🟡 Very little headroom (${fmt(hw)}).</div>`;
-  else ah=`<div class="alert al-green">✅ Can release up to ${fmt(hw)} based on verified work.</div>`;
-  document.getElementById('rf-body').innerHTML=`${ah}
-    <div class="calc" style="margin-bottom:14px">
-      <div class="fr"><span class="fl">Max fundable (70% cap)</span><span class="fv">${fmt(max)}</span></div>
-      <div class="fr"><span class="fl">Released so far</span><span class="fv">${fmt(rel)}</span></div>
-      <div class="fr"><span class="fl">Eligible (verified)</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-      <div class="fr"><span class="fl">Headroom</span><span class="fv" style="color:${hw<100000?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
-    </div>
-    <div class="fg"><label>Amount (₹)</label><input type="number" id="rf-amt" placeholder="${Math.round(hw*0.8)}" ${s==='red'?'disabled':''}></div>
-    <div class="frow">
-      <div class="fg"><label>Date</label><input type="date" id="rf-date" value="${new Date().toISOString().split('T')[0]}"></div>
-      <div class="fg"><label>Method</label><select id="rf-meth"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>UPI</option><option>Cash</option></select></div>
-    </div>
-    <div class="fg"><label>Reference / UTR / Cheque No.</label><input type="text" id="rf-ref" placeholder="For Tally reconciliation"></div>
-    <div class="fg"><label>Notes</label><input type="text" id="rf-notes" placeholder="e.g. Stage 1 completion"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="CM('modal-rf')">Cancel</button>
-      <button class="btn btn-navy" onclick="confirmRF()" ${s==='red'?'disabled':''}>Confirm Release</button>
-    </div>`;
-  OM('modal-rf');
-}
-
-async function confirmRF(){
-  const p=GP(rfpid);
-  const amt=parseFloat(document.getElementById('rf-amt').value);
-  const date=document.getElementById('rf-date').value;
-  const notes=document.getElementById('rf-notes').value;
-  const method=document.getElementById('rf-meth').value;
-  const ref=document.getElementById('rf-ref').value;
-  if(!amt||amt<=0){alert('Enter a valid amount.');return;}
-  const hw=hdroom(p);
-  if(amt>hw+500){alert('Amount exceeds headroom '+fmt(hw));return;}
-  if(!p.releases) p.releases=[];
-  p.releases.push({id:uid(),date,amount:amt,notes,method,ref});
-  try {
-    await saveProjectDB(p);
-    CM('modal-rf');
-    toast(`✓ Released ${fmt(amt)}`,'ok');
-    if(dpid===rfpid)renderDetail(rfpid);else renderDash();
-  } catch(e){ toast('Save failed','error'); }
-}
 
 // ═══════════════════════════════════════════════════════
 // CONTRACTORS
@@ -1268,15 +1490,70 @@ function renderConts(){
           <div class="amenu-wrap">
             <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('cm-${c.id}')">⋮</button>
             <div class="amenu" id="cm-${c.id}">
+              <button class="amenu-item" onclick="openChangeCPw('${c.id}')">🔑 Change Password</button>
               <button class="amenu-item danger" onclick="deleteContractor('${c.id}')">🗑️ Delete Contractor</button>
             </div>
           </div>
         </div>
       </div>
       ${pp.length?`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Released</th><th>Verified</th><th>Status</th></tr></thead><tbody>
-        ${pp.map(p=>`<tr><td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p))}</td></tr>`).join('')}</tbody></table></div>`
+        ${pp.map(p=>`<tr><td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td></tr>`).join('')}</tbody></table></div>`
       :'<div style="font-size:13px;color:var(--text3)">No projects assigned.</div>'}
     </div>`;}).join('');
+}
+
+let changePwContractorId = null;
+function openChangeCPw(cid){
+  const c = D.contractors.find(x=>x.id===cid);
+  if(!c) return;
+  changePwContractorId = cid;
+  document.getElementById('cpw-name').textContent = c.name;
+  document.getElementById('cpw-new').value = '';
+  document.getElementById('cpw-confirm').value = '';
+  document.getElementById('cpw-err').style.display = 'none';
+  document.getElementById('modal-cpw').classList.add('open');
+}
+
+async function saveContractorPw(){
+  const nw = document.getElementById('cpw-new').value;
+  const conf = document.getElementById('cpw-confirm').value;
+  const err = document.getElementById('cpw-err');
+  if(nw.length < 4){ err.textContent='Password must be at least 4 characters.'; err.style.display='block'; return; }
+  if(nw !== conf){ err.textContent='Passwords do not match.'; err.style.display='block'; return; }
+  const c = D.contractors.find(x=>x.id===changePwContractorId);
+  if(!c) return;
+  c.password = nw;
+  try {
+    await saveContractorDB(c);
+    CM('modal-cpw');
+    toast(`✓ Password updated for ${c.name}`,'ok');
+  } catch(e){ toast('Save failed','error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// OWNER NOTES (private, per project, RSR admin only)
+// ═══════════════════════════════════════════════════════
+let notesPid = null;
+
+function openOwnerNotes(pid){
+  const p = GP(pid); if(!p) return;
+  notesPid = pid;
+  document.getElementById('notes-project-name').textContent = p.name;
+  document.getElementById('notes-text').value = p.ownerNotes || '';
+  document.getElementById('modal-notes').classList.add('open');
+}
+
+async function saveOwnerNotes(){
+  const p = GP(notesPid); if(!p) return;
+  p.ownerNotes = document.getElementById('notes-text').value.trim();
+  p.ownerNotesUpdated = new Date().toISOString();
+  try {
+    await saveProjectDB(p);
+    CM('modal-notes');
+    // Refresh detail if currently viewing this project
+    if(dpid === notesPid) renderDetail(notesPid);
+    toast('✓ Notes saved','ok');
+  } catch(e){ toast('Save failed','error'); }
 }
 
 async function saveContractor(){
@@ -1300,16 +1577,519 @@ async function saveContractor(){
 // ═══════════════════════════════════════════════════════
 // FUNDS LOG
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// TALLY IMPORT ENGINE
+// ═══════════════════════════════════════════════════════
+let tallyUnmatched = []; // transactions that didn't match any project
+let calViewYear = new Date().getFullYear();
+let calViewMonth = new Date().getMonth(); // 0-based
+
+// ─── DAYBOOK CALENDAR ─────────────────────────────────
+function getDaybookUploadedDates(){
+  // Collect all unique dates where a daybook was uploaded
+  // A daybook upload is identified by source==='tally' and vch type = 'daybook'
+  // We track which calendar dates have ANY tally transactions
+  const dateSet = new Set();
+  D.projects.forEach(p=>{
+    (p.releases||[]).forEach(r=>{
+      if(r.source==='tally'||r.source==='tally-manual'){
+        if(r.date) dateSet.add(r.date.split('T')[0]);
+      }
+    });
+  });
+  // Also check tallyUploadLog stored separately
+  try{
+    const log = JSON.parse(localStorage.getItem('rsr_daybook_log')||'[]');
+    log.forEach(d=>dateSet.add(d));
+  }catch(e){}
+  return dateSet;
+}
+
+function recordDaybookUpload(dateStr){
+  // Record that a daybook was uploaded for this date
+  try{
+    const log = JSON.parse(localStorage.getItem('rsr_daybook_log')||'[]');
+    if(!log.includes(dateStr)) log.push(dateStr);
+    localStorage.setItem('rsr_daybook_log', JSON.stringify(log));
+  }catch(e){}
+}
+
+function renderDaybookCalendar(){
+  const uploadedDates = getDaybookUploadedDates();
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const year = calViewYear;
+  const month = calViewMonth;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  // Build set of business days (Mon-Sat) that are past and should have daybooks
+  // We consider Mon-Sat as working days for construction finance
+  const expectedDays = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayOfWeek = new Date(year, month, d).getDay();
+    const isPast = dateStr < todayStr;
+    const isToday = dateStr === todayStr;
+    const isSunday = dayOfWeek === 0; // Only Sunday is holiday; Sat is working day in construction
+    if((isPast || isToday) && !isSunday) expectedDays.push(dateStr);
+  }
+
+  const missingCount = expectedDays.filter(d=>!uploadedDates.has(d)).length;
+  const uploadedCount = expectedDays.filter(d=>uploadedDates.has(d)).length;
+
+  let calHTML = `<div class="cal-wrap">
+    <div class="cal-header">
+      <div class="cal-title">${monthNames[month]} ${year}</div>
+      <div class="cal-nav">
+        <button onclick="calNavMonth(-1)">‹</button>
+        <button onclick="calNavMonth(0)">Today</button>
+        <button onclick="calNavMonth(1)">›</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;flex-wrap:wrap">
+      <span style="color:var(--green);font-weight:600">✅ ${uploadedCount} uploaded</span>
+      <span style="color:var(--red);font-weight:600">❌ ${missingCount} missing</span>
+      ${missingCount>0?'<span style="color:var(--text3);font-size:12px">— click any red day to import that daybook</span>':'<span style="color:var(--green);font-size:12px">— all days covered!</span>'}
+    </div>
+    <div class="cal-grid">
+      ${dayNames.map(d=>`<div class="cal-day-name">${d}</div>`).join('')}
+      ${Array(firstDayOfWeek).fill('<div class="cal-day empty"></div>').join('')}`;
+
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayOfWeek = new Date(year, month, d).getDay();
+    const isSunday = dayOfWeek === 0;
+    const isFuture = dateStr > todayStr;
+    const isToday = dateStr === todayStr;
+    const isUploaded = uploadedDates.has(dateStr);
+    const isExpected = !isSunday && !isFuture;
+
+    let cls = 'cal-day';
+    let title = '';
+    let onclick = '';
+    if(isFuture){ cls+=' future'; }
+    else if(isSunday){ cls+=' no-data'; title='Sunday — no daybook expected'; }
+    else if(isUploaded){ cls+=' uploaded'; title=`${dateStr} — Daybook uploaded ✅`; }
+    else{ cls+=' missing'; title=`${dateStr} — Daybook NOT uploaded ❌ — click to import`; onclick=`onclick="prefillDaybookDate('${dateStr}')""`; }
+    if(isToday) cls+=' today-marker';
+
+    calHTML += `<div class="${cls}" title="${title}" ${onclick} style="font-size:13px">${d}</div>`;
+  }
+
+  calHTML += `</div>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#eaf5ee;border:1px solid #b8dfc0"></div><span style="color:var(--green)">Uploaded</span></div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#fdf0ee;border:1px solid #f0bdb8"></div><span style="color:var(--red)">Missing</span></div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:var(--surface2);border:1px solid var(--border)"></div><span style="color:var(--text3)">Sunday / Future</span></div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:transparent;outline:2px solid var(--navy);outline-offset:1px;border-radius:3px"></div><span>Today</span></div>
+    </div>
+  </div>`;
+  return calHTML;
+}
+
+function calNavMonth(dir){
+  if(dir===0){ calViewYear=new Date().getFullYear(); calViewMonth=new Date().getMonth(); }
+  else{
+    calViewMonth+=dir;
+    if(calViewMonth>11){calViewMonth=0;calViewYear++;}
+    if(calViewMonth<0){calViewMonth=11;calViewYear--;}
+  }
+  // Re-render just the calendar section
+  const calEl = document.getElementById('daybook-calendar');
+  if(calEl) calEl.innerHTML = renderDaybookCalendar();
+}
+
+function prefillDaybookDate(dateStr){
+  // Scroll to upload section and pre-select daybook type
+  document.getElementById('tally-type').value='daybook';
+  document.getElementById('tally-file').value='';
+  const uploadCard = document.getElementById('tally-upload-card');
+  if(uploadCard){
+    uploadCard.scrollIntoView({behavior:'smooth',block:'start'});
+    uploadCard.style.borderColor='var(--red)';
+    uploadCard.style.borderWidth='2px';
+    setTimeout(()=>{uploadCard.style.borderColor='';uploadCard.style.borderWidth='';},3000);
+  }
+  toast(`Upload the daybook for ${dateStr}`, 'ok', 3000);
+}
+
 function renderFunds(){
   const all=[];
   D.projects.forEach(p=>{(p.releases||[]).forEach(r=>{const c=GC(p.contractorId);all.push({...r,project:p.name,contractor:c?c.name:'—',pid:p.id});});});
   all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   const tot=all.reduce((s,r)=>s+r.amount,0);
-  document.getElementById('funds-wrap').innerHTML=`
-    <div class="stat" style="margin-bottom:16px;max-width:280px"><div class="stat-lbl">Total Released (all projects)</div><div class="stat-val" style="font-size:18px">${fmt(tot)}</div></div>
-    ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Project</th><th>Contractor</th><th>Method</th><th>Reference</th><th>Amount</th><th>Notes</th></tr></thead><tbody>
-      ${all.map(r=>`<tr><td>${r.date}</td><td><a href="#" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td><td>${r.contractor}</td><td>${r.method||'—'}</td><td style="font-family:monospace;font-size:12px">${r.ref||'—'}</td><td class="fv">${fmt(r.amount)}</td><td style="color:var(--text2)">${r.notes||''}</td></tr>`).join('')}</tbody></table></div>`
-    :'<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">No fund releases yet.</div></div>'}`;
+  const ccMap = D.projects.filter(p=>p.costCentre).map(p=>`<tr><td style="font-family:monospace;font-size:12px">${p.costCentre}</td><td style="font-weight:700;color:var(--navy)">${p.name}</td><td>${GC(p.contractorId)?.name||'—'}</td></tr>`).join('');
+
+  document.getElementById('tally-wrap').innerHTML=`
+    <div class="pg-hdr"><div class="pg-title">📂 Tally Import</div></div>
+
+    <!-- DAYBOOK CALENDAR -->
+    <div class="card" style="border-top:4px solid var(--navy)">
+      <div class="st">📅 Daybook Upload Calendar</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Shows which days' daybooks have been imported. <strong>Red days</strong> = daybook not yet uploaded. Click any red day to jump to the upload panel.</div>
+      <div id="daybook-calendar">${renderDaybookCalendar()}</div>
+    </div>
+
+    <!-- UPLOAD PANEL -->
+    <div class="card" id="tally-upload-card" style="border-top:4px solid var(--gold);transition:border-color .3s,border-width .3s">
+      <div class="st">Upload Tally Export File</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload the Daybook or Cost Centre report exported from Tally as XLS/XLSX. The app reads each transaction, matches it by Cost Centre, and posts it to the correct project automatically.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="fg"><label>File Type</label>
+          <select id="tally-type">
+            <option value="daybook">Day Book (daily export)</option>
+            <option value="ledger">Ledger / Cost Centre Report</option>
+          </select>
+        </div>
+        <div class="fg"><label>Select File (XLS or XLSX)</label>
+          <input type="file" id="tally-file" accept=".xls,.xlsx" style="padding:8px">
+        </div>
+      </div>
+      <button class="btn btn-navy" onclick="processTallyFile()" style="padding:10px 24px">⚡ Process & Import</button>
+      <div id="tally-progress" style="display:none;margin-top:12px">
+        <div class="alert al-navy">Processing file…</div>
+      </div>
+    </div>
+
+    <!-- UNMATCHED TRANSACTIONS -->
+    <div id="tally-unmatched-section" style="${tallyUnmatched.length?'':'display:none'}">
+      <div class="card" style="border-top:4px solid var(--amber)">
+        <div class="st" style="color:var(--amber)">⚠️ Unmatched Transactions (${tallyUnmatched.length}) — Needs Manual Assignment</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These transactions did not match any project's Cost Centre. Assign them to a project or delete them.</div>
+        ${tallyUnmatched.map((t,i)=>`
+          <div style="background:var(--amber-bg);border:1px solid #f5d5a0;border-radius:var(--rs);padding:12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div>
+                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo}</div>
+                <div style="font-size:12px;color:var(--text2)">${t.ledger} · CC: <span style="font-family:monospace">${t.costCentre||'(no cost centre)'}</span></div>
+                <div style="font-size:12px;color:var(--text3)">${t.narration||''}</div>
+              </div>
+              <div style="font-size:18px;font-weight:800;color:var(--navy)">₹${t.amount.toLocaleString('en-IN')}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="um-assign-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+                <option value="">— Assign to project —</option>
+                ${D.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+              </select>
+              <button class="btn btn-sm btn-navy" onclick="assignUnmatched(${i})">✓ Assign</button>
+              <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i})">🗑️ Delete</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- ALL TRANSACTIONS LOG -->
+    <div class="card">
+      <div class="st">All Tally Transactions — All Projects</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Total imported: <strong style="color:var(--navy)">${fmt(tot)}</strong></div>
+      ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Project</th><th>Contractor</th><th>Vch No</th><th>Cost Centre</th><th>Narration</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+        ${all.map(r=>`<tr>
+          <td style="white-space:nowrap">${r.date}</td>
+          <td><a href="#" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td>
+          <td>${r.contractor}</td>
+          <td style="font-family:monospace;font-size:11px">${r.ref||'—'}</td>
+          <td style="font-size:11px;font-family:monospace;color:var(--text3)">${r.costCentre||'—'}</td>
+          <td style="font-size:12px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes||''}">${r.notes||'—'}</td>
+          <td style="text-align:right;font-weight:700">${fmt(r.amount)}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      :'<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No transactions imported yet. Upload a Tally file above.</div>'}
+    </div>
+
+    <!-- COST CENTRE MAPPING -->
+    <div class="card">
+      <div class="st">Cost Centre → Project Mapping</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These are the Tally Cost Centre names registered for each project. Transactions matching these names are auto-imported.</div>
+      ${ccMap?`<div class="tbl-wrap"><table><thead><tr><th>Tally Cost Centre Name</th><th>Project</th><th>Contractor</th></tr></thead><tbody>${ccMap}</tbody></table></div>`
+      :'<div style="color:var(--text3);font-size:13px">No cost centres registered yet. Edit each project to add the Tally Cost Centre name.</div>'}
+    </div>`;
+}
+
+// ─── PARSE TALLY FILE ─────────────────────────────────
+async function processTallyFile(){
+  const fileInput = document.getElementById('tally-file');
+  const type = document.getElementById('tally-type').value;
+  if(!fileInput.files.length){ toast('Select a file first','error'); return; }
+  const file = fileInput.files[0];
+  document.getElementById('tally-progress').style.display='block';
+  setBusy(true,'Reading Tally file…');
+  try {
+    const transactions = await parseTallyXLS(file, type);
+    if(!transactions.length){ toast('No transactions found in file','error'); setBusy(false); return; }
+    await matchAndImport(transactions);
+    document.getElementById('tally-progress').style.display='none';
+    fileInput.value='';
+    setBusy(false);
+    renderFunds();
+    // Refresh calendar to reflect newly uploaded dates
+    setTimeout(()=>{const c=document.getElementById('daybook-calendar');if(c)c.innerHTML=renderDaybookCalendar();},100);
+    ownerTab(3);
+  } catch(e) {
+    document.getElementById('tally-progress').style.display='none';
+    setBusy(false);
+    toast('Error reading file: '+e.message,'error',5000);
+    console.error(e);
+  }
+}
+
+async function parseTallyXLS(file, type){
+  // Read file as ArrayBuffer then parse with a simple XLS reader
+  const buffer = await file.arrayBuffer();
+  const wb = parseXLSX(buffer);
+  const sheet = wb[0]; // first sheet
+  const transactions = [];
+
+  if(type === 'daybook'){
+    // DAYBOOK format: multi-row per transaction
+    // Row with date in col0 = transaction header → date, ledger, vchType, vchNo, amount in col6
+    // Next row: col1=cost centre name, col2=amount
+    // Skip rows until we find header row (has 'Date' in col0)
+    let i=0;
+    while(i<sheet.length){
+      const row = sheet[i];
+      const col0 = str(row[0]);
+      // Transaction row: col0 is a date, col4='Payment'/'Receipt', col5=vchNo, col6=amount
+      if(isDate(col0) && row[6] && !isNaN(parseFloat(str(row[6])))){
+        const date = fmtDate(col0);
+        const ledger = str(row[1]);
+        const vchType = str(row[4]);
+        const vchNo = str(row[5]);
+        const amount = Math.abs(parseFloat(str(row[6]))||0);
+        // Next row has cost centre
+        let costCentre='', narration='';
+        if(i+1<sheet.length){
+          const r2=sheet[i+1];
+          costCentre = str(r2[1]);
+          // narration is usually 2 rows down
+          if(i+3<sheet.length) narration=str(sheet[i+3]?.[1])||'';
+        }
+        if(amount>0) transactions.push({date,ledger,vchType,vchNo,amount,costCentre:costCentre.toUpperCase(),narration});
+      }
+      i++;
+    }
+  } else {
+    // LEDGER / COST CENTRE format
+    // Header row has 'Date' in col0. Each transaction:
+    // Main row: col0=date, col1=ledger, col5=vchType, col6=vchNo, col7=debit
+    // Next row: col2=costCentre, col3=amount
+    // narration: col2 of row after that
+    // Also handle cost centre report which has cost centre name in row 3
+    let headerCC = ''; // from "Cost Centre: ..." line
+    let i=0;
+    while(i<sheet.length){
+      const row=sheet[i];
+      const col0=str(row[0]);
+      // Check for cost centre name line
+      if(col0.startsWith('Cost Centre:')){
+        headerCC = col0.replace('Cost Centre:','').trim().toUpperCase();
+      }
+      if(isDate(col0)){
+        const date=fmtDate(col0);
+        const ledger=str(row[1]);
+        const vchType=str(row[5]);
+        const vchNo=str(row[6]);
+        const debit=parseFloat(str(row[7]))||0;
+        const credit=parseFloat(str(row[8]))||0;
+        const amount=debit||credit;
+        // Next row has cost centre (col2) and amount (col3)
+        let costCentre=headerCC, narration='';
+        if(i+1<sheet.length){
+          const r2=sheet[i+1];
+          const cc=str(r2[2]);
+          if(cc && !isNaN(parseFloat(str(r2[3])))) costCentre=cc.toUpperCase();
+          if(i+2<sheet.length) narration=str(sheet[i+2]?.[2])||'';
+        }
+        if(amount>0) transactions.push({date,ledger,vchType,vchNo:vchNo||str(row[4]),amount,costCentre:costCentre.toUpperCase(),narration});
+      }
+      i++;
+    }
+  }
+  return transactions;
+}
+
+// Simple XLS/XLSX reader using FileReader + raw parsing
+// Uses a minimal approach: convert to CSV-like structure
+function parseXLSX(buffer){
+  // Use a simple approach: read as text and find cell values
+  // For proper XLS we need a library — load SheetJS from CDN
+  throw new Error('Use the SheetJS-powered version below');
+}
+
+// Override with SheetJS-based reader (loaded dynamically)
+async function parseTallyXLSReal(file, type){
+  // Ensure SheetJS is loaded
+  if(!window.XLSX){
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  }
+  const buffer = await file.arrayBuffer();
+  const wb = window.XLSX.read(buffer, {type:'array', cellDates:true});
+  const wsName = wb.SheetNames[0];
+  const ws = wb.Sheets[wsName];
+  const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  return parseRowsByType(rows, type);
+}
+
+function parseRowsByType(rows, type){
+  const transactions=[];
+  if(type==='daybook'){
+    // DAYBOOK: col0=date, col1=ledger, col4=vchType, col5=vchNo, col6=amount
+    // then next row: col1=costCentre
+    // then skip row (bank/cash), then col1=narration
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i];
+      const d=r[0];
+      const amt=parseFloat(String(r[6]).replace(/,/g,''))||0;
+      if(isDateVal(d) && amt>0){
+        const vchNo=String(r[5]||'');
+        const costCentre=i+1<rows.length?String(rows[i+1][1]||'').toUpperCase():'';
+        const narration=i+3<rows.length?String(rows[i+3][1]||''):'';
+        transactions.push({
+          date:fmtDateVal(d),
+          ledger:String(r[1]||''),
+          vchType:String(r[4]||'Payment'),
+          vchNo, amount:amt,
+          costCentre, narration
+        });
+      }
+    }
+  } else {
+    // LEDGER/COSTCENTRE report
+    let headerCC='';
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i];
+      const c0=String(r[0]||'');
+      if(c0.startsWith('Cost Centre:')) headerCC=c0.replace('Cost Centre:','').trim().toUpperCase();
+      const d=r[0];
+      if(isDateVal(d)){
+        const debit=parseFloat(String(r[7]||'').replace(/,/g,''))||0;
+        const credit=parseFloat(String(r[8]||'').replace(/,/g,''))||0;
+        const amt=debit||credit;
+        const vchNo=String(r[6]||r[4]||'');
+        // next row: col2=costCentre, col3=amount (confirms)
+        let costCentre=headerCC;
+        let narration='';
+        if(i+1<rows.length){
+          const r2=rows[i+1];
+          const cc=String(r2[2]||'').trim();
+          const ccAmt=parseFloat(String(r2[3]||'').replace(/,/g,''));
+          if(cc && !isNaN(ccAmt) && cc!=='nan') costCentre=cc.toUpperCase();
+          if(i+2<rows.length) narration=String(rows[i+2][2]||'');
+        }
+        if(amt>0) transactions.push({
+          date:fmtDateVal(d),
+          ledger:String(r[1]||''),
+          vchType:String(r[5]||'Payment'),
+          vchNo, amount:amt,
+          costCentre, narration
+        });
+      }
+    }
+  }
+  return transactions;
+}
+
+function isDateVal(v){
+  if(!v) return false;
+  if(v instanceof Date) return !isNaN(v.getTime());
+  const s=String(v);
+  return /^\d{4}-\d{2}-\d{2}/.test(s)||/^\d{1,2}[-\/]\w{3}[-\/]\d{2,4}/.test(s);
+}
+function fmtDateVal(v){
+  if(v instanceof Date) return v.toISOString().split('T')[0];
+  const d=new Date(String(v));
+  if(!isNaN(d)) return d.toISOString().split('T')[0];
+  return String(v).split('T')[0]||String(v);
+}
+function isDate(s){ return /^\d{4}-\d{2}-\d{2}/.test(s)||/^\d{1,2}[-\/]\w{3}/.test(s); }
+function fmtDate(s){ try{ return new Date(s).toISOString().split('T')[0]; }catch(e){return s;} }
+function str(v){ return v===null||v===undefined?'':String(v); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s); }); }
+
+// ─── MATCH TRANSACTIONS TO PROJECTS ──────────────────
+async function matchAndImport(transactions){
+  let matched=0, skipped=0, unmatched=0;
+  for(const tx of transactions){
+    // Find project by cost centre (case-insensitive)
+    const proj = D.projects.find(p=>p.costCentre && p.costCentre.toUpperCase()===tx.costCentre.toUpperCase());
+    if(!proj){
+      // Check if already in unmatched (by vchNo+amount)
+      const dup = tallyUnmatched.find(u=>u.vchNo===tx.vchNo&&u.amount===tx.amount&&u.date===tx.date);
+      if(!dup){ tallyUnmatched.push(tx); unmatched++; }
+      continue;
+    }
+    // Check for duplicate (same vchNo already in project releases)
+    if(!proj.releases) proj.releases=[];
+    const dup = proj.releases.find(r=>r.ref===tx.vchNo&&r.amount===tx.amount&&r.date===tx.date);
+    if(dup){ skipped++; continue; }
+    // Add to project releases
+    proj.releases.push({
+      id: uid(),
+      date: tx.date,
+      amount: tx.amount,
+      method: tx.vchType||'Payment',
+      ref: tx.vchNo,
+      notes: tx.narration||'',
+      costCentre: tx.costCentre,
+      source: 'tally'
+    });
+    await saveProjectDB(proj);
+    matched++;
+  }
+  if(synced>0 || unmatched>0){
+    // Record the dates of all imported transactions for the calendar
+    const importedDates = new Set(transactions.map(t=>t.date).filter(Boolean));
+    importedDates.forEach(d=>recordDaybookUpload(d));
+  }
+  toast(`✅ Imported: ${matched} matched · ${unmatched} unmatched · ${skipped} duplicates skipped`,'ok',5000);
+}
+
+// Override processTallyFile to use real parser
+async function processTallyFile(){
+  const fileInput=document.getElementById('tally-file');
+  const type=document.getElementById('tally-type').value;
+  if(!fileInput.files.length){toast('Select a file first','error');return;}
+  const file=fileInput.files[0];
+  document.getElementById('tally-progress').style.display='block';
+  setBusy(true,'Reading Tally file…');
+  try{
+    const transactions=await parseTallyXLSReal(file,type);
+    if(!transactions.length){toast('No transactions found. Check file format.','error',4000);setBusy(false);document.getElementById('tally-progress').style.display='none';return;}
+    await matchAndImport(transactions);
+    document.getElementById('tally-progress').style.display='none';
+    fileInput.value='';
+    setBusy(false);
+    renderFunds();
+  }catch(e){
+    document.getElementById('tally-progress').style.display='none';
+    setBusy(false);
+    toast('Error: '+e.message,'error',5000);
+    console.error('Tally parse error:',e);
+  }
+}
+
+// ─── UNMATCHED ACTIONS ────────────────────────────────
+async function assignUnmatched(i){
+  const tx=tallyUnmatched[i];
+  const pid=document.getElementById('um-assign-'+i)?.value;
+  if(!pid){toast('Select a project first','error');return;}
+  const proj=GP(pid); if(!proj)return;
+  if(!proj.releases) proj.releases=[];
+  proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,method:tx.vchType||'Payment',ref:tx.vchNo,notes:tx.narration||'',costCentre:tx.costCentre||'MANUAL',source:'tally-manual'});
+  try{
+    await saveProjectDB(proj);
+    tallyUnmatched.splice(i,1);
+    renderFunds(); ownerTab(3);
+    toast('✓ Transaction assigned to project','ok');
+  }catch(e){toast('Save failed','error');}
+}
+
+function deleteUnmatched(i){
+  if(!confirm('Delete this unmatched transaction?'))return;
+  tallyUnmatched.splice(i,1);
+  renderFunds(); ownerTab(3);
+  toast('Deleted','ok');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1320,7 +2100,7 @@ function initNP(){
   const sel=document.getElementById('np-cont');
   sel.innerHTML=D.contractors.length?D.contractors.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''):'<option value="">— Add contractors first —</option>';
   document.getElementById('np-calc').classList.add('hidden');
-  ['np-name','np-tender','np-loc','np-est','np-bid'].forEach(id=>document.getElementById(id).value='');
+  ['np-name','np-tender','np-loc','np-est','np-bid','np-cc'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('np-date').value=new Date().toISOString().split('T')[0];
 }
 
@@ -1364,6 +2144,7 @@ async function saveProject(){
     estimated:est,bidPct:parseFloat(document.getElementById('np-bid').value)||0,
     agreeDate:document.getElementById('np-date').value,
     location:document.getElementById('np-loc').value.trim(),
+    costCentre:document.getElementById('np-cc').value.trim().toUpperCase(),
     boq,verifications:[],releases:[],contractorUpdates:[],
     createdAt:new Date().toISOString()};
   D.projects.push(proj);
@@ -1648,24 +2429,60 @@ function renderCHome(){
   document.getElementById('cp-home').classList.remove('hidden');
   document.getElementById('cp-proj').classList.add('hidden');
   document.getElementById('cp-upd').classList.add('hidden');
+  document.getElementById('cp-funds').classList.add('hidden');
   const mine=D.projects.filter(p=>p.contractorId===CU.id);
   const el=document.getElementById('cp-home');
-  if(!mine.length){el.innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>';return;}
-  el.innerHTML=`<h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">My Projects</h2>
+
+  // Check offline queue count asynchronously and update UI
+  getOfflineQueue().then(q=>{
+    const pendingEl = document.getElementById('offline-pending-banner');
+    if(pendingEl && q.length>0){
+      pendingEl.style.display='block';
+      pendingEl.innerHTML=`<div class="alert al-amber" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span>📥 ${q.length} update${q.length>1?'s':''} saved offline — not yet synced</span>
+        ${navigator.onLine&&dbOK?`<button class="btn btn-sm btn-navy" onclick="syncOfflineQueue().then(renderCHome)">Sync Now</button>`:'<span style="font-size:12px;color:var(--amber)">Connect internet to sync</span>'}
+      </div>`;
+    }
+  }).catch(()=>{});
+
+  if(!mine.length){
+    el.innerHTML='<div id="offline-pending-banner"></div><div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>';
+    return;
+  }
+  el.innerHTML=`
+    <div id="offline-pending-banner"></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">My Projects</h2>
     <p style="font-size:13px;color:var(--text3);margin-bottom:20px">Tap a project to update progress or upload photos.</p>`+
   mine.map(p=>`<div class="ppill" onclick="cOpenProj('${p.id}')">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;flex-wrap:wrap">
       <div><div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:3px">${p.name}</div>
       <div style="font-size:12px;color:var(--text3)">${p.type} · ${p.location||''} · #${p.tender}</div></div>
-      ${sBadge(pStat(p))}
+      ${sBadge(pStat(p),p)}
     </div>
     <div class="prog" style="margin:0"><div class="prog-lbl"><span>Work verified by RSR</span><span>${pct(verPct(p))}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(verPct(p),100)}%"></div></div></div>
   </div>`).join('');
+
+  // Async: update offline banner after render
+  setTimeout(()=>{
+    getOfflineQueue().then(q=>{
+      const pendingEl = document.getElementById('offline-pending-banner');
+      if(pendingEl){
+        if(q.length>0){
+          pendingEl.innerHTML=`<div class="alert al-amber" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <span>📥 ${q.length} update${q.length>1?'s':''} saved offline — not yet synced</span>
+            ${navigator.onLine&&dbOK?`<button class="btn btn-sm btn-navy" onclick="syncOfflineQueue().then(()=>renderCHome())">Sync Now</button>`:'<span style="font-size:12px">Connect internet to sync</span>'}
+          </div>`;
+        } else {
+          pendingEl.innerHTML='';
+        }
+      }
+    }).catch(()=>{});
+  }, 100);
 }
 
 async function cOpenProj(id){
-  // Re-fetch fresh data before opening
-  if (dbOK) { try { await loadDB(); } catch(e){} }
+  // Lazy fetch full project data before opening
+  if (dbOK) { try { await fetchProjectFull(id); } catch(e){} }
   const p=GP(id);
   document.getElementById('cp-home').classList.add('hidden');
   document.getElementById('cp-upd').classList.add('hidden');
@@ -1682,6 +2499,7 @@ async function cOpenProj(id){
     <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:16px" onclick="cOpenUpd('${id}')">
       📸 Update Progress + Upload Photos
     </button>
+    ${capAlert(p)}
     <div class="card"><div class="st">Work Status</div>
       <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Total</th><th style="color:var(--amber)">You Reported</th><th style="color:var(--navy)">RSR Verified</th><th>Progress</th></tr></thead><tbody>
       ${(p.boq||[]).map(item=>{
@@ -1708,115 +2526,159 @@ async function cOpenProj(id){
     </div>`;
 }
 
+
+// ═══════════════════════════════════════════════════════
+// GPS CAPTURE
+// ═══════════════════════════════════════════════════════
+function captureGPS(){
+  const tag=document.getElementById('gps-tag');
+  gpsData=null;
+  if(!navigator.geolocation){
+    if(tag){tag.textContent='📍 Location unavailable on this device';tag.className='gps-tag fail';}
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    async(pos)=>{
+      const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+      const time=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      let area=lat.toFixed(4)+', '+lng.toFixed(4);
+      try{
+        const r=await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json');
+        const d=await r.json();
+        const a=d.address;
+        const sub=a.suburb||a.neighbourhood||a.village||a.town||a.city||'';
+        const city=a.city||a.town||'';
+        area=sub&&city&&sub!==city?sub+', '+city:sub||city||area;
+      }catch(e){}
+      gpsData={lat,lng,acc,area,time};
+      if(tag){tag.textContent='📍 '+area+' · '+time+' · ±'+acc+'m';tag.className='gps-tag got';}
+    },
+    (err)=>{
+      gpsData=null;
+      if(tag){tag.textContent='📍 Location denied — photos will not have GPS';tag.className='gps-tag fail';}
+    },
+    {enableHighAccuracy:true,timeout:15000,maximumAge:60000}
+  );
+}
+
 function cOpenUpd(id){
   const p=GP(id);
   document.getElementById('cp-proj').classList.add('hidden');
   const el=document.getElementById('cp-upd');
   el.classList.remove('hidden');
   photos=[];
+  gpsData=null;
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <button class="btn btn-sm" onclick="cOpenProj('${id}')">← Back</button>
       <div style="font-size:16px;font-weight:700;color:var(--navy)">Update Progress</div>
     </div>
     <div class="card">
       <div class="fg"><label>Date</label><input type="date" id="cu-date" value="${new Date().toISOString().split('T')[0]}"></div>
-      <div class="fg"><label>Notes — What was done?</label><textarea id="cu-notes" rows="3" placeholder="e.g. Excavation completed for section 3, RCC work started…"></textarea></div>
+      <div class="fg"><label>Notes — What was done today?</label><textarea id="cu-notes" rows="3" placeholder="e.g. Excavation completed, RCC work started…"></textarea></div>
     </div>
     <div class="card">
       <div class="st">Today's Work Quantities</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter how much work you did <strong>today only</strong> — not the total. The app will add it up automatically.</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter <strong>today's quantity only</strong>. App totals automatically.</div>
       ${(p.boq||[]).map(item=>{
         const alreadyReported=(p.reportedItems||{})[item.id]||0;
         const remaining=Math.max(0,item.qty-alreadyReported);
         return`<div class="vrow">
-          <div class="vdesc">${item.desc}
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">Total BOQ: ${item.qty} ${item.unit} · Already reported: ${alreadyReported} · Remaining: ${remaining}</div>
+          <div class="vdesc"><strong>${item.desc}</strong>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Total: ${item.qty} ${item.unit} · Done: ${alreadyReported} · Left: ${remaining}</div>
           </div>
-          <div class="vmeta">+today</div>
           <input type="number" class="vinput" id="cu-q-${item.id}" placeholder="0" min="0" max="${remaining}" step="0.1">
         </div>`;}).join('')}
     </div>
     <div class="card">
-      <div class="st">📸 Site Photos</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">RSR will review these before releasing funds. Max 5 photos.</div>
+      <div class="st">📸 Site Photos <span style="color:var(--red);font-weight:800">* Required</span></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">At least 1 photo is required. RSR reviews before releasing funds.</div>
+      <div class="photo-req" id="photo-req-msg">⚠️ You must add at least 1 photo before submitting.</div>
+      <div style="margin-bottom:10px">
+        <span class="gps-tag" id="gps-tag">📍 Getting your location…</span>
+      </div>
       <div class="pgrid" id="cu-pgrid">
-        <label class="padd" for="cu-photo-inp"><div class="padd-icon">📷</div><div>Tap to add photo</div></label>
+        <label class="padd" for="cu-photo-inp" style="min-height:90px">
+          <div class="padd-icon">📷</div>
+          <div style="font-weight:600">Add Photo</div>
+          <div style="font-size:11px">Camera or Gallery</div>
+        </label>
       </div>
       <input type="file" id="cu-photo-inp" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
     </div>
-    <button class="btn btn-navy btn-full" style="padding:14px;font-size:15px" id="cu-submit-btn" onclick="submitUpd('${id}')">✅ Submit Update to RSR</button>`;
+    <button class="btn btn-navy btn-full" style="padding:16px;font-size:16px;margin-bottom:16px" id="cu-submit-btn" onclick="submitUpd('${id}')">
+      ✅ Submit Update to RSR
+    </button>`;
+  captureGPS();
 }
 
 async function handlePhotos(evt){
   const files=Array.from(evt.target.files);
   if(photos.length+files.length>5){alert('Maximum 5 photos per update.');return;}
+  const captureTime=new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   for(const file of files){
     if(file.size>20*1024*1024){alert(file.name+' is too large. Max 20MB.');continue;}
     setBusy(true,'Compressing photo…');
-    try {
-      const compressed = await compressImage(file);
-      const r = new FileReader();
-      const dataUrl = await new Promise(res=>{r.onload=e=>res(e.target.result);r.readAsDataURL(compressed);});
-      photos.push({name:file.name, file:compressed, dataUrl});
-    } catch(e){ console.error(e); }
+    try{
+      const compressed=await compressImage(file);
+      const r=new FileReader();
+      const dataUrl=await new Promise(res=>{r.onload=e=>res(e.target.result);r.readAsDataURL(compressed);});
+      photos.push({name:file.name,file:compressed,dataUrl,captureTime,gps:gpsData?{lat:gpsData.lat,lng:gpsData.lng,area:gpsData.area,time:gpsData.time}:null});
+    }catch(e){console.error(e);}
     setBusy(false);
   }
+  const req=document.getElementById('photo-req-msg');
+  if(req&&photos.length>0)req.classList.remove('show');
   renderPhotoPreview();
-  // Reset input so same file can be re-selected
   evt.target.value='';
 }
 
 function renderPhotoPreview(){
-  const g=document.getElementById('cu-pgrid'); if(!g)return;
-  g.innerHTML=photos.map((ph,i)=>`<div class="pitem" style="position:relative"><img src="${ph.dataUrl}" alt=""><div class="pcap">${ph.name}</div><button onclick="event.stopPropagation();photos.splice(${i},1);renderPhotoPreview()" style="position:absolute;top:4px;right:4px;background:rgba(192,57,43,.9);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-weight:700">✕</button></div>`).join('')+
-    (photos.length<5?`<label class="padd" for="cu-photo-inp"><div class="padd-icon">➕</div><div>Add more</div></label>`:'');
+  const g=document.getElementById('cu-pgrid');if(!g)return;
+  g.innerHTML=photos.map((ph,i)=>`<div class="pitem" style="position:relative" onclick="lightbox('${ph.dataUrl}')"><img src="${ph.dataUrl}" alt=""><div class="pcap">${ph.gps?'📍 '+ph.gps.area+' · '+ph.captureTime:'🕐 '+ph.captureTime}</div><button onclick="event.stopPropagation();photos.splice(${i},1);renderPhotoPreview()" style="position:absolute;top:4px;right:4px;background:rgba(192,57,43,.9);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;font-weight:700;line-height:1">✕</button></div>`).join('')+(photos.length<5?`<label class="padd" for="cu-photo-inp" style="min-height:90px"><div class="padd-icon">➕</div><div style="font-size:12px">Add more</div></label>`:'');
 }
 
 async function submitUpd(pid){
   const p=GP(pid);
+  if(photos.length===0){
+    const req=document.getElementById('photo-req-msg');
+    if(req){req.classList.add('show');req.scrollIntoView({behavior:'smooth',block:'center'});}
+    toast('📸 Please add at least 1 site photo','error',3000);
+    return;
+  }
   const date=document.getElementById('cu-date').value;
   const notes=document.getElementById('cu-notes').value;
   const quantities={};
   (p.boq||[]).forEach(item=>{
     const todayDelta=parseFloat(document.getElementById('cu-q-'+item.id)?.value)||0;
-    if(todayDelta>0) quantities[item.id]=todayDelta; // store delta only
+    if(todayDelta>0)quantities[item.id]=todayDelta;
   });
-
   const btn=document.getElementById('cu-submit-btn');
-  btn.disabled=true; btn.textContent='Submitting…';
-  const updateId = uid();
-
-  try {
-    // Upload all photos to Supabase Storage first
-    const uploadedPhotos = [];
-    for(let i=0; i<photos.length; i++){
-      setBusy(true, `Uploading photo ${i+1}/${photos.length}…`);
-      const url = await uploadPhoto(photos[i].file, pid, updateId);
-      uploadedPhotos.push({ url, name: photos[i].name });
+  btn.disabled=true;btn.textContent='Submitting…';
+  const updateId=uid();
+  try{
+    const uploadedPhotos=[];
+    for(let i=0;i<photos.length;i++){
+      setBusy(true,`Uploading photo ${i+1}/${photos.length}…`);
+      const url=await uploadPhoto(photos[i].file,pid,updateId);
+      uploadedPhotos.push({url,name:photos[i].name,captureTime:photos[i].captureTime,gps:photos[i].gps});
     }
     setBusy(false);
-
-    // Now save the update to project JSON (small — just URLs)
-    if(!p.contractorUpdates) p.contractorUpdates=[];
-    p.contractorUpdates.push({
-      id: updateId,
-      date, notes, quantities,
-      photos: uploadedPhotos,
-      reviewed: false,
-      submittedBy: CU.name,
-      contractorId: CU.id
-    });
+    if(!p.contractorUpdates)p.contractorUpdates=[];
+    p.contractorUpdates.push({id:updateId,date,notes,quantities,photos:uploadedPhotos,reviewed:false,submittedBy:CU.name,contractorId:CU.id,submittedGPS:gpsData?{lat:gpsData.lat,lng:gpsData.lng,area:gpsData.area,time:gpsData.time}:null});
     await saveProjectDB(p);
-    photos=[];
+    photos=[];gpsData=null;
     toast('✅ Update submitted to RSR!','ok',3000);
     setTimeout(()=>cOpenProj(pid),1200);
-  } catch(e){
+  }catch(e){
     toast('Submit failed: '+e.message,'error',5000);
-    btn.disabled=false; btn.textContent='✅ Submit Update to RSR';
+    btn.disabled=false;btn.textContent='✅ Submit Update to RSR';
     setBusy(false);
   }
 }
+
+
+
 
 function lightbox(src){
   document.getElementById('lb-img').src=src;
@@ -1826,6 +2688,540 @@ function lightbox(src){
 document.querySelectorAll('.mov').forEach(ov=>{
   ov.addEventListener('click',e=>{if(e.target===ov)CM(ov.id);});
 });
+
+// ═══════════════════════════════════════════════════════
+// PWA — MANIFEST + OFFLINE QUEUE + SERVICE WORKER
+// ═══════════════════════════════════════════════════════
+
+// Inject manifest dynamically (since we're a single HTML file)
+function setupPWAManifest(){
+  const manifest = {
+    name: 'RSR Constructions Tracker',
+    short_name: 'RSR Tracker',
+    description: 'Project and finance tracking for RSR Constructions',
+    start_url: './',
+    display: 'standalone',
+    background_color: '#1a2744',
+    theme_color: '#1a2744',
+    orientation: 'portrait-primary',
+    icons: [
+      { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='96' fill='%231a2744'/><text x='96' y='120' font-size='72' fill='%23c9a84c' text-anchor='middle' font-family='Georgia' font-weight='900'>RSR</text></svg>", sizes: '192x192', type: 'image/svg+xml' },
+      { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><circle cx='256' cy='256' r='256' fill='%231a2744'/><text x='256' y='320' font-size='192' fill='%23c9a84c' text-anchor='middle' font-family='Georgia' font-weight='900'>RSR</text></svg>", sizes: '512x512', type: 'image/svg+xml' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  const url = URL.createObjectURL(blob);
+  document.getElementById('pwa-manifest').href = url;
+}
+
+// ─── INDEXEDDB OFFLINE QUEUE ─────────────────────────
+// Uses IndexedDB instead of localStorage — supports 50-500MB vs 5MB limit
+// Each queue item stored as a separate record with its photos as blobs
+// This means 50+ compressed photos (each ~100KB) = ~5MB total — no problem
+
+const IDB_NAME = 'RSROfflineDB';
+const IDB_VERSION = 1;
+const IDB_STORE = 'offlineQueue';
+let _idb = null; // cached db connection
+
+function openIDB(){
+  if(_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(IDB_STORE)){
+        const store = db.createObjectStore(IDB_STORE, {keyPath:'id'});
+        store.createIndex('queuedAt','queuedAt',{unique:false});
+      }
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror = e => { console.error('IDB open failed:', e); reject(e); };
+  });
+}
+
+async function idbGetAll(){
+  try {
+    const db = await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch(e) { console.error('idbGetAll failed:', e); return []; }
+}
+
+async function idbPut(item){
+  try {
+    const db = await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).put(item);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    });
+  } catch(e) { console.error('idbPut failed:', e); return false; }
+}
+
+async function idbDelete(id){
+  try {
+    const db = await openIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e) { return false; }
+}
+
+async function idbClear(){
+  try {
+    const db = await openIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e) { return false; }
+}
+
+// Public API — replaces old localStorage functions
+async function getOfflineQueue(){
+  return await idbGetAll();
+}
+
+async function addToOfflineQueue(item){
+  const record = {...item, id: item.updateId || uid(), queuedAt: new Date().toISOString()};
+  const ok = await idbPut(record);
+  if(ok){
+    toast('📥 Saved offline — will sync when you have internet','ok',4000);
+  } else {
+    // Fallback to localStorage if IDB fails (very rare)
+    console.warn('IDB save failed, falling back to localStorage');
+    try{
+      const existing = JSON.parse(localStorage.getItem('rsr_offline_fallback')||'[]');
+      existing.push(record);
+      localStorage.setItem('rsr_offline_fallback', JSON.stringify(existing));
+      toast('📥 Saved offline (fallback storage)','ok',4000);
+    }catch(e){
+      toast('⚠️ Could not save offline — storage full','error',5000);
+    }
+  }
+}
+
+async function syncOfflineQueue(){
+  if(!dbOK) return;
+  const q = await getOfflineQueue();
+  // Also check localStorage fallback
+  let fallback = [];
+  try{ fallback = JSON.parse(localStorage.getItem('rsr_offline_fallback')||'[]'); }catch(e){}
+  const allItems = [...q, ...fallback];
+  if(!allItems.length) return;
+
+  let synced=0, failed=0;
+  for(const item of allItems){
+    try{
+      if(item.type==='projectUpdate'){
+        // Re-fetch project to get latest state
+        const p = await fetchProjectFull(item.projectId);
+        if(!p){ failed++; continue; }
+
+        // Check not already synced (duplicate guard)
+        if((p.contractorUpdates||[]).find(u=>u.id===item.update.id)){
+          await idbDelete(item.id);
+          synced++;
+          continue;
+        }
+
+        // Upload photos — stored as dataURLs, convert to blobs
+        const uploadedPhotos=[];
+        const photoCount = (item.photos||[]).length;
+        for(let pi=0; pi<photoCount; pi++){
+          const ph = item.photos[pi];
+          setBusy(true,`Syncing photo ${pi+1}/${photoCount}…`);
+          if(ph.dataUrl && !ph.url){
+            try{
+              const res = await fetch(ph.dataUrl);
+              const blob = await res.blob();
+              const file = new File([blob], ph.name||'photo.jpg', {type:'image/jpeg'});
+              const url = await uploadPhoto(file, item.projectId, item.updateId||item.id);
+              uploadedPhotos.push({url, name:ph.name, captureTime:ph.captureTime, gps:ph.gps});
+            }catch(photoErr){
+              console.error('Photo upload failed during sync:', photoErr);
+              // Continue with other photos — don't lose the whole update
+              uploadedPhotos.push({url:'', name:ph.name, captureTime:ph.captureTime, gps:ph.gps, _uploadFailed:true});
+            }
+          } else {
+            uploadedPhotos.push(ph);
+          }
+        }
+        setBusy(false);
+
+        // Save update to project
+        if(!p.contractorUpdates) p.contractorUpdates=[];
+        p.contractorUpdates.push({...item.update, photos:uploadedPhotos, _syncedFrom:'offline'});
+        await saveProjectDB(p);
+
+        // Remove from IDB queue on success
+        await idbDelete(item.id);
+        synced++;
+      }
+    }catch(e){
+      console.error('Sync failed for item:', item.id, e);
+      failed++;
+    }
+  }
+  setBusy(false);
+
+  // Clear localStorage fallback if everything synced
+  if(synced>0 && failed===0){
+    localStorage.removeItem('rsr_offline_fallback');
+  }
+
+  if(synced>0){
+    toast(`✅ ${synced} offline update${synced>1?'s':''} synced successfully!`,'ok',4000);
+    // Reload project data to show synced updates
+    try{ await loadDBSummary(); }catch(e){}
+    if(CU?.role==='contractor') renderCHome();
+  }
+  if(failed>0 && synced===0){
+    toast(`⚠️ Sync failed for ${failed} update${failed>1?'s':''} — will retry when reconnected`,'error',5000);
+  }
+}
+
+async function checkOfflineQueue(){
+  const q = await getOfflineQueue();
+  let fallback = [];
+  try{ fallback = JSON.parse(localStorage.getItem('rsr_offline_fallback')||'[]'); }catch(e){}
+  const total = q.length + fallback.length;
+  if(total>0){
+    toast(`📥 ${total} update${total>1?'s':''} pending sync — connect to internet to upload`,'ok',5000);
+  }
+}
+
+// Check connectivity and sync on coming back online
+window.addEventListener('online', ()=>{
+  dbOK=true;
+  toast('🌐 Back online — syncing…','ok',2000);
+  setTimeout(syncOfflineQueue, 1500);
+});
+window.addEventListener('offline', ()=>{
+  dbOK=false;
+  toast('📵 You are offline. Updates will be saved locally.','error',4000);
+});
+
+// ─── SUBMIT UPDATE (online + offline + duplicate check) ───
+async function submitUpd(pid){
+  const p=GP(pid);
+
+  // DUPLICATE WARNING — check if already submitted today
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayUpds = (p.contractorUpdates||[]).filter(u=>
+    u.contractorId===CU.id && u.date===todayStr && !u.rejected
+  );
+  if(todayUpds.length>0){
+    const proceed = confirm(
+      '⚠️ You already submitted an update for this project today ('+todayStr+').\n\n'+
+      'Previous: "'+( todayUpds[todayUpds.length-1].notes||'No notes')+'"\n\n'+
+      'Do you want to submit another update anyway?'
+    );
+    if(!proceed) return;
+  }
+
+  // PHOTO CHECK
+  if(photos.length===0){
+    const req=document.getElementById('photo-req-msg');
+    if(req){req.classList.add('show');req.scrollIntoView({behavior:'smooth',block:'center'});}
+    toast('📸 Please add at least 1 site photo','error',3000);
+    return;
+  }
+
+  const date=document.getElementById('cu-date').value;
+  const notes=document.getElementById('cu-notes').value;
+  const quantities={};
+  (p.boq||[]).forEach(item=>{
+    const delta=parseFloat(document.getElementById('cu-q-'+item.id)?.value)||0;
+    if(delta>0)quantities[item.id]=delta;
+  });
+  const updateId=uid();
+
+  // OFFLINE PATH
+  if(!navigator.onLine || !dbOK){
+    const update={id:updateId,date,notes,quantities,reviewed:false,
+      submittedBy:CU.name,contractorId:CU.id,
+      submittedGPS:gpsData?{...gpsData}:null,_offline:true};
+    const offlinePhotos=photos.map(ph=>({name:ph.name,dataUrl:ph.dataUrl,captureTime:ph.captureTime,gps:ph.gps}));
+    await addToOfflineQueue({type:'projectUpdate',projectId:pid,updateId,update,photos:offlinePhotos});
+    if(!p.contractorUpdates) p.contractorUpdates=[];
+    p.contractorUpdates.push({...update,photos:offlinePhotos.map(ph=>({...ph,url:ph.dataUrl}))});
+    photos=[];gpsData=null;
+    const btn=document.getElementById('cu-submit-btn');
+    if(btn)btn.textContent='📥 Saved Offline';
+    setTimeout(()=>cOpenProj(pid),1200);
+    return;
+  }
+
+  // ONLINE PATH
+  const btn=document.getElementById('cu-submit-btn');
+  btn.disabled=true;btn.textContent='Submitting…';
+  try{
+    const uploadedPhotos=[];
+    for(let i=0;i<photos.length;i++){
+      setBusy(true,`Uploading photo ${i+1}/${photos.length}…`);
+      const url=await uploadPhoto(photos[i].file,pid,updateId);
+      uploadedPhotos.push({url,name:photos[i].name,captureTime:photos[i].captureTime,gps:photos[i].gps});
+    }
+    setBusy(false);
+    if(!p.contractorUpdates) p.contractorUpdates=[];
+    p.contractorUpdates.push({id:updateId,date,notes,quantities,
+      photos:uploadedPhotos,reviewed:false,
+      submittedBy:CU.name,contractorId:CU.id,
+      submittedGPS:gpsData?{...gpsData}:null});
+    await saveProjectDB(p);
+    photos=[];gpsData=null;
+    toast('✅ Update submitted to RSR!','ok',3000);
+    setTimeout(()=>cOpenProj(pid),1200);
+  }catch(e){
+    toast('Submit failed: '+e.message,'error',5000);
+    btn.disabled=false;btn.textContent='✅ Submit Update to RSR';
+    setBusy(false);
+  }
+}
+
+// Show offline queue status if there are pending items
+function checkOfflineQueue(){
+  const q=getOfflineQueue();
+  if(q.length>0){
+    toast(`📥 ${q.length} update${q.length>1?'s':''} pending sync — connect to internet to upload`,'ok',5000);
+  }
+}
+
+// ─── INSTALL PROMPT ───────────────────────────────────
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show install button after login
+  setTimeout(showInstallBanner, 2000);
+});
+
+function showInstallBanner(){
+  if(!deferredInstallPrompt || !CU) return;
+  const existing = document.getElementById('install-banner');
+  if(existing) return;
+  const banner = document.createElement('div');
+  banner.id='install-banner';
+  banner.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:999;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:320px;border:1px solid rgba(201,168,76,.3)';
+  banner.innerHTML=`<span>📱 Install RSR App on your phone</span><button onclick="installPWA()" style="background:var(--gold);color:var(--navy);border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">Install</button><button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:18px">✕</button>`;
+  document.body.appendChild(banner);
+}
+
+async function installPWA(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const result = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+  if(result.outcome==='accepted') toast('✅ RSR app installed!','ok');
+}
+
+// ─── SERVICE WORKER ───────────────────────────────────
+function registerServiceWorker(){
+  if(!('serviceWorker' in navigator)) return;
+  // Inline service worker as a blob (since we're a single HTML file)
+  const swCode = `
+const CACHE_NAME = 'rsr-tracker-v13';
+const STATIC_ASSETS = ['/'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(STATIC_ASSETS).catch(()=>{});
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    ))
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', e => {
+  // Cache-first for same-origin HTML (the app shell)
+  if(e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/').then(r => r || fetch(e.request)))
+    );
+    return;
+  }
+  // Network-first for Supabase API calls (always want fresh data)
+  if(e.request.url.includes('supabase.co')) {
+    e.respondWith(
+      fetch(e.request).catch(() => new Response(JSON.stringify([]), {headers:{'Content-Type':'application/json'}}))
+    );
+    return;
+  }
+  // Cache-first for CDN resources (SheetJS, fonts)
+  if(e.request.url.includes('cdnjs.cloudflare.com') || e.request.url.includes('fonts.googleapis.com')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if(cached) return cached;
+        return fetch(e.request).then(r => {
+          const clone = r.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          return r;
+        });
+      })
+    );
+    return;
+  }
+  // Default: network with cache fallback
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+`;
+  const blob = new Blob([swCode], {type:'application/javascript'});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl, {scope:'/'})
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.log('SW registration failed (normal for file:// protocol):', err.message));
+}
+
+// ═══════════════════════════════════════════════════════
+// FULL DATA EXPORT (Excel — all projects, finance, updates)
+// ═══════════════════════════════════════════════════════
+async function exportAllData(){
+  setBusy(true,'Preparing export…');
+  try {
+    // Ensure SheetJS is loaded
+    if(!window.XLSX){
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    }
+
+    const wb = window.XLSX.utils.book_new();
+    const now = new Date().toLocaleString('en-IN');
+
+    // ── SHEET 1: Projects Summary ──
+    const projRows = [
+      ['RSR CONSTRUCTIONS — Data Export', '', '', '', '', '', '', '', now],
+      [],
+      ['Project Name','Tender ID','Type','Contractor','Location','Tally Cost Centre',
+       'Agreement Amount','Max Fundable (70%)','Total Deployed','Cap Used %',
+       'Verified Work %','Total Settled','Outstanding','Interest Accrued','Status']
+    ];
+    D.projects.forEach(p=>{
+      const c=GC(p.contractorId);
+      const rel=totRel(p),max=maxF(p),settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
+      projRows.push([
+        p.name, p.tender, p.type, c?c.name:'—', p.location||'—', p.costCentre||'—',
+        Math.round(agAmt(p)), Math.round(max),
+        Math.round(rel), Math.round(rel/max*100)+'%',
+        Math.round(verPct(p))+'%',
+        Math.round(settled), Math.round(Math.max(0,rel-settled)),
+        Math.round(intr(p)),
+        pStat(p)==='green'?'On Track':pStat(p)==='red'?'High Risk':'Caution'
+      ]);
+    });
+    const ws1 = window.XLSX.utils.aoa_to_sheet(projRows);
+    ws1['!cols'] = [{wch:40},{wch:12},{wch:12},{wch:20},{wch:20},{wch:35},
+      {wch:16},{wch:16},{wch:14},{wch:10},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12}];
+    window.XLSX.utils.book_append_sheet(wb, ws1, 'Projects Summary');
+
+    // ── SHEET 2: All Fund Releases ──
+    const fundRows = [
+      ['Date','Project','Contractor','Voucher No','Cost Centre','Method','Narration','Amount','Source']
+    ];
+    D.projects.forEach(p=>{
+      const c=GC(p.contractorId);
+      (p.releases||[]).forEach(r=>{
+        fundRows.push([
+          r.date, p.name, c?c.name:'—', r.ref||'—', r.costCentre||'—',
+          r.method||'—', r.notes||'—', r.amount, r.source||'manual'
+        ]);
+      });
+    });
+    fundRows.sort((a,b)=>new Date(b[0])-new Date(a[0]));
+    const ws2 = window.XLSX.utils.aoa_to_sheet(fundRows);
+    ws2['!cols']=[{wch:12},{wch:40},{wch:20},{wch:12},{wch:35},{wch:10},{wch:30},{wch:12},{wch:14}];
+    window.XLSX.utils.book_append_sheet(wb, ws2, 'Fund Releases');
+
+    // ── SHEET 3: Government Settlements ──
+    const settRows = [['Date','Project','Contractor','Amount','Mode','Reference','Notes']];
+    D.projects.forEach(p=>{
+      const c=GC(p.contractorId);
+      (p.settlements||[]).forEach(s=>{
+        settRows.push([s.date, p.name, c?c.name:'—', s.amount, s.mode||'—', s.ref||'—', s.notes||'—']);
+      });
+    });
+    const ws3 = window.XLSX.utils.aoa_to_sheet(settRows);
+    ws3['!cols']=[{wch:12},{wch:40},{wch:20},{wch:12},{wch:10},{wch:16},{wch:30}];
+    window.XLSX.utils.book_append_sheet(wb, ws3, 'Settlements');
+
+    // ── SHEET 4: BOQ & Verification ──
+    const boqRows = [['Project','BOQ Item','Unit','Total Qty','Rate','Total Value','Reported Qty','Verified Qty','Verified %']];
+    D.projects.forEach(p=>{
+      const lv=(p.verifications||[]).slice(-1)[0];
+      (p.boq||[]).forEach(item=>{
+        const reported=(p.reportedItems||{})[item.id]||0;
+        const verified=lv?(lv.items[item.id]||0):0;
+        boqRows.push([
+          p.name, item.desc, item.unit, item.qty, item.rate,
+          Math.round(item.qty*item.rate), reported, verified,
+          item.qty?Math.round(verified/item.qty*100)+'%':'—'
+        ]);
+      });
+    });
+    const ws4 = window.XLSX.utils.aoa_to_sheet(boqRows);
+    ws4['!cols']=[{wch:40},{wch:30},{wch:8},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:10}];
+    window.XLSX.utils.book_append_sheet(wb, ws4, 'BOQ & Verification');
+
+    // ── SHEET 5: Contractor Updates Log ──
+    const updRows = [['Date','Project','Contractor','Notes','Quantities Reported','Status','GPS Location','Submitted At']];
+    D.projects.forEach(p=>{
+      const c=GC(p.contractorId);
+      (p.contractorUpdates||[]).forEach(u=>{
+        const qtyStr = (p.boq||[]).filter(i=>u.quantities?.[i.id])
+          .map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join('; ');
+        const status = u.rejected?'Rejected':u.reviewed?'Approved':'Pending';
+        const gps = u.submittedGPS ? `${u.submittedGPS.area} (${u.submittedGPS.time})` : '—';
+        updRows.push([u.date, p.name, c?c.name:u.submittedBy||'—',
+          u.notes||'—', qtyStr||'—', status, gps, u.queuedAt||'—']);
+      });
+    });
+    const ws5 = window.XLSX.utils.aoa_to_sheet(updRows);
+    ws5['!cols']=[{wch:12},{wch:40},{wch:20},{wch:30},{wch:40},{wch:10},{wch:30},{wch:20}];
+    window.XLSX.utils.book_append_sheet(wb, ws5, 'Site Updates Log');
+
+    // ── SHEET 6: Contractors ──
+    const cRows = [['Name','Phone','Notes','Projects Count','Total Deployed','Created']];
+    D.contractors.forEach(c=>{
+      const pp=D.projects.filter(p=>p.contractorId===c.id);
+      const dep=pp.reduce((s,p)=>s+totRel(p),0);
+      cRows.push([c.name, c.phone||'—', c.notes||'—', pp.length, Math.round(dep), c.createdAt?.split('T')[0]||'—']);
+    });
+    const ws6 = window.XLSX.utils.aoa_to_sheet(cRows);
+    ws6['!cols']=[{wch:25},{wch:14},{wch:30},{wch:14},{wch:16},{wch:12}];
+    window.XLSX.utils.book_append_sheet(wb, ws6, 'Contractors');
+
+    // Generate file
+    const filename = `RSR_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+    window.XLSX.writeFile(wb, filename);
+    setBusy(false);
+    toast(`✅ Exported: ${filename}`,'ok',4000);
+
+  } catch(e) {
+    setBusy(false);
+    toast('Export failed: '+e.message,'error',5000);
+    console.error('Export error:', e);
+  }
+}
 
 // Boot
 init();
