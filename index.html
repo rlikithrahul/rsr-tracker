@@ -174,6 +174,32 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
 .pw{position:relative}.pw input{padding-right:40px}
 .pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)}
+
+/* ACTION MENU (3-dot) */
+.amenu-wrap{position:relative;display:inline-block}
+.amenu-btn{background:none;border:1px solid var(--border);border-radius:var(--rs);padding:4px 8px;cursor:pointer;font-size:16px;color:var(--text3);line-height:1}
+.amenu-btn:hover{background:var(--surface2);color:var(--navy)}
+.amenu{position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:160px;z-index:150;display:none}
+.amenu.open{display:block}
+.amenu-item{display:block;width:100%;padding:10px 14px;font-size:13px;font-family:'Inter',sans-serif;font-weight:500;background:none;border:none;cursor:pointer;text-align:left;color:var(--text)}
+.amenu-item:hover{background:var(--surface2)}
+.amenu-item.danger{color:var(--red)}.amenu-item.danger:hover{background:var(--red-bg)}
+.amenu-item.success{color:var(--green)}.amenu-item.success:hover{background:var(--green-bg)}
+
+/* ALERT BANNERS */
+.alert-banner{border-radius:var(--rs);padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:6px;border:1px solid;display:flex;align-items:center;gap:8px;cursor:pointer}
+.ab-red{background:var(--red-bg);color:var(--red);border-color:#f0bdb8}
+.ab-amber{background:var(--amber-bg);color:var(--amber);border-color:#f5d5a0}
+.ab-navy{background:rgba(26,39,68,.06);color:var(--navy);border-color:var(--border)}
+
+/* SETTLE */
+.btn-green{background:#1a7a3a;color:#fff;border-color:#145e2c}.btn-green:hover{background:#22994a}
+.settle-row{background:var(--green-bg);border-radius:var(--rs);padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-size:13px;border:1px solid #b8dfc0}
+
+/* UPDATE REVIEW ACTIONS */
+.upd-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.btn-reject{background:var(--red-bg);color:var(--red);border:1px solid #f0bdb8;border-radius:var(--rs);padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-reject:hover{background:#fce8e6}
 </style>
 </head>
 <body>
@@ -399,6 +425,58 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   <img id="lb-img" style="max-width:95vw;max-height:90vh;border-radius:8px;margin:auto;display:block" src="" alt="">
 </div>
 
+<!-- Record Settlement / Government Payment -->
+<div class="mov" id="modal-settle">
+<div class="mbox" style="max-width:460px">
+  <div class="mhdr"><h2>🏦 Record Government Payment</h2><button class="mx" onclick="CM('modal-settle')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:14px">Record a payment received from GVMC / government against this project. This reduces outstanding balance and stops interest on the settled amount.</div>
+  <div id="settle-summary"></div>
+  <div class="fg"><label>Amount Received (₹)</label><input type="number" id="settle-amt" placeholder="e.g. 500000"></div>
+  <div class="frow">
+    <div class="fg"><label>Date Received</label><input type="date" id="settle-date"></div>
+    <div class="fg"><label>Payment Mode</label>
+      <select id="settle-mode"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Cash</option></select>
+    </div>
+  </div>
+  <div class="fg"><label>Reference / UTR / Cheque No.</label><input type="text" id="settle-ref" placeholder="For records"></div>
+  <div class="fg"><label>Notes</label><input type="text" id="settle-notes" placeholder="e.g. Bill No. 12, RA Bill 3"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-settle')">Cancel</button>
+    <button class="btn btn-green" onclick="confirmSettle()">Record Payment</button>
+  </div>
+</div></div>
+
+<!-- Edit Fund Release -->
+<div class="mov" id="modal-edit-release">
+<div class="mbox" style="max-width:460px">
+  <div class="mhdr"><h2>✏️ Edit Fund Release</h2><button class="mx" onclick="CM('modal-edit-release')">✕</button></div>
+  <div class="fg"><label>Amount (₹)</label><input type="number" id="er-amt"></div>
+  <div class="frow">
+    <div class="fg"><label>Date</label><input type="date" id="er-date"></div>
+    <div class="fg"><label>Method</label><select id="er-meth"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>UPI</option><option>Cash</option></select></div>
+  </div>
+  <div class="fg"><label>Reference / UTR</label><input type="text" id="er-ref"></div>
+  <div class="fg"><label>Notes</label><input type="text" id="er-notes"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-edit-release')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveEditRelease()">Save Changes</button>
+  </div>
+</div></div>
+
+<!-- Review Update: Approve with edit or Reject -->
+<div class="mov" id="modal-review-upd">
+<div class="mbox" style="max-width:560px">
+  <div class="mhdr"><h2>📋 Review Contractor Update</h2><button class="mx" onclick="CM('modal-review-upd')">✕</button></div>
+  <div class="alert al-amber" style="margin-bottom:14px">You can approve the quantities as-is, adjust the quantities before approving, or reject this update entirely.</div>
+  <div id="review-upd-fields"></div>
+  <div class="fg" style="margin-top:12px"><label>Your Notes (optional)</label><input type="text" id="ru-notes" placeholder="e.g. Verified 18 Cum not 20 Cum on site"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+    <button class="btn" onclick="CM('modal-review-upd')">Cancel</button>
+    <button class="btn-reject" onclick="rejectUpdate()">✗ Reject Update</button>
+    <button class="btn btn-navy" onclick="approveWithEdit()">✓ Approve</button>
+  </div>
+</div></div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -417,6 +495,10 @@ let bqc = 0, atab = 0, dpid = null, rfpid = null, vpid = null;
 let photos = []; // array of {name, dataUrl, file} during upload
 let dbOK = false;
 let autoRefreshTimer = null;
+// Edit/review state
+let editReleasePid = null, editReleaseId = null;
+let reviewUpdPid = null, reviewUpdId = null;
+let settlePid = null;
 
 // ═══════════════════════════════════════════════════════
 // SESSION (persists across page refresh)
@@ -754,11 +836,19 @@ function ownerTab(i){
 function renderDash(){
   const pp=D.projects;
   const cap=pp.reduce((s,p)=>s+totRel(p),0);
-  const it=pp.reduce((s,p)=>s+intr(p),0);
-  const at=pp.filter(p=>pStat(p)!=='green').length;
+  const settled=pp.reduce((s,p)=>s+(p.settlements||[]).reduce((a,x)=>a+x.amount,0),0);
+  const it=pp.reduce((s,p)=>{
+    const settledAmt=(p.settlements||[]).reduce((a,x)=>a+x.amount,0);
+    const outstanding=Math.max(0,totRel(p)-settledAmt);
+    return s+(p.releases||[]).reduce((a,r)=>{
+      const d=Math.max(0,Math.round((Date.now()-new Date(r.date).getTime())/86400000));
+      return a+r.amount*0.24*d/365;
+    },0);
+  },0);
+  const at=pp.filter(p=>getProjectAlerts(p).some(a=>a.type==='red'||a.type==='amber')).length;
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat"><div class="stat-lbl">Active Projects</div><div class="stat-val">${pp.length}</div><div class="stat-sub">all contractors</div></div>
-    <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">total released</div></div>
+    <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
     <div class="stat"><div class="stat-lbl">Interest Accruing</div><div class="stat-val int-val" style="font-size:17px">${fmt(it)}</div><div class="stat-sub">@ 24% p.a.</div></div>
     <div class="stat"><div class="stat-lbl">Need Attention</div><div class="stat-val" style="color:${at>0?'var(--red)':'var(--green)'}">${at}</div><div class="stat-sub">caution or stop</div></div>`;
   document.getElementById('dash-banner').innerHTML='';
@@ -766,43 +856,70 @@ function renderDash(){
     document.getElementById('dash-cards').innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects yet. Add your first project.</div></div>';
     return;
   }
-  document.getElementById('dash-cards').innerHTML=pp.map(p=>{
-    const c=GC(p.contractorId);
-    const rel=totRel(p),max=maxF(p),el=eligR(p),vp=verPct(p);
-    const rp=Math.min(rel/max*100,100); const s=pStat(p); const hw=hdroom(p);
-    const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed).length;
-    const lv=(p.verifications||[]).slice(-1)[0];
-    return `<div class="card">
-      <div class="card-hdr">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span class="card-title">${p.name}</span>${sBadge(s)}
-            ${pend>0?`<span class="badge bg-navy">📸 ${pend} new update${pend>1?'s':''}</span>`:''}
+
+  // Split into: needs attention vs healthy
+  const needsAttention = pp.filter(p=>getProjectAlerts(p).length>0);
+  const healthy = pp.filter(p=>getProjectAlerts(p).length===0);
+
+  let html='';
+  if(needsAttention.length){
+    html+=`<div class="st" style="color:var(--red)">⚠️ Action Required (${needsAttention.length})</div>`;
+    html+=needsAttention.map(p=>dashCardHTML(p)).join('');
+  }
+  if(healthy.length){
+    html+=`<div class="st" style="margin-top:${needsAttention.length?'20px':'0'}">✅ On Track (${healthy.length})</div>`;
+    html+=healthy.map(p=>dashCardHTML(p)).join('');
+  }
+  document.getElementById('dash-cards').innerHTML=html;
+}
+
+function dashCardHTML(p){
+  const c=GC(p.contractorId);
+  const rel=totRel(p),max=maxF(p),el=eligR(p),vp=verPct(p);
+  const rp=Math.min(rel/max*100,100); const s=pStat(p); const hw=hdroom(p);
+  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed).length;
+  const lv=(p.verifications||[]).slice(-1)[0];
+  const alerts=getProjectAlerts(p);
+  const alertsHtml=alerts.map(a=>`<div class="alert-banner ab-${a.type}" onclick="openDetail('${p.id}')">${a.msg}</div>`).join('');
+  return `<div class="card" style="${alerts.some(a=>a.type==='red')?'border-color:var(--red);border-left:4px solid var(--red)':''}">
+    <div class="card-hdr">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="card-title">${p.name}</span>${sBadge(s)}
+        </div>
+        <div class="card-sub">${p.type} · ${p.location||'—'} · ${c?c.name:'—'} · #${p.tender}</div>
+      </div>
+      <div class="card-acts">
+        <button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button>
+        <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">Release</button>
+        <div class="amenu-wrap">
+          <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pm-${p.id}')">⋮</button>
+          <div class="amenu" id="pm-${p.id}">
+            <button class="amenu-item" onclick="openDetail('${p.id}')">📋 View Detail</button>
+            <button class="amenu-item" onclick="openRF('${p.id}')">💰 Release Funds</button>
+            <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Payment</button>
+            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
           </div>
-          <div class="card-sub">${p.type} · ${p.location||'—'} · ${c?c.name:'—'} · #${p.tender}</div>
-        </div>
-        <div class="card-acts">
-          <button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button>
-          <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">Release</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
-        <div>
-          <div class="prog"><div class="prog-lbl"><span style="color:var(--amber)">Contractor reported</span><span style="color:var(--amber)">${pct(reportedPct(p))}</span></div><div class="prog-track" style="background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${Math.min(reportedPct(p),100)}%"></div></div></div>
-          <div class="prog"><div class="prog-lbl"><span>RSR verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
-          <div class="prog"><div class="prog-lbl"><span>Cap used (${fmt(rel)} / ${fmt(max)})</span><span>${pct(rp)}</span></div><div class="prog-track"><div class="prog-fill ${s==='red'?'pf-red':s==='amber'?'pf-amber':'pf-green'}" style="width:${rp}%"></div></div></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last site verified: '+lv.date:'No site verification yet'}</div>
-        </div>
-        <div style="font-size:12px">
-          <div class="fr" style="font-size:12px"><span class="fl">Agreement</span><span class="fv">${fmt(agAmt(p))}</span></div>
-          <div class="fr" style="font-size:12px"><span class="fl">Max (70%)</span><span class="fv">${fmt(max)}</span></div>
-          <div class="fr" style="font-size:12px"><span class="fl">Eligible</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-          <div class="fr" style="font-size:12px"><span class="fl">Headroom</span><span class="fv" style="color:${s==='red'?'var(--red)':s==='amber'?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
-          <div class="fr" style="font-size:12px"><span class="fl">Interest</span><span class="int-val">${fmt(intr(p))}</span></div>
-        </div>
+    </div>
+    ${alertsHtml}
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:${alerts.length?'10px':'0'}">
+      <div>
+        <div class="prog"><div class="prog-lbl"><span style="color:var(--amber)">Contractor reported</span><span style="color:var(--amber)">${pct(reportedPct(p))}</span></div><div class="prog-track" style="background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${Math.min(reportedPct(p),100)}%"></div></div></div>
+        <div class="prog"><div class="prog-lbl"><span>RSR verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
+        <div class="prog"><div class="prog-lbl"><span>Cap used (${fmt(rel)} / ${fmt(max)})</span><span>${pct(rp)}</span></div><div class="prog-track"><div class="prog-fill ${s==='red'?'pf-red':s==='amber'?'pf-amber':'pf-green'}" style="width:${rp}%"></div></div></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last verified: '+lv.date:'No verification yet'}</div>
       </div>
-    </div>`;
-  }).join('');
+      <div style="font-size:12px">
+        <div class="fr" style="font-size:12px"><span class="fl">Agreement</span><span class="fv">${fmt(agAmt(p))}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Max (70%)</span><span class="fv">${fmt(max)}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Eligible</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Headroom</span><span class="fv" style="color:${s==='red'?'var(--red)':s==='amber'?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Interest</span><span class="int-val">${fmt(intr(p))}</span></div>
+      </div>
+    </div>
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -854,18 +971,21 @@ function renderDetail(id){
   else if(s==='amber') ah=`<div class="alert al-amber">🟡 Caution — Verify site before next release.</div>`;
   else ah=`<div class="alert al-green">🟢 On Track — Available headroom: ${fmt(hw)}</div>`;
 
-  // Pending (unreviewed) block — call-to-action
+  // Pending (unreviewed) block — full review controls
   const pendHtml=pend.length?`<div class="card" style="border-color:var(--navy);border-top:3px solid var(--gold)">
     <div class="st" style="color:var(--navy)">📸 Contractor Updates — Needs Review (${pend.length})</div>
     ${pend.map(u=>`<div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:8px;border:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px">
         <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
-        <button class="btn btn-sm btn-gold" onclick="markRev('${id}','${u.id}')">✓ Mark Reviewed</button>
       </div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${u.notes||'No notes'}</div>
-      ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--navy)">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
+      ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--navy)">Claimed: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
       ${u.photos&&u.photos.length?`<div class="pgrid">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.url}')"><img src="${ph.url}" loading="lazy" alt=""><div class="pcap">${ph.name||'photo'}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos</div>'}
-      <div style="margin-top:10px;font-size:12px;color:var(--text3)">💡 After reviewing, click "📋 Record Verification" above to officially update verified quantities — that controls funding eligibility.</div>
+      <div class="upd-actions">
+        <button class="btn btn-gold btn-sm" onclick="openReviewUpd('${id}','${u.id}')">📋 Review & Approve</button>
+        <button class="btn-reject" onclick="(()=>{reviewUpdPid='${id}';reviewUpdId='${u.id}';document.getElementById('ru-notes').value='';rejectUpdate();})()">✗ Quick Reject</button>
+        <button class="btn btn-sm" onclick="deleteUpdate('${id}','${u.id}')">🗑️ Delete</button>
+      </div>
     </div>`).join('')}</div>`:'';
 
   // All updates log (permanent — never disappears)
@@ -873,10 +993,22 @@ function renderDetail(id){
     ${allUpdates.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
         <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
-        <span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed':'⏳ Pending'}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="badge ${u.rejected?'bg-red':u.reviewed?'bg-green':'bg-navy'}">${u.rejected?'✗ Rejected':u.reviewed?'✓ Approved':'⏳ Pending'}</span>
+          <div class="amenu-wrap">
+            <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('um-${u.id}')">⋮</button>
+            <div class="amenu" id="um-${u.id}">
+              ${!u.reviewed?`<button class="amenu-item success" onclick="openReviewUpd('${id}','${u.id}')">📋 Review</button>`:''}
+              <button class="amenu-item danger" onclick="deleteUpdate('${id}','${u.id}')">🗑️ Delete</button>
+            </div>
+          </div>
+        </div>
       </div>
+      ${u.reviewNotes?`<div style="font-size:12px;color:var(--text3);margin-bottom:4px;font-style:italic">RSR note: ${u.reviewNotes}</div>`:''}
       ${u.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}
-      ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:6px;font-weight:600;color:var(--navy)">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
+      ${u.quantities&&Object.keys(u.quantities).length&&!u.rejected?`<div style="font-size:12px;margin-bottom:6px;font-weight:600;color:${u.approvedQty?'var(--green)':'var(--navy)'}">
+        ${u.approvedQty?'Approved:':'Reported:'} ${(p.boq||[]).filter(i=>(u.approvedQty||u.quantities)[i.id]).map(i=>`${i.desc}: ${(u.approvedQty||u.quantities)[i.id]} ${i.unit}`).join(' · ')}
+      </div>`:''}
       ${u.photos&&u.photos.length?`<div class="pgrid" style="grid-template-columns:repeat(4,1fr)">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.url}')"><img src="${ph.url}" loading="lazy" alt=""><div class="pcap">${ph.name||'photo'}</div></div>`).join('')}</div>`:''}
     </div>`).join('')}
   </div>`:'';
@@ -914,19 +1046,57 @@ function renderDetail(id){
       </td>
       <td style="text-align:right;font-weight:700">${fmt(item.qty*item.rate)}</td>
     </tr>`;}).join('');
-  const relLog=(p.releases||[]).slice().reverse().map(r=>`<div class="fr"><span class="fl">${r.date}<br><span style="font-size:11px">${r.notes||''} · ${r.method||''} ${r.ref?'· Ref: '+r.ref:''}</span></span><span class="fv">${fmt(r.amount)}</span></div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No releases yet.</div>';
-  const verLog=(p.verifications||[]).slice().reverse().map(v=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-weight:700;font-size:13px">${v.date}</span><span style="font-size:12px;color:var(--text3)">by ${v.verifiedBy||'owner'}</span></div><div style="font-size:13px;color:var(--text2)">${v.notes||'—'}</div></div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
+  const relLog=(p.releases||[]).slice().reverse().map(r=>`
+    <div class="fr">
+      <span class="fl">${r.date}<br><span style="font-size:11px">${r.notes||''} · ${r.method||''} ${r.ref?'· Ref: '+r.ref:''}</span></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="fv">${fmt(r.amount)}</span>
+        <div class="amenu-wrap">
+          <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('rm-${r.id}')">⋮</button>
+          <div class="amenu" id="rm-${r.id}">
+            <button class="amenu-item" onclick="openEditRelease('${id}','${r.id}')">✏️ Edit</button>
+            <button class="amenu-item danger" onclick="deleteRelease('${id}','${r.id}')">🗑️ Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No releases yet.</div>';
+
+  const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
+  const settleLog=(p.settlements||[]).slice().reverse().map(s=>`<div class="settle-row"><span>🏦 ${s.date} · ${s.mode} ${s.ref?'· '+s.ref:''} · ${s.notes||''}</span><strong style="color:var(--green)">${fmt(s.amount)}</strong></div>`).join('');
+
+  const verLog=(p.verifications||[]).slice().reverse().map(v=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <div style="font-weight:700;font-size:13px">${v.date} <span style="font-size:12px;color:var(--text3)">by ${v.verifiedBy||'owner'}</span></div>
+        <div style="font-size:13px;color:var(--text2)">${v.notes||'—'}</div>
+      </div>
+      <div class="amenu-wrap">
+        <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('vm-${v.id}')">⋮</button>
+        <div class="amenu" id="vm-${v.id}">
+          <button class="amenu-item danger" onclick="deleteVerification('${id}','${v.id}')">🗑️ Delete</button>
+        </div>
+      </div>
+    </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
   document.getElementById('detail-wrap').innerHTML=`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="ownerTab(0)">← Dashboard</button>
       <div style="flex:1;min-width:200px"><div style="font-size:18px;font-weight:700;color:var(--navy)">${p.name}</div>
       <div style="font-size:12px;color:var(--text3)">#${p.tender} · ${p.type} · ${c?c.name:'—'} · ${p.location||''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Record Verification</button>
-        <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">💰 Release Funds</button>
+        <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
+        <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
+        <button class="btn btn-gold btn-sm" onclick="openRF('${p.id}')">💰 Release</button>
+        <div class="amenu-wrap">
+          <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('detail-menu')">⋮</button>
+          <div class="amenu" id="detail-menu">
+            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
+          </div>
+        </div>
       </div>
     </div>
-    ${ah}${pendHtml}
+    ${ah}
+    ${(()=>{const alerts=getProjectAlerts(p);return alerts.map(a=>`<div class="alert-banner ab-${a.type}">${a.msg}</div>`).join('');})()}
+    ${pendHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="card"><div class="st">Financials</div>
         <div class="fr"><span class="fl">Estimated BOQ</span><span class="fv">${fmt(p.estimated)}</span></div>
@@ -934,11 +1104,16 @@ function renderDetail(id){
         <div class="fr"><span class="fl">Agreement Amount</span><span class="fv">${fmt(agAmt(p))}</span></div>
         <div class="fr"><span class="fl">Max Fundable (70%)</span><span class="fv">${fmt(max)}</span></div>
         <div class="fr"><span class="fl">Total Released</span><span class="fv">${fmt(rel)}</span></div>
+        <div class="fr"><span class="fl">Total Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
+        <div class="fr"><span class="fl">Outstanding</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
         <div class="fr"><span class="fl">Eligible Now</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
         <div class="fr"><span class="fl">Headroom</span><span class="fv" style="color:${s==='red'?'var(--red)':s==='amber'?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
         <div class="fr"><span class="fl">Interest Accrued</span><span class="int-val">${fmt(intr(p))}</span></div>
       </div>
-      <div class="card"><div class="st">Fund Releases</div>${relLog}</div>
+      <div class="card">
+        <div class="st">Fund Releases</div>${relLog}
+        ${settleLog?`<div class="st" style="margin-top:14px">Government Payments Received</div>${settleLog}`:''}
+      </div>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -957,8 +1132,8 @@ function renderDetail(id){
         <th style="text-align:right">Value</th>
       </tr></thead><tbody>${brows}</tbody></table></div>
       <div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">
-        <strong style="color:var(--amber)">Reported</strong> = quantities accepted when you click "Mark Reviewed" on contractor updates.&nbsp;&nbsp;
-        <strong style="color:var(--navy)">RSR Verified</strong> = quantities you physically confirmed on site — controls funding eligibility.
+        <strong style="color:var(--amber)">Reported</strong> = accepted from contractor updates.&nbsp;&nbsp;
+        <strong style="color:var(--navy)">RSR Verified</strong> = physically confirmed on site — controls funding.
       </div>
     </div>
     <div class="card"><div class="st">Verification Log</div>${verLog}</div>
@@ -1087,9 +1262,15 @@ function renderConts(){
     return `<div class="card">
       <div class="card-hdr">
         <div><div class="card-title">${c.name}</div><div class="card-sub">📞 ${c.phone||'—'} · ${c.notes||'—'}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span class="badge bg-navy">${pp.length} project${pp.length!==1?'s':''}</span>
           <span class="badge bg-gold">${fmt(cap)} deployed</span>
+          <div class="amenu-wrap">
+            <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('cm-${c.id}')">⋮</button>
+            <div class="amenu" id="cm-${c.id}">
+              <button class="amenu-item danger" onclick="deleteContractor('${c.id}')">🗑️ Delete Contractor</button>
+            </div>
+          </div>
         </div>
       </div>
       ${pp.length?`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Released</th><th>Verified</th><th>Status</th></tr></thead><tbody>
@@ -1216,6 +1397,251 @@ async function changePw(){
 }
 
 // ═══════════════════════════════════════════════════════
+// ACTION MENU (3-dot) helpers
+// ═══════════════════════════════════════════════════════
+function toggleMenu(id){
+  // close all other menus first
+  document.querySelectorAll('.amenu.open').forEach(m=>{ if(m.id!==id) m.classList.remove('open'); });
+  document.getElementById(id)?.classList.toggle('open');
+}
+// Close menus on outside click
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.amenu-wrap')) document.querySelectorAll('.amenu.open').forEach(m=>m.classList.remove('open'));
+});
+
+// ═══════════════════════════════════════════════════════
+// ALERT HELPERS (for dashboard)
+// ═══════════════════════════════════════════════════════
+function daysSince(dateStr){
+  if(!dateStr) return 9999;
+  return Math.floor((Date.now()-new Date(dateStr).getTime())/86400000);
+}
+function getProjectAlerts(p){
+  const alerts=[];
+  const rel=totRel(p), max=maxF(p);
+  const lv=(p.verifications||[]).slice(-1)[0];
+  const lu=(p.contractorUpdates||[]).slice(-1)[0];
+  const lastUpdDate = lu ? lu.date : p.createdAt?.split('T')[0];
+  const lastVerDate = lv ? lv.date : null;
+  const daysSinceUpd = daysSince(lastUpdDate);
+  const daysSinceVer = daysSince(lastVerDate);
+  const capPct = max>0 ? rel/max*100 : 0;
+
+  if(rel>=max*0.97) alerts.push({type:'red',msg:'🔴 Hard Stop — 70% cap reached. No more releases.'});
+  else if(capPct>=65) alerts.push({type:'red',msg:`🚨 ${Math.round(capPct)}% of cap used — approaching limit.`});
+  if(daysSinceUpd>=5 && p.contractorUpdates?.length>0) alerts.push({type:'amber',msg:`⏰ No site update for ${daysSinceUpd} days.`});
+  else if(!p.contractorUpdates?.length) alerts.push({type:'navy',msg:'📋 No site updates submitted yet.'});
+  if(daysSinceVer>=7 && lastVerDate) alerts.push({type:'amber',msg:`🔍 No site verification for ${daysSinceVer} days.`});
+  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed).length;
+  if(pend>0) alerts.push({type:'navy',msg:`📸 ${pend} update${pend>1?'s':''} waiting for your review.`});
+  return alerts;
+}
+
+// ═══════════════════════════════════════════════════════
+// DELETE / EDIT — PROJECTS
+// ═══════════════════════════════════════════════════════
+async function deleteProject(pid){
+  if(!confirm('Delete this project? This cannot be undone. All data including releases and updates will be lost.')) return;
+  try {
+    await sbReq(`projects?id=eq.${pid}`, 'DELETE');
+    D.projects = D.projects.filter(p=>p.id!==pid);
+    toast('Project deleted','ok');
+    ownerTab(0);
+  } catch(e){ toast('Delete failed: '+e.message,'error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// DELETE / EDIT — CONTRACTORS
+// ═══════════════════════════════════════════════════════
+async function deleteContractor(cid){
+  const inUse = D.projects.some(p=>p.contractorId===cid);
+  if(inUse){ alert('Cannot delete — this contractor has projects assigned. Delete the projects first.'); return; }
+  if(!confirm('Delete this contractor? This cannot be undone.')) return;
+  try {
+    await sbReq(`contractors?id=eq.${cid}`, 'DELETE');
+    D.contractors = D.contractors.filter(c=>c.id!==cid);
+    renderConts();
+    toast('Contractor deleted','ok');
+  } catch(e){ toast('Delete failed: '+e.message,'error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// DELETE / EDIT — FUND RELEASES
+// ═══════════════════════════════════════════════════════
+function openEditRelease(pid, rid){
+  const p=GP(pid); if(!p) return;
+  const r=(p.releases||[]).find(x=>x.id===rid); if(!r) return;
+  editReleasePid=pid; editReleaseId=rid;
+  document.getElementById('er-amt').value=r.amount;
+  document.getElementById('er-date').value=r.date;
+  document.getElementById('er-meth').value=r.method||'NEFT';
+  document.getElementById('er-ref').value=r.ref||'';
+  document.getElementById('er-notes').value=r.notes||'';
+  document.getElementById('modal-edit-release').classList.add('open');
+}
+async function saveEditRelease(){
+  const p=GP(editReleasePid); if(!p) return;
+  const r=(p.releases||[]).find(x=>x.id===editReleaseId); if(!r) return;
+  const newAmt=parseFloat(document.getElementById('er-amt').value);
+  if(!newAmt||newAmt<=0){alert('Enter a valid amount');return;}
+  r.amount=newAmt;
+  r.date=document.getElementById('er-date').value;
+  r.method=document.getElementById('er-meth').value;
+  r.ref=document.getElementById('er-ref').value;
+  r.notes=document.getElementById('er-notes').value;
+  try {
+    await saveProjectDB(p);
+    CM('modal-edit-release');
+    renderDetail(editReleasePid);
+    toast('Release updated','ok');
+  } catch(e){ toast('Save failed','error'); }
+}
+async function deleteRelease(pid, rid){
+  if(!confirm('Delete this fund release? This will also reduce the interest calculation.')) return;
+  const p=GP(pid); if(!p) return;
+  p.releases=(p.releases||[]).filter(r=>r.id!==rid);
+  try {
+    await saveProjectDB(p);
+    renderDetail(pid);
+    toast('Release deleted','ok');
+  } catch(e){ toast('Delete failed','error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// DELETE / EDIT — VERIFICATIONS
+// ═══════════════════════════════════════════════════════
+async function deleteVerification(pid, vid){
+  if(!confirm('Delete this verification record? Verified quantities will revert to previous verification.')) return;
+  const p=GP(pid); if(!p) return;
+  p.verifications=(p.verifications||[]).filter(v=>v.id!==vid);
+  try {
+    await saveProjectDB(p);
+    renderDetail(pid);
+    toast('Verification deleted','ok');
+  } catch(e){ toast('Delete failed','error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// REVIEW UPDATE — Approve with editable quantities, or Reject
+// ═══════════════════════════════════════════════════════
+function openReviewUpd(pid, uid_val){
+  const p=GP(pid); if(!p) return;
+  const u=(p.contractorUpdates||[]).find(x=>x.id===uid_val); if(!u) return;
+  reviewUpdPid=pid; reviewUpdId=uid_val;
+  let html='';
+  (p.boq||[]).forEach(item=>{
+    const claimed=u.quantities?.[item.id]||0;
+    const existing=(p.reportedItems||{})[item.id]||0;
+    html+=`<div class="vrow">
+      <div class="vdesc"><strong>${item.desc}</strong>
+        <div style="font-size:11px;color:var(--text3)">Contractor claimed today: ${claimed} ${item.unit} · Already reported: ${existing} ${item.unit}</div>
+      </div>
+      <div class="vmeta">today's qty</div>
+      <input type="number" class="vinput" id="ru-q-${item.id}" value="${claimed}" min="0" step="0.1">
+    </div>`;
+  });
+  document.getElementById('review-upd-fields').innerHTML=html||'<p style="color:var(--text3)">No quantities in this update.</p>';
+  document.getElementById('ru-notes').value='';
+  document.getElementById('modal-review-upd').classList.add('open');
+}
+
+async function approveWithEdit(){
+  const p=GP(reviewUpdPid); if(!p) return;
+  const u=(p.contractorUpdates||[]).find(x=>x.id===reviewUpdId); if(!u) return;
+  // Collect approved quantities (these are deltas from this update)
+  const approved={};
+  (p.boq||[]).forEach(item=>{
+    const v=parseFloat(document.getElementById('ru-q-'+item.id)?.value)||0;
+    approved[item.id]=Math.min(v, item.qty);
+  });
+  u.reviewed=true;
+  u.approvedQty=approved;
+  u.reviewNotes=document.getElementById('ru-notes').value;
+  // Add approved delta to cumulative reported items
+  if(!p.reportedItems) p.reportedItems={};
+  (p.boq||[]).forEach(item=>{
+    p.reportedItems[item.id]=Math.min(
+      (p.reportedItems[item.id]||0) + (approved[item.id]||0),
+      item.qty
+    );
+  });
+  try {
+    await saveProjectDB(p);
+    CM('modal-review-upd');
+    renderDetail(reviewUpdPid);
+    toast('✓ Update approved — quantities updated','ok');
+  } catch(e){ toast('Save failed','error'); }
+}
+
+async function rejectUpdate(){
+  if(!confirm('Reject this update completely? The contractor\'s quantities will NOT be recorded.')) return;
+  const p=GP(reviewUpdPid); if(!p) return;
+  const u=(p.contractorUpdates||[]).find(x=>x.id===reviewUpdId); if(!u) return;
+  u.reviewed=true;
+  u.rejected=true;
+  u.reviewNotes=document.getElementById('ru-notes').value||'Rejected by RSR';
+  try {
+    await saveProjectDB(p);
+    CM('modal-review-upd');
+    renderDetail(reviewUpdPid);
+    toast('Update rejected','ok');
+  } catch(e){ toast('Save failed','error'); }
+}
+
+async function deleteUpdate(pid, uid_val){
+  if(!confirm('Delete this update completely?')) return;
+  const p=GP(pid); if(!p) return;
+  p.contractorUpdates=(p.contractorUpdates||[]).filter(u=>u.id!==uid_val);
+  try {
+    await saveProjectDB(p);
+    renderDetail(pid);
+    toast('Update deleted','ok');
+  } catch(e){ toast('Delete failed','error'); }
+}
+
+// ═══════════════════════════════════════════════════════
+// SETTLEMENT / GOVERNMENT PAYMENT
+// ═══════════════════════════════════════════════════════
+function openSettle(pid){
+  settlePid=pid;
+  const p=GP(pid); if(!p) return;
+  const rel=totRel(p);
+  const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
+  const outstanding=rel-settled;
+  document.getElementById('settle-summary').innerHTML=`<div class="calc" style="margin-bottom:14px">
+    <div class="fr"><span class="fl">Total Released to Contractor</span><span class="fv">${fmt(rel)}</span></div>
+    <div class="fr"><span class="fl">Already Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
+    <div class="fr"><span class="fl">Outstanding Balance</span><span class="fv" style="color:var(--red)">${fmt(outstanding)}</span></div>
+  </div>`;
+  document.getElementById('settle-amt').value='';
+  document.getElementById('settle-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('settle-ref').value='';
+  document.getElementById('settle-notes').value='';
+  document.getElementById('modal-settle').classList.add('open');
+}
+
+async function confirmSettle(){
+  const p=GP(settlePid); if(!p) return;
+  const amt=parseFloat(document.getElementById('settle-amt').value);
+  if(!amt||amt<=0){alert('Enter valid amount');return;}
+  if(!p.settlements) p.settlements=[];
+  p.settlements.push({
+    id:uid(),
+    amount:amt,
+    date:document.getElementById('settle-date').value,
+    mode:document.getElementById('settle-mode').value,
+    ref:document.getElementById('settle-ref').value,
+    notes:document.getElementById('settle-notes').value
+  });
+  try {
+    await saveProjectDB(p);
+    CM('modal-settle');
+    renderDetail(settlePid);
+    toast(`✓ Settlement of ${fmt(amt)} recorded`,'ok');
+  } catch(e){ toast('Save failed','error'); }
+}
+
+// ═══════════════════════════════════════════════════════
 // CONTRACTOR VIEWS
 // ═══════════════════════════════════════════════════════
 function renderCHome(){
@@ -1298,9 +1724,18 @@ function cOpenUpd(id){
       <div class="fg"><label>Notes — What was done?</label><textarea id="cu-notes" rows="3" placeholder="e.g. Excavation completed for section 3, RCC work started…"></textarea></div>
     </div>
     <div class="card">
-      <div class="st">Quantities (Cumulative total done so far)</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter TOTAL quantity completed so far — not just today.</div>
-      ${(p.boq||[]).map(item=>`<div class="vrow"><div class="vdesc">${item.desc}</div><div class="vmeta">of ${item.qty} ${item.unit}</div><input type="number" class="vinput" id="cu-q-${item.id}" placeholder="0" min="0" max="${item.qty}" step="0.1"></div>`).join('')}
+      <div class="st">Today's Work Quantities</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter how much work you did <strong>today only</strong> — not the total. The app will add it up automatically.</div>
+      ${(p.boq||[]).map(item=>{
+        const alreadyReported=(p.reportedItems||{})[item.id]||0;
+        const remaining=Math.max(0,item.qty-alreadyReported);
+        return`<div class="vrow">
+          <div class="vdesc">${item.desc}
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Total BOQ: ${item.qty} ${item.unit} · Already reported: ${alreadyReported} · Remaining: ${remaining}</div>
+          </div>
+          <div class="vmeta">+today</div>
+          <input type="number" class="vinput" id="cu-q-${item.id}" placeholder="0" min="0" max="${remaining}" step="0.1">
+        </div>`;}).join('')}
     </div>
     <div class="card">
       <div class="st">📸 Site Photos</div>
@@ -1343,7 +1778,10 @@ async function submitUpd(pid){
   const date=document.getElementById('cu-date').value;
   const notes=document.getElementById('cu-notes').value;
   const quantities={};
-  (p.boq||[]).forEach(item=>{const v=parseFloat(document.getElementById('cu-q-'+item.id)?.value)||0;if(v>0)quantities[item.id]=Math.min(v,item.qty);});
+  (p.boq||[]).forEach(item=>{
+    const todayDelta=parseFloat(document.getElementById('cu-q-'+item.id)?.value)||0;
+    if(todayDelta>0) quantities[item.id]=todayDelta; // store delta only
+  });
 
   const btn=document.getElementById('cu-submit-btn');
   btn.disabled=true; btn.textContent='Submitting…';
