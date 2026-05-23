@@ -61,7 +61,9 @@ function enterOwner(){
     ['Dashboard','Projects','Contractors','Tally','Interest'].map((t,i)=>
       `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
     ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>';
-  // Always reset bnav to owner tabs (fixes mobile showing contractor tabs)
+  // Show global search for owner
+  const gsw = document.getElementById('gsearch-wrap');
+  if(gsw) gsw.style.display='flex';
   const bnav=document.getElementById('bnav');
   bnav.style.display='flex';
   bnav.innerHTML=`
@@ -80,6 +82,9 @@ function enterCont(){
   rb.textContent='Contractor'; rb.style.background='rgba(255,255,255,.15)'; rb.style.color='#fff';
   document.getElementById('nav-uname').textContent=CU.name;
   document.getElementById('nav-links').innerHTML='';
+  // Hide global search for contractors
+  const gsw = document.getElementById('gsearch-wrap');
+  if(gsw) gsw.style.display='none';
   // Show contractor-specific bottom nav
   const bnav = document.getElementById('bnav');
   bnav.style.display='flex';

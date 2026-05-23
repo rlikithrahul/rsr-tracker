@@ -186,13 +186,19 @@ function cOpenUpd(id){
         <span class="gps-tag" id="gps-tag">📍 Getting your location…</span>
       </div>
       <div class="pgrid" id="cu-pgrid">
-        <label class="padd" for="cu-photo-inp" style="min-height:90px">
+        <label class="padd" for="cu-photo-camera" style="min-height:90px;border-color:var(--navy)">
           <div class="padd-icon">📷</div>
-          <div style="font-weight:600">Add Photo</div>
-          <div style="font-size:11px">Camera or Gallery</div>
+          <div style="font-weight:600;color:var(--navy)">Take Photo</div>
+          <div style="font-size:11px">Open Camera</div>
+        </label>
+        <label class="padd" for="cu-photo-gallery" style="min-height:90px">
+          <div class="padd-icon">🖼️</div>
+          <div style="font-weight:600">From Gallery</div>
+          <div style="font-size:11px">Choose File</div>
         </label>
       </div>
-      <input type="file" id="cu-photo-inp" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+      <input type="file" id="cu-photo-camera" accept="image/*" capture="environment" multiple style="display:none" onchange="handlePhotos(event,'camera')">
+      <input type="file" id="cu-photo-gallery" accept="image/*" multiple style="display:none" onchange="handlePhotos(event,'gallery')">
     </div>
     <button class="btn btn-navy btn-full" style="padding:16px;font-size:16px;margin-bottom:16px" id="cu-submit-btn" onclick="submitUpd('${id}')">
       ✅ Submit Update to RSR
@@ -200,7 +206,7 @@ function cOpenUpd(id){
   captureGPS();
 }
 
-async function handlePhotos(evt){
+async function handlePhotos(evt, source='unknown'){
   const files=Array.from(evt.target.files);
   if(photos.length+files.length>5){alert('Maximum 5 photos per update.');return;}
   const captureTime=new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -211,7 +217,11 @@ async function handlePhotos(evt){
       const compressed=await compressImage(file);
       const r=new FileReader();
       const dataUrl=await new Promise(res=>{r.onload=e=>res(e.target.result);r.readAsDataURL(compressed);});
-      photos.push({name:file.name,file:compressed,dataUrl,captureTime,gps:gpsData?{lat:gpsData.lat,lng:gpsData.lng,area:gpsData.area,time:gpsData.time}:null});
+      photos.push({
+        name:file.name, file:compressed, dataUrl, captureTime,
+        source, // 'camera' or 'gallery'
+        gps:gpsData?{lat:gpsData.lat,lng:gpsData.lng,area:gpsData.area,time:gpsData.time}:null
+      });
     }catch(e){console.error(e);}
     setBusy(false);
   }
@@ -223,8 +233,38 @@ async function handlePhotos(evt){
 
 function renderPhotoPreview(){
   const g=document.getElementById('cu-pgrid');if(!g)return;
-  g.innerHTML=photos.map((ph,i)=>`<div class="pitem" style="position:relative" onclick="lightbox('${ph.dataUrl}')"><img src="${ph.dataUrl}" alt=""><div class="pcap">${ph.gps?'📍 '+ph.gps.area+' · '+ph.captureTime:'🕐 '+ph.captureTime}</div><button onclick="event.stopPropagation();photos.splice(${i},1);renderPhotoPreview()" style="position:absolute;top:4px;right:4px;background:rgba(192,57,43,.9);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;font-weight:700;line-height:1">✕</button></div>`).join('')+(photos.length<5?`<label class="padd" for="cu-photo-inp" style="min-height:90px"><div class="padd-icon">➕</div><div style="font-size:12px">Add more</div></label>`:'');
+  const addBtns=photos.length<5?`
+    <label class="padd" for="cu-photo-camera" style="min-height:70px;border-color:var(--navy)">
+      <div style="font-size:18px">📷</div><div style="font-size:11px;font-weight:600;color:var(--navy)">Camera</div>
+    </label>
+    <label class="padd" for="cu-photo-gallery" style="min-height:70px">
+      <div style="font-size:18px">🖼️</div><div style="font-size:11px;font-weight:600">Gallery</div>
+    </label>`:'';
+  g.innerHTML=photos.map((ph,i)=>`
+    <div class="pitem" style="position:relative" onclick="lightbox('${ph.dataUrl}')">
+      <img src="${ph.dataUrl}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--rs)">
+      <button onclick="event.stopPropagation();removePhoto(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px">✕</button>
+      <div style="font-size:9px;margin-top:2px;text-align:center">
+        <span style="background:${ph.source==='camera'?'var(--navy)':'#e9ecef'};color:${ph.source==='camera'?'#fff':'#666'};padding:1px 5px;border-radius:3px">${ph.source==='camera'?'📷 Live':'🖼️ Gallery'}</span>
+        <div style="color:var(--text3)">${ph.captureTime}</div>
+      </div>
+    </div>`).join('')+addBtns;
 }
+
+function lightbox(src){
+  document.getElementById('lb-img').src=src;
+  OM('modal-lb');
+}
+
+document.querySelectorAll('.mov').forEach(ov=>{
+  ov.addEventListener('click',e=>{if(e.target===ov)CM(ov.id);});
+});
+
+// ═══════════════════════════════════════════════════════
+// PWA — MANIFEST + OFFLINE QUEUE + SERVICE WORKER
+// ═══════════════════════════════════════════════════════
+
+// Inject manifest dynamically (since we're a single HTML file)
 
 async function submitUpd(pid){
   const p=GP(pid);
@@ -302,21 +342,3 @@ async function submitUpd(pid){
     setTimeout(()=>cOpenProj(pid),1500);
   }
 }
-
-
-
-
-function lightbox(src){
-  document.getElementById('lb-img').src=src;
-  OM('modal-lb');
-}
-
-document.querySelectorAll('.mov').forEach(ov=>{
-  ov.addEventListener('click',e=>{if(e.target===ov)CM(ov.id);});
-});
-
-// ═══════════════════════════════════════════════════════
-// PWA — MANIFEST + OFFLINE QUEUE + SERVICE WORKER
-// ═══════════════════════════════════════════════════════
-
-// Inject manifest dynamically (since we're a single HTML file)

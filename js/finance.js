@@ -11,19 +11,31 @@
 // ═══════════════════════════════════════════════════════
 
 // ─── DAYBOOK CALENDAR ─────────────────────────────────
+// 4 states: green=uploaded, red=missing, orange=checked/empty, grey=sunday
+// Orange state persists in localStorage
+// All days clickable including Sundays
+
+const CAL_ORANGE_KEY = 'rsr_cal_orange_days'; // days marked as checked/no transactions
+
+function getOrangeDays(){
+  try{ return new Set(JSON.parse(localStorage.getItem(CAL_ORANGE_KEY)||'[]')); }catch(e){return new Set();}
+}
+function setOrangeDay(dateStr, isOrange){
+  try{
+    const days = getOrangeDays();
+    if(isOrange) days.add(dateStr); else days.delete(dateStr);
+    localStorage.setItem(CAL_ORANGE_KEY, JSON.stringify([...days]));
+  }catch(e){}
+}
+
 function getDaybookUploadedDates(){
-  // Collect all unique dates where a daybook was uploaded
-  // A daybook upload is identified by source==='tally' and vch type = 'daybook'
-  // We track which calendar dates have ANY tally transactions
   const dateSet = new Set();
   D.projects.forEach(p=>{
     (p.releases||[]).forEach(r=>{
-      if(r.source==='tally'||r.source==='tally-manual'){
-        if(r.date) dateSet.add(r.date.split('T')[0]);
-      }
+      if((r.source==='tally'||r.source==='tally-manual') && r.date)
+        dateSet.add(r.date.split('T')[0]);
     });
   });
-  // Also check tallyUploadLog stored separately
   try{
     const log = JSON.parse(localStorage.getItem('rsr_daybook_log')||'[]');
     log.forEach(d=>dateSet.add(d));
@@ -32,7 +44,6 @@ function getDaybookUploadedDates(){
 }
 
 function recordDaybookUpload(dateStr){
-  // Record that a daybook was uploaded for this date
   try{
     const log = JSON.parse(localStorage.getItem('rsr_daybook_log')||'[]');
     if(!log.includes(dateStr)) log.push(dateStr);
@@ -42,77 +53,87 @@ function recordDaybookUpload(dateStr){
 
 function renderDaybookCalendar(){
   const uploadedDates = getDaybookUploadedDates();
+  const orangeDays = getOrangeDays();
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-  const year = calViewYear;
-  const month = calViewMonth;
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const year = calViewYear, month = calViewMonth;
+  const monthNames = ['January','February','March','April','May','June',
+    'July','August','September','October','November','December'];
   const daysInMonth = new Date(year, month+1, 0).getDate();
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
   const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-  // Build set of business days (Mon-Sat) that are past and should have daybooks
-  // We consider Mon-Sat as working days for construction finance
-  const expectedDays = [];
-  for(let d=1; d<=daysInMonth; d++){
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dayOfWeek = new Date(year, month, d).getDay();
-    const isPast = dateStr < todayStr;
-    const isToday = dateStr === todayStr;
-    const isSunday = dayOfWeek === 0; // Only Sunday is holiday; Sat is working day in construction
-    if((isPast || isToday) && !isSunday) expectedDays.push(dateStr);
+  let greenCount=0, redCount=0, orangeCount=0;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(ds > todayStr) continue;
+    if(uploadedDates.has(ds)) greenCount++;
+    else if(orangeDays.has(ds)) orangeCount++;
+    else redCount++;
   }
 
-  const missingCount = expectedDays.filter(d=>!uploadedDates.has(d)).length;
-  const uploadedCount = expectedDays.filter(d=>uploadedDates.has(d)).length;
-
-  let calHTML = `<div class="cal-wrap" style="max-width:320px">
-    <div class="cal-header" style="margin-bottom:8px">
-      <div class="cal-title" style="font-size:13px">${monthNames[month]} ${year}</div>
-      <div class="cal-nav">
-        <button onclick="calNavMonth(-1)" style="padding:3px 8px;font-size:13px">‹</button>
-        <button onclick="calNavMonth(0)" style="padding:3px 8px;font-size:11px">●</button>
-        <button onclick="calNavMonth(1)" style="padding:3px 8px;font-size:13px">›</button>
+  let html = `<div style="max-width:420px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:700;color:var(--navy)">${monthNames[month]} ${year}</div>
+      <div style="display:flex;gap:4px">
+        <button onclick="calNavMonth(-1)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text2)">‹</button>
+        <button onclick="calNavMonth(0)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text3)">Today</button>
+        <button onclick="calNavMonth(1)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text2)">›</button>
       </div>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:8px;font-size:11px;flex-wrap:wrap">
-      <span style="color:var(--green);font-weight:600">✅ ${uploadedCount}</span>
-      <span style="color:var(--red);font-weight:600">❌ ${missingCount}</span>
-      <span style="color:var(--text3)">${missingCount>0?'click red day to import':'all covered!'}</span>
+    <div style="display:flex;gap:12px;margin-bottom:10px;font-size:11px;flex-wrap:wrap">
+      <span>🟢 ${greenCount} uploaded</span>
+      <span style="color:var(--red)">🔴 ${redCount} missing</span>
+      ${orangeCount?`<span style="color:var(--amber)">🟠 ${orangeCount} checked/empty</span>`:''}
     </div>
-    <div class="cal-grid" style="gap:2px">
-      ${dayNames.map(d=>`<div class="cal-day-name" style="font-size:9px;padding:2px 0">${d}</div>`).join('')}
-      ${Array(firstDayOfWeek).fill('<div class="cal-day empty"></div>').join('')}`;
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:8px">
+      ${dayNames.map(d=>`<div style="text-align:center;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;padding:3px 0">${d}</div>`).join('')}
+      ${Array(firstDayOfWeek).fill('<div></div>').join('')}`;
 
   for(let d=1; d<=daysInMonth; d++){
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const dayOfWeek = new Date(year, month, d).getDay();
-    const isSunday = dayOfWeek === 0;
-    const isFuture = dateStr > todayStr;
-    const isToday = dateStr === todayStr;
-    const isUploaded = uploadedDates.has(dateStr);
-    const isExpected = !isSunday && !isFuture;
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isSunday = new Date(year,month,d).getDay()===0;
+    const isFuture = ds > todayStr;
+    const isToday = ds === todayStr;
+    const isUploaded = uploadedDates.has(ds);
+    const isOrange = orangeDays.has(ds) && !isUploaded;
 
-    let cls = 'cal-day';
-    let title = '';
-    let onclick = '';
-    if(isFuture){ cls+=' future'; }
-    else if(isSunday){ cls+=' no-data'; title='Sunday — no daybook expected'; }
-    else if(isUploaded){ cls+=' uploaded'; title=`${dateStr} — Daybook uploaded ✅`; }
-    else{ cls+=' missing'; title=`${dateStr} — Daybook NOT uploaded ❌ — click to import`; onclick=`onclick="prefillDaybookDate('${dateStr}')""`; }
-    if(isToday) cls+=' today-marker';
+    let bg, color, cursor='pointer', border='none', title='';
+    if(isFuture){
+      bg='var(--surface2)'; color='var(--text3)'; cursor='default';
+    } else if(isUploaded){
+      bg='#d4edda'; color='#155724'; title=`${ds} ✅ Uploaded`;
+    } else if(isOrange){
+      bg='#fff3cd'; color='#856404'; title=`${ds} 🟠 Checked — no transactions. Click to reset.`;
+    } else if(isSunday){
+      bg='#e9ecef'; color='#6c757d'; title=`${ds} Sunday — click to upload daybook`;
+    } else {
+      bg='#fde8e8'; color='#c0392b'; title=`${ds} ❌ Missing — click to import`;
+    }
+    if(isToday) border='2px solid var(--navy)';
 
-    calHTML += `<div class="${cls}" title="${title}" ${onclick} style="font-size:11px;aspect-ratio:1;min-width:0">${d}</div>`;
+    const onclick = isFuture ? '' : `onclick="calDayClick('${ds}')"`;
+
+    html += `<div ${onclick} title="${title}"
+      class="cal-day-cell"
+      style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+             border-radius:5px;font-size:11px;font-weight:600;cursor:${cursor};
+             background:${bg};color:${color};border:${border};
+             transition:transform .1s;${!isFuture?'user-select:none':''}">
+      ${d}
+    </div>`;
   }
 
-  calHTML += `</div>
-    <div class="cal-legend" style="margin-top:6px;gap:8px">
-      <div class="cal-legend-item"><div class="cal-dot" style="width:8px;height:8px;background:#eaf5ee;border:1px solid #b8dfc0"></div><span style="color:var(--green);font-size:10px">Uploaded</span></div>
-      <div class="cal-legend-item"><div class="cal-dot" style="width:8px;height:8px;background:#fdf0ee;border:1px solid #f0bdb8"></div><span style="color:var(--red);font-size:10px">Missing</span></div>
-      <div class="cal-legend-item"><div class="cal-dot" style="width:8px;height:8px;background:var(--surface2);border:1px solid var(--border)"></div><span style="color:var(--text3);font-size:10px">Sun/Future</span></div>
+  html += `</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
+      <span>🟢 Uploaded</span>
+      <span>🔴 Missing (click to import)</span>
+      <span>🟠 Checked/empty (right-click to reset)</span>
+      <span style="background:#e9ecef;padding:1px 6px;border-radius:3px;color:#6c757d">Su Sunday</span>
     </div>
   </div>`;
-  return calHTML;
+
+  return html;
 }
 
 function calNavMonth(dir){
@@ -122,23 +143,58 @@ function calNavMonth(dir){
     if(calViewMonth>11){calViewMonth=0;calViewYear++;}
     if(calViewMonth<0){calViewMonth=11;calViewYear--;}
   }
-  // Re-render just the calendar section
-  const calEl = document.getElementById('daybook-calendar');
-  if(calEl) calEl.innerHTML = renderDaybookCalendar();
+  const calEl=document.getElementById('daybook-calendar');
+  if(calEl) calEl.innerHTML=renderDaybookCalendar();
+}
+
+function calDayClick(dateStr){
+  const uploadedDates = getDaybookUploadedDates();
+  const orangeDays = getOrangeDays();
+
+  if(uploadedDates.has(dateStr)){
+    // Already uploaded — show info toast
+    toast(`✅ Daybook already imported for ${dateStr}`,'ok',2000);
+    return;
+  }
+
+  if(orangeDays.has(dateStr)){
+    // Orange → reset back to red
+    setOrangeDay(dateStr, false);
+    const calEl=document.getElementById('daybook-calendar');
+    if(calEl) calEl.innerHTML=renderDaybookCalendar();
+    toast(`Reset ${dateStr} back to unchecked`,'ok',2000);
+    return;
+  }
+
+  // Red or grey → show options: upload daybook OR mark as checked
+  const isToday = dateStr === new Date().toISOString().split('T')[0];
+  const choice = confirm(
+    `📅 ${dateStr}\n\nWhat do you want to do?\n\n` +
+    `• Click OK to scroll to Upload and import daybook for this date\n` +
+    `• Click Cancel, then use the "Mark as Checked" button if you verified there are no transactions`
+  );
+
+  if(choice){
+    prefillDaybookDate(dateStr);
+  }
+}
+
+function markDayChecked(dateStr){
+  setOrangeDay(dateStr, true);
+  const calEl=document.getElementById('daybook-calendar');
+  if(calEl) calEl.innerHTML=renderDaybookCalendar();
+  toast(`🟠 ${dateStr} marked as checked — no transactions`,'ok',2000);
 }
 
 function prefillDaybookDate(dateStr){
-  // Scroll to upload section and pre-select daybook type
   document.getElementById('tally-type').value='daybook';
-  document.getElementById('tally-file').value='';
-  const uploadCard = document.getElementById('tally-upload-card');
+  const uploadCard=document.getElementById('tally-upload-card');
   if(uploadCard){
     uploadCard.scrollIntoView({behavior:'smooth',block:'start'});
-    uploadCard.style.borderColor='var(--red)';
-    uploadCard.style.borderWidth='2px';
-    setTimeout(()=>{uploadCard.style.borderColor='';uploadCard.style.borderWidth='';},3000);
+    uploadCard.style.outline='2px solid var(--red)';
+    setTimeout(()=>{uploadCard.style.outline='';},3000);
   }
-  toast(`Upload the daybook for ${dateStr}`, 'ok', 3000);
+  toast(`Upload daybook for ${dateStr}`,'ok',3000);
 }
 
 function renderFunds(){
@@ -153,20 +209,31 @@ function renderFunds(){
 
     <!-- DAYBOOK CALENDAR -->
     <div class="card" style="border-top:4px solid var(--navy)">
-      <div class="st">📅 Daybook Upload Calendar</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Shows which days' daybooks have been imported. <strong>Red days</strong> = daybook not yet uploaded. Click any red day to jump to the upload panel.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="st" style="margin:0;border:none;padding:0">📅 Daybook Upload Calendar</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="date" id="mark-checked-date" value="${new Date().toISOString().split('T')[0]}"
+            style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif">
+          <button class="btn btn-sm" onclick="markDayChecked(document.getElementById('mark-checked-date').value)"
+            style="background:#fff3cd;color:#856404;border:1px solid #ffc107;white-space:nowrap;font-size:12px">🟠 Mark Checked</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+        🔴 Missing → click day to import &nbsp;·&nbsp; 🟠 Checked/no transactions → click to reset &nbsp;·&nbsp; 🟢 Uploaded
+      </div>
       <div id="daybook-calendar">${renderDaybookCalendar()}</div>
     </div>
 
     <!-- UPLOAD PANEL -->
-    <div class="card" id="tally-upload-card" style="border-top:4px solid var(--gold);transition:border-color .3s,border-width .3s">
+    <div class="card" id="tally-upload-card" style="border-top:4px solid var(--gold);transition:outline .3s">
       <div class="st">Upload Tally Export File</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload the Daybook or Cost Centre report exported from Tally as XLS/XLSX. The app reads each transaction, matches it by Cost Centre, and posts it to the correct project automatically.</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload the Daybook or Cost Centre report exported from Tally as XLS/XLSX. The app reads each transaction, matches it by Cost Centre, and posts to the correct project automatically.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div class="fg"><label>File Type</label>
           <select id="tally-type">
             <option value="daybook">Day Book (daily export)</option>
             <option value="ledger">Ledger / Cost Centre Report</option>
+            <option value="monthly">Monthly Verification</option>
           </select>
         </div>
         <div class="fg"><label>Select File (XLS or XLSX)</label>
@@ -178,6 +245,9 @@ function renderFunds(){
         <div class="alert al-navy">Processing file…</div>
       </div>
     </div>
+
+    <!-- MONTHLY VERIFICATION RESULTS -->
+    <div id="monthly-verify-section" style="display:none"></div>
 
     <!-- UNMATCHED TRANSACTIONS -->
     <div id="tally-unmatched-section" style="${tallyUnmatched.length?'':'display:none'}">
@@ -234,30 +304,34 @@ function renderFunds(){
 
 // ─── PARSE TALLY FILE ─────────────────────────────────
 async function processTallyFile(){
-  const fileInput = document.getElementById('tally-file');
-  const type = document.getElementById('tally-type').value;
-  if(!fileInput.files.length){ toast('Select a file first','error'); return; }
-  const file = fileInput.files[0];
+  const fileInput=document.getElementById('tally-file');
+  const type=document.getElementById('tally-type').value;
+  if(!fileInput.files.length){toast('Select a file first','error');return;}
+  const file=fileInput.files[0];
   document.getElementById('tally-progress').style.display='block';
   setBusy(true,'Reading Tally file…');
-  try {
-    const transactions = await parseTallyXLS(file, type);
-    if(!transactions.length){ toast('No transactions found in file','error'); setBusy(false); return; }
-    await matchAndImport(transactions);
+  try{
+    const parseType=type==='monthly'?'daybook':type;
+    const transactions=await parseTallyXLSReal(file,parseType);
+    if(!transactions.length){toast('No transactions found. Check file format.','error',4000);setBusy(false);document.getElementById('tally-progress').style.display='none';return;}
     document.getElementById('tally-progress').style.display='none';
     fileInput.value='';
     setBusy(false);
-    renderFunds();
-    // Refresh calendar to reflect newly uploaded dates
-    setTimeout(()=>{const c=document.getElementById('daybook-calendar');if(c)c.innerHTML=renderDaybookCalendar();},100);
-    ownerTab(3);
-  } catch(e) {
+    if(type==='monthly'){
+      await runMonthlyVerification(transactions);
+    } else {
+      await matchAndImport(transactions);
+      renderFunds();
+      setTimeout(()=>{const c=document.getElementById('daybook-calendar');if(c)c.innerHTML=renderDaybookCalendar();},100);
+    }
+  }catch(e){
     document.getElementById('tally-progress').style.display='none';
     setBusy(false);
-    toast('Error reading file: '+e.message,'error',5000);
-    console.error(e);
+    toast('Error: '+e.message,'error',5000);
+    console.error('Tally parse error:',e);
   }
 }
+
 
 async function parseTallyXLS(file, type){
   // Read file as ArrayBuffer then parse with a simple XLS reader
@@ -471,28 +545,6 @@ async function matchAndImport(transactions){
 }
 
 // Override processTallyFile to use real parser
-async function processTallyFile(){
-  const fileInput=document.getElementById('tally-file');
-  const type=document.getElementById('tally-type').value;
-  if(!fileInput.files.length){toast('Select a file first','error');return;}
-  const file=fileInput.files[0];
-  document.getElementById('tally-progress').style.display='block';
-  setBusy(true,'Reading Tally file…');
-  try{
-    const transactions=await parseTallyXLSReal(file,type);
-    if(!transactions.length){toast('No transactions found. Check file format.','error',4000);setBusy(false);document.getElementById('tally-progress').style.display='none';return;}
-    await matchAndImport(transactions);
-    document.getElementById('tally-progress').style.display='none';
-    fileInput.value='';
-    setBusy(false);
-    renderFunds();
-  }catch(e){
-    document.getElementById('tally-progress').style.display='none';
-    setBusy(false);
-    toast('Error: '+e.message,'error',5000);
-    console.error('Tally parse error:',e);
-  }
-}
 
 // ─── UNMATCHED ACTIONS ────────────────────────────────
 async function assignUnmatched(i){
@@ -647,4 +699,143 @@ async function exportAllData(){
     toast('Export failed: '+e.message,'error',5000);
     console.error('Export error:', e);
   }
+}
+
+// ─── MONTHLY VERIFICATION ─────────────────────────────
+async function runMonthlyVerification(transactions){
+  // Compare monthly daybook transactions against what is already in the app
+  // Show: matched, missing, duplicates, unmatched cost centres
+
+  const matched = [], missing = [], duplicates = [], unmatched = [];
+
+  for(const tx of transactions){
+    // Find project by cost centre
+    const proj = D.projects.find(p=>p.costCentre &&
+      p.costCentre.toUpperCase()===tx.costCentre.toUpperCase());
+
+    if(!proj){
+      unmatched.push(tx);
+      continue;
+    }
+
+    // Check if already in releases
+    const existing = (proj.releases||[]).find(r=>
+      r.ref===tx.vchNo && Math.abs(r.amount-tx.amount)<1 && r.date===tx.date
+    );
+
+    if(existing){
+      matched.push({...tx, projectName: proj.name});
+    } else {
+      // Check if it's a duplicate by vchNo only
+      const dupByVch = (proj.releases||[]).find(r=>r.ref===tx.vchNo);
+      if(dupByVch){
+        duplicates.push({...tx, projectName: proj.name,
+          existingAmount: dupByVch.amount, existingDate: dupByVch.date});
+      } else {
+        missing.push({...tx, projectName: proj.name, projId: proj.id});
+      }
+    }
+  }
+
+  // Render results
+  const section = document.getElementById('monthly-verify-section');
+  if(!section) return;
+  section.style.display='block';
+
+  section.innerHTML = `
+    <div class="card" style="border-top:4px solid var(--navy)">
+      <div class="st">📊 Monthly Verification Results</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+        <div style="background:#d4edda;border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#155724">${matched.length}</div>
+          <div style="font-size:11px;color:#155724;font-weight:600">✅ Matched</div>
+        </div>
+        <div style="background:#fde8e8;border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--red)">${missing.length}</div>
+          <div style="font-size:11px;color:var(--red);font-weight:600">❌ Missing</div>
+        </div>
+        <div style="background:#fff3cd;border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#856404">${duplicates.length}</div>
+          <div style="font-size:11px;color:#856404;font-weight:600">⚠️ Possible Duplicates</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--text2)">${unmatched.length}</div>
+          <div style="font-size:11px;color:var(--text3);font-weight:600">❓ No Cost Centre</div>
+        </div>
+      </div>
+
+      ${missing.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">❌ Missing Transactions — Not in App</div>
+          ${missing.map((tx,i)=>`
+            <div style="background:#fde8e8;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo} · ${tx.projectName}</div>
+                <div style="font-size:11px;color:var(--text3)">${tx.narration||''} · CC: ${tx.costCentre}</div>
+              </div>
+              <div style="font-weight:800;color:var(--red)">${fmt(tx.amount)}</div>
+              <button class="btn btn-sm btn-navy" onclick="importMissingTx(${i})">+ Import</button>
+            </div>`).join('')}
+          <button class="btn btn-navy" onclick="importAllMissing()" style="margin-top:8px;width:100%">⚡ Import All Missing (${missing.length})</button>
+        </div>` : ''}
+
+      ${duplicates.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:8px">⚠️ Possible Duplicates — Same Voucher No, Different Amount/Date</div>
+          ${duplicates.map(tx=>`
+            <div style="background:#fff3cd;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px">
+              <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo} · ${tx.projectName}</div>
+              <div style="font-size:11px;color:var(--text3)">Monthly: ${fmt(tx.amount)} · In app: ${fmt(tx.existingAmount)} on ${tx.existingDate}</div>
+            </div>`).join('')}
+        </div>` : ''}
+
+      ${unmatched.length ? `
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px">❓ No Cost Centre Match</div>
+          ${unmatched.map(tx=>`
+            <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo}</div>
+                <div style="font-size:11px;color:var(--text3)">CC: ${tx.costCentre||'(none)'} · ${tx.narration||''}</div>
+              </div>
+              <div style="font-weight:700">${fmt(tx.amount)}</div>
+            </div>`).join('')}
+        </div>` : ''}
+    </div>`;
+
+  // Store missing list for import actions
+  window._monthlyMissing = missing;
+  toast(`Monthly verification: ${matched.length} matched, ${missing.length} missing, ${duplicates.length} duplicate warnings`,'ok',5000);
+}
+
+async function importMissingTx(idx){
+  const tx = window._monthlyMissing?.[idx]; if(!tx) return;
+  const proj = D.projects.find(p=>p.id===tx.projId); if(!proj) return;
+  if(!proj.releases) proj.releases=[];
+  proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,
+    method:tx.vchType||'Payment',ref:tx.vchNo,
+    notes:tx.narration||'',costCentre:tx.costCentre,source:'tally-monthly'});
+  try {
+    await saveProjectDB(proj);
+    window._monthlyMissing.splice(idx,1);
+    toast('✅ Transaction imported','ok');
+    renderFunds();
+  } catch(e){ toast('Import failed','error'); }
+}
+
+async function importAllMissing(){
+  const missing = window._monthlyMissing||[];
+  if(!missing.length) return;
+  if(!confirm(`Import all ${missing.length} missing transactions?`)) return;
+  for(const tx of missing){
+    const proj = D.projects.find(p=>p.id===tx.projId); if(!proj) continue;
+    if(!proj.releases) proj.releases=[];
+    proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,
+      method:tx.vchType||'Payment',ref:tx.vchNo,
+      notes:tx.narration||'',costCentre:tx.costCentre,source:'tally-monthly'});
+    await saveProjectDB(proj);
+  }
+  window._monthlyMissing=[];
+  toast(`✅ ${missing.length} transactions imported`,'ok');
+  renderFunds();
 }

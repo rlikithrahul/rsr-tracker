@@ -282,3 +282,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
 /* Anomaly modal always on top */
 #modal-anomaly{ z-index:10000 !important; }
+
+/* Calendar day hover */
+.cal-day-cell:hover{ transform: scale(1.12) !important; }

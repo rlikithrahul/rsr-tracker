@@ -260,3 +260,82 @@ function ownerTab(i){
   if(i===3) renderFunds();
   if(i===4) renderInterest();
 }
+// ─── GLOBAL SEARCH ────────────────────────────────────
+function toggleGlobalSearch(){
+  const wrap = document.getElementById('gsearch-wrap');
+  if(!wrap) return;
+  const isVisible = wrap.style.display !== 'none';
+  wrap.style.display = isVisible ? 'none' : 'flex';
+  if(!isVisible) document.getElementById('gsearch-input')?.focus();
+}
+
+function globalSearch(query){
+  const resultsEl = document.getElementById('gsearch-results');
+  if(!resultsEl) return;
+  const q = query.trim().toLowerCase();
+  if(!q){ resultsEl.style.display='none'; return; }
+
+  const results = [];
+
+  // Search projects
+  D.projects.forEach(p=>{
+    const c = GC(p.contractorId);
+    if(p.name.toLowerCase().includes(q) ||
+       (p.tender||'').toLowerCase().includes(q) ||
+       (p.location||'').toLowerCase().includes(q) ||
+       (c&&c.name.toLowerCase().includes(q))){
+      results.push({ type:'project', id:p.id, name:p.name,
+        sub:`${p.type||''}${p.location?' · '+p.location:''} · #${p.tender||''}`,
+        badge: sBadge(pStat(p),p) });
+    }
+  });
+
+  // Search contractors
+  D.contractors.forEach(c=>{
+    if(c.name.toLowerCase().includes(q) ||
+       (c.phone||'').includes(q)){
+      const pp = D.projects.filter(p=>p.contractorId===c.id);
+      results.push({ type:'contractor', id:c.id, name:c.name,
+        sub:`📞 ${c.phone||'—'} · ${pp.length} project${pp.length!==1?'s':''}` });
+    }
+  });
+
+  if(!results.length){
+    resultsEl.innerHTML=`<div style="padding:14px 16px;font-size:13px;color:#666">No results for "${query}"</div>`;
+    resultsEl.style.display='block';
+    return;
+  }
+
+  resultsEl.innerHTML = results.map(r=>`
+    <div onclick="searchGoTo('${r.type}','${r.id}')"
+      style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px"
+      onmouseover="this.style.background='#f7f8fb'" onmouseout="this.style.background='#fff'">
+      <span style="font-size:18px">${r.type==='project'?'🏗️':'👷'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:#1a2744;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+        <div style="font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub}</div>
+      </div>
+    </div>`).join('');
+  resultsEl.style.display='block';
+}
+
+function searchGoTo(type, id){
+  closeGlobalSearch();
+  if(type==='project'){
+    openDetail(id);
+  } else {
+    // Go to contractors tab and highlight
+    ownerTab(2);
+    setTimeout(()=>{
+      const el = document.querySelector(`[data-cid="${id}"]`);
+      if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+    }, 300);
+  }
+}
+
+function closeGlobalSearch(){
+  const resultsEl = document.getElementById('gsearch-results');
+  if(resultsEl) resultsEl.style.display='none';
+  const input = document.getElementById('gsearch-input');
+  if(input) input.value='';
+}

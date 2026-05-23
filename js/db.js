@@ -30,111 +30,41 @@ async function sbReq(table, method, body, extra) {
 // ═══════════════════════════════════════════════════════
 // SUPABASE STORAGE (photo uploads)
 // ═══════════════════════════════════════════════════════
-// ─── CLOUDFLARE R2 UPLOAD ─────────────────────────────
-// Uses AWS Signature v4 for R2 authentication
-async function r2Upload(file, bucket, key) {
-  // Build the S3-compatible signed URL request
-  const datetime = new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0,15) + 'Z';
-  const date = datetime.slice(0,8);
-  const region = 'auto';
-  const service = 's3';
-  const host = R2_ENDPOINT.replace('https://','') + '/' + bucket;
-  const uploadUrl = `${R2_ENDPOINT}/${bucket}/${key}`;
+// ─── UPLOAD VIA CLOUDFLARE WORKER ────────────────────
+// All uploads go through the Worker — no secret keys in browser
+// Worker URL is set in config.js as UPLOAD_WORKER_URL
 
-  // For browser-based uploads, use presigned URL approach via a simple PUT
-  // R2 supports direct PUT with access key auth via Authorization header
-  // We use a simple HMAC-SHA256 signing
-  const encoder = new TextEncoder();
-
-  async function hmac(key, data) {
-    const k = typeof key === 'string' ? encoder.encode(key) : key;
-    const cryptoKey = await crypto.subtle.importKey('raw', k, {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
-    return new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data)));
-  }
-
-  async function sha256hex(data) {
-    const buf = typeof data === 'string' ? encoder.encode(data) : data;
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  }
-
-  const fileBuffer = await file.arrayBuffer();
-  const payloadHash = await sha256hex(fileBuffer);
-  const contentType = file.type || 'application/octet-stream';
-
-  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${datetime}\n`;
-  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
-  const canonicalRequest = `PUT\n/${key}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
-  const credentialScope = `${date}/${region}/${service}/aws4_request`;
-  const stringToSign = `AWS4-HMAC-SHA256\n${datetime}\n${credentialScope}\n${await sha256hex(canonicalRequest)}`;
-
-  const signingKey = await hmac(
-    await hmac(await hmac(await hmac('AWS4' + R2_SECRET_KEY, date), region), service),
-    'aws4_request'
-  );
-  const sigArr = await hmac(signingKey, stringToSign);
-  const signature = Array.from(sigArr).map(b=>b.toString(16).padStart(2,'0')).join('');
-
-  const authHeader = `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY}/${credentialScope},SignedHeaders=${signedHeaders},Signature=${signature}`;
-
-  const r = await fetch(uploadUrl, {
-    method: 'PUT',
+async function r2UploadViaWorker(file, bucket, key) {
+  const response = await fetch(UPLOAD_WORKER_URL, {
+    method: 'POST',
     headers: {
-      'Authorization': authHeader,
-      'Content-Type': contentType,
-      'x-amz-date': datetime,
-      'x-amz-content-sha256': payloadHash
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Bucket': bucket,
+      'X-Key': key,
     },
-    body: file
+    body: file,
   });
-
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error('R2 upload failed: ' + r.status + ' ' + t.slice(0,200));
+  if (!response.ok) {
+    const err = await response.json().catch(()=>({error: response.statusText}));
+    throw new Error('Upload failed: ' + (err.error || response.status));
   }
-  return key;
+  const result = await response.json();
+  return result.url;
 }
 
 async function uploadPhoto(file, projId, updateId) {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const key = `photos/${projId}/${updateId}_${Date.now()}.${ext}`;
-  await r2Upload(file, R2_PHOTOS_BUCKET, key);
-  return `${R2_PHOTOS_PUBLIC}/${key}`;
+  return await r2UploadViaWorker(file, R2_PHOTOS_BUCKET, key);
 }
 
 async function uploadDocument(file, projId, docType) {
   const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const key = `docs/${projId}/${docType}_${Date.now()}_${safeName}`;
-  await r2Upload(file, R2_DOCS_BUCKET, key);
-  return `${R2_DOCS_PUBLIC}/${key}`;
+  return await r2UploadViaWorker(file, R2_DOCS_BUCKET, key);
 }
 
-// Compress image client-side before upload — keeps photos small/fast
-async function compressImage(file) {
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const maxW = 1200;
-        const scale = img.width > maxW ? maxW / img.width : 1;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => {
-          const f = new File([blob], file.name.replace(/\.[^.]+$/,'') + '.jpg', { type: 'image/jpeg' });
-          resolve(f);
-        }, 'image/jpeg', 0.75);
-      };
-      img.onerror = () => resolve(file);
-      img.src = e.target.result;
-    };
-    r.onerror = () => resolve(file);
-    r.readAsDataURL(file);
-  });
-}
 
 // ═══════════════════════════════════════════════════════
 // DATA LOAD / SAVE

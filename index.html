@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<meta name="theme-color" content="#1a2744">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RSR Tracker">
+<link rel="manifest" id="pwa-manifest">
+<title>RSR Constructions</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+</head>
+<body>
+
+<!-- Splash screen (shown while connecting) -->
+<div class="splash" id="splash">
+  <div class="splash-logo"></div>
+  <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:2px">RSR <span style="color:var(--gold)">Constructions</span></div>
+  <div class="splash-text" id="splash-text">Connecting…</div>
+  <div class="spinner"></div>
+</div>
+
+<div id="toast"></div>
+<div class="busy" id="busy"><div class="busy-sp"></div><span id="busy-text">Saving…</span></div>
+
+<!-- TOP NAV (hidden until logged in) -->
+<nav class="nav" id="main-nav" style="display:none">
+  <div class="nav-logo">
+    <div class="nav-logo-circle"></div>
+    <span class="nav-logo-text">RSR <span>Constructions</span></span>
+  </div>
+  <!-- Global Search -->
+  <div class="gsearch-wrap" id="gsearch-wrap" style="display:none;position:relative;flex:1;max-width:320px;margin:0 12px">
+    <input type="text" id="gsearch-input" placeholder="🔍 Search projects & contractors…"
+      oninput="globalSearch(this.value)"
+      onkeydown="if(event.key==='Escape')closeGlobalSearch()"
+      autocomplete="off"
+      style="width:100%;padding:7px 12px;border:1px solid rgba(255,255,255,.2);border-radius:20px;background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-family:'Inter',sans-serif;outline:none">
+    <div id="gsearch-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.2);max-height:320px;overflow-y:auto;z-index:9999"></div>
+  </div>
+  <div class="nav-right">
+    <div class="nav-links" id="nav-links"></div>
+    <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()" title="Refresh">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+    </button>
+    <span class="nav-role" id="nav-role">Owner</span>
+    <span class="nav-uname" id="nav-uname"></span>
+    <button class="btn-out" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- BOTTOM NAV (mobile) -->
+<nav class="bnav" id="bnav" style="display:none">
+  <button class="bn active" onclick="ownerTab(0)"><div class="bn-icon">📊</div><div>Dashboard</div></button>
+  <button class="bn" onclick="ownerTab(1)"><div class="bn-icon">🏗️</div><div>Projects</div></button>
+  <button class="bn" onclick="ownerTab(2)"><div class="bn-icon">👷</div><div>Contractors</div></button>
+  <button class="bn" onclick="ownerTab(3)"><div class="bn-icon">📂</div><div>Tally</div></button>
+</nav>
+
+<!-- LOGIN PAGE -->
+<div class="page active" id="page-login">
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="lg-img"></div>
+        <div class="login-name">RSR <span>Constructions</span></div>
+        <div class="login-sub">Project Tracker</div>
+      </div>
+      <div class="rtabs">
+        <button class="rtab active" id="rt-owner" onclick="selRole('owner')">
+          <div class="rtab-icon">👑</div><div class="rtab-label">RSR Admin</div><div class="rtab-sub">Owner login</div>
+        </button>
+        <button class="rtab" id="rt-cont" onclick="selRole('contractor')">
+          <div class="rtab-icon">👷</div><div class="rtab-label">Contractor</div><div class="rtab-sub">Site team login</div>
+        </button>
+      </div>
+      <div id="lf-owner">
+        <div class="fg pw"><label>Owner Password</label>
+          <input type="password" id="owner-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')ownerLogin()">
+          <button class="pw-eye" onclick="togglePw('owner-pw',this)" type="button">👁️</button>
+        </div>
+        <button class="btn btn-navy btn-full" onclick="ownerLogin()">Login as Owner</button>
+      </div>
+      <div id="lf-cont" class="hidden">
+        <div class="fg"><label>Your Name</label>
+          <input type="text" id="cl-name" placeholder="As registered by RSR" onkeydown="if(event.key==='Enter')contLogin()">
+        </div>
+        <div class="fg pw"><label>Password</label>
+          <input type="password" id="cl-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')contLogin()">
+          <button class="pw-eye" onclick="togglePw('cl-pw',this)" type="button">👁️</button>
+        </div>
+        <button class="btn btn-navy btn-full" onclick="contLogin()">Login as Contractor</button>
+      </div>
+      <div class="lerr" id="lerr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- OWNER PAGE -->
+<div class="page" id="page-owner">
+  <div class="wrap">
+    <!-- Dashboard tab -->
+    <div class="osec" id="sec-dash">
+      <div class="pg-hdr"><div class="pg-title">Dashboard</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="backupAllData()" title="Download full data backup">💾 Backup</button>
+          <button class="btn btn-sm" onclick="OM('modal-health')" title="Run system health checks">🔍 Health Check</button>
+          <button class="btn btn-sm" onclick="exportAllData()" title="Export all data to Excel">📥 Export</button>
+          <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+        </div>
+      </div>
+      <div class="fg" style="max-width:500px;margin-bottom:16px">
+        <input type="text" id="dash-search" placeholder="🔍 Search projects, contractors, tender ID…" oninput="renderDash()" style="font-size:14px">
+      </div>
+      <div id="dash-banner"></div>
+      <div class="stats" id="dash-stats"></div>
+      <div class="st">All Sites — Live Status</div>
+      <div id="dash-cards"></div>
+    </div>
+
+    <!-- Projects tab -->
+    <div class="osec hidden" id="sec-proj">
+      <div class="pg-hdr"><div class="pg-title">Projects</div>
+        <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+      </div>
+      <div class="fg" style="max-width:400px"><input type="text" id="psearch" placeholder="🔍 Search by name, tender ID, or contractor…" oninput="renderProjects()"></div>
+      <div id="proj-tbl"></div>
+    </div>
+
+    <!-- Contractors tab -->
+    <div class="osec hidden" id="sec-cont">
+      <div class="pg-hdr"><div class="pg-title">Contractors</div>
+        <button class="btn btn-gold" onclick="OM('modal-nc')">+ New Contractor</button>
+      </div>
+      <div id="cont-list"></div>
+    </div>
+
+    <!-- Funds tab -->
+    <div class="osec hidden" id="sec-funds">
+      <div id="tally-wrap"></div>
+    </div>
+
+    <!-- Interest tab -->
+    <div class="osec hidden" id="sec-interest">
+      <div id="interest-wrap"></div>
+    </div>
+
+    <!-- Project detail (full-page) -->
+    <div class="osec hidden" id="sec-detail">
+      <div id="detail-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTRACTOR PAGE -->
+<div class="page" id="page-cont">
+  <div class="wrap">
+    <div id="cp-home"></div>
+    <div id="cp-proj" class="hidden"></div>
+    <div id="cp-upd" class="hidden"></div>
+    <div id="cp-funds" class="hidden"></div>
+  </div>
+</div>
+
+<!-- ═══════ MODALS ═══════ -->
+
+<!-- New Contractor -->
+<div class="mov" id="modal-nc">
+<div class="mbox">
+  <div class="mhdr"><h2>+ New Contractor</h2><button class="mx" onclick="CM('modal-nc')">✕</button></div>
+  <div class="fg"><label>Full Name *</label><input type="text" id="nc-name" placeholder="e.g. Ramesh Kumar"></div>
+  <div class="fg"><label>Phone Number *</label><input type="text" id="nc-phone" placeholder="10-digit mobile"></div>
+  <div class="fg pw"><label>Login Password *</label>
+    <input type="password" id="nc-pw" placeholder="Set password (min 4 chars)">
+    <button class="pw-eye" onclick="togglePw('nc-pw',this)" type="button">👁️</button>
+  </div>
+  <div class="fg"><label>Notes</label><input type="text" id="nc-notes" placeholder="e.g. Specialises in roads"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-nc')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveContractor()">Save Contractor</button>
+  </div>
+</div></div>
+
+<!-- New Project -->
+<div class="mov" id="modal-np">
+<div class="mbox" style="max-width:720px">
+  <div class="mhdr"><h2>+ New Project</h2><button class="mx" onclick="CM('modal-np')">✕</button></div>
+  <div class="frow">
+    <div class="fg"><label>Project / Work Name *</label><input type="text" id="np-name" placeholder="e.g. Gajuwaka road widening"></div>
+    <div class="fg"><label>Tender ID *</label><input type="text" id="np-tender" placeholder="e.g. 862609"></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label>Type *</label>
+      <select id="np-type">
+        <option>Road</option><option>Building</option><option>Drain</option><option>Culvert</option>
+        <option>Bridge</option><option>False Ceiling</option><option>Electrical</option><option>Other</option>
+      </select>
+    </div>
+    <div class="fg"><label>Contractor *</label><select id="np-cont"></select></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label>Estimated BOQ Value (₹) *</label><input type="number" id="np-est" placeholder="e.g. 1000000" oninput="calcAgree()"></div>
+    <div class="fg"><label>Bid % (negative = below est) *</label><input type="number" id="np-bid" placeholder="e.g. -10" step="0.01" oninput="calcAgree()"></div>
+  </div>
+  <div class="calc hidden" id="np-calc">
+    <div class="fr"><span class="fl">Agreement Amount</span><span class="fv" id="np-agree">₹0</span></div>
+    <div class="fr"><span class="fl">Max Fundable (70%)</span><span class="fv" id="np-max">₹0</span></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label>Agreement Date</label><input type="date" id="np-date"></div>
+    <div class="fg"><label>Location / Site</label><input type="text" id="np-loc" placeholder="e.g. Gajuwaka, Vizag"></div>
+  <div class="fg"><label>Tally Cost Centre Name <span style="color:var(--text3);font-weight:400;text-transform:none">(exact name from Tally — used for auto-import)</span></label>
+    <input type="text" id="np-cc" placeholder="e.g. K KRISHNA FISHER MAN CC ROAD WARD 18" style="font-family:monospace;font-size:13px">
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Copy-paste the exact Cost Centre name from Tally. This is how the app matches Tally transactions to this project.</div>
+  </div>
+  </div>
+  <div class="st" style="margin-top:18px">BOQ Items</div>
+  <div id="boq-upload-section"><!-- rendered by renderBOQUploadSection() on modal open --></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+    <button class="btn" onclick="CM('modal-np')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveProject()">Create Project</button>
+  </div>
+</div></div>
+
+
+<!-- Record Verification -->
+<div class="mov" id="modal-ver">
+<div class="mbox" style="max-width:560px">
+  <div class="mhdr"><h2>📋 Record Verification</h2><button class="mx" onclick="CM('modal-ver')">✕</button></div>
+  <div id="ver-body"></div>
+</div></div>
+
+<!-- Change Password -->
+<div class="mov" id="modal-pw">
+<div class="mbox" style="max-width:400px">
+  <div class="mhdr"><h2>🔑 Change Owner Password</h2><button class="mx" onclick="CM('modal-pw')">✕</button></div>
+  <div class="fg"><label>Current Password</label><input type="password" id="pw-cur"></div>
+  <div class="fg"><label>New Password (min 6 chars)</label><input type="password" id="pw-new"></div>
+  <div class="fg"><label>Confirm New Password</label><input type="password" id="pw-conf"></div>
+  <div id="pw-err" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-pw')">Cancel</button>
+    <button class="btn btn-navy" onclick="changePw()">Update Password</button>
+  </div>
+</div></div>
+
+<!-- Change Contractor Password (Owner only) -->
+<div class="mov" id="modal-cpw">
+<div class="mbox" style="max-width:400px">
+  <div class="mhdr"><h2>🔑 Change Contractor Password</h2><button class="mx" onclick="CM('modal-cpw')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:16px">You are changing the password for: <strong id="cpw-name"></strong></div>
+  <div class="fg"><label>New Password (min 4 characters)</label><input type="password" id="cpw-new" placeholder="Enter new password"></div>
+  <div class="fg"><label>Confirm New Password</label><input type="password" id="cpw-confirm" placeholder="Repeat new password"></div>
+  <div id="cpw-err" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-cpw')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveContractorPw()">Update Password</button>
+  </div>
+</div></div>
+
+<!-- Owner Notes -->
+<div class="mov" id="modal-notes">
+<div class="mbox" style="max-width:520px">
+  <div class="mhdr"><h2>📝 Owner Notes</h2><button class="mx" onclick="CM('modal-notes')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:14px">Private notes — only visible to RSR Admin. Contractors never see this.</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:600;margin-bottom:8px" id="notes-project-name"></div>
+  <div class="fg">
+    <textarea id="notes-text" rows="8" placeholder="e.g. Contractor is running slow on this site. Material shortage reported on 15 May. Payment from GVMC expected by end of month. Watch the excavation quantities — contractor tends to overclaim..."></textarea>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Tip: Date your notes so you can track history. e.g. "21-May: Visited site, work 40% done."</div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-notes')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveOwnerNotes()">Save Notes</button>
+  </div>
+</div></div>
+
+<!-- System Health Check -->
+<div class="mov" id="modal-health">
+<div class="mbox" style="max-width:560px">
+  <div class="mhdr"><h2>🔍 System Health Check</h2><button class="mx" onclick="CM('modal-health')">✕</button></div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Runs 10 checks to verify the system is working correctly. Run this before every deployment.</div>
+  <div id="health-body"><div style="text-align:center;padding:20px;color:var(--text3)">Click Run Checks to begin.</div></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+    <button class="btn" onclick="CM('modal-health')">Close</button>
+    <button class="btn btn-navy" onclick="runSystemChecks()">▶ Run Checks</button>
+  </div>
+</div></div>
+
+<!-- Anomaly Warning -->
+<div class="mov" id="modal-anomaly">
+<div class="mbox" style="max-width:520px">
+  <div class="mhdr"><h2>⚠️ Anomaly Detected</h2><button class="mx" onclick="CM('modal-anomaly')">✕</button></div>
+  <div id="anomaly-body"></div>
+</div></div>
+
+<!-- Edit BOQ Modal -->
+<div class="mov" id="modal-edit-boq">
+<div class="mbox" style="max-width:800px;width:95vw">
+  <div class="mhdr"><h2>📊 Edit BOQ</h2><button class="mx" onclick="CM('modal-edit-boq')">✕</button></div>
+  <div id="edit-boq-body"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+    <button class="btn" onclick="CM('modal-edit-boq')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveEditBOQ()">💾 Save BOQ</button>
+  </div>
+</div></div>
+
+<!-- Lightbox -->
+<div class="mov" id="modal-lb" onclick="CM('modal-lb')" style="background:rgba(0,0,0,.92)">
+  <img id="lb-img" style="max-width:95vw;max-height:90vh;border-radius:8px;margin:auto;display:block" src="" alt="">
+</div>
+
+<!-- Record Settlement / Government Payment -->
+<div class="mov" id="modal-settle">
+<div class="mbox" style="max-width:460px">
+  <div class="mhdr"><h2>🏦 Record Government Payment</h2><button class="mx" onclick="CM('modal-settle')">✕</button></div>
+  <div class="alert al-navy" style="margin-bottom:14px">Record a payment received from GVMC / government against this project. This reduces outstanding balance and stops interest on the settled amount.</div>
+  <div id="settle-summary"></div>
+  <div class="fg"><label>Amount Received (₹)</label><input type="number" id="settle-amt" placeholder="e.g. 500000"></div>
+  <div class="frow">
+    <div class="fg"><label>Date Received</label><input type="date" id="settle-date"></div>
+    <div class="fg"><label>Payment Mode</label>
+      <select id="settle-mode"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Cash</option></select>
+    </div>
+  </div>
+  <div class="fg"><label>Reference / UTR / Cheque No.</label><input type="text" id="settle-ref" placeholder="For records"></div>
+  <div class="fg"><label>Notes</label><input type="text" id="settle-notes" placeholder="e.g. Bill No. 12, RA Bill 3"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-settle')">Cancel</button>
+    <button class="btn btn-green" onclick="confirmSettle()">Record Payment</button>
+  </div>
+</div></div>
+
+<!-- Edit Fund Release -->
+<div class="mov" id="modal-edit-release">
+<div class="mbox" style="max-width:460px">
+  <div class="mhdr"><h2>✏️ Edit Fund Release</h2><button class="mx" onclick="CM('modal-edit-release')">✕</button></div>
+  <div class="fg"><label>Amount (₹)</label><input type="number" id="er-amt"></div>
+  <div class="frow">
+    <div class="fg"><label>Date</label><input type="date" id="er-date"></div>
+    <div class="fg"><label>Method</label><select id="er-meth"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>UPI</option><option>Cash</option></select></div>
+  </div>
+  <div class="fg"><label>Reference / UTR</label><input type="text" id="er-ref"></div>
+  <div class="fg"><label>Notes</label><input type="text" id="er-notes"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="CM('modal-edit-release')">Cancel</button>
+    <button class="btn btn-navy" onclick="saveEditRelease()">Save Changes</button>
+  </div>
+</div></div>
+
+<!-- Review Update: Approve with edit or Reject -->
+<div class="mov" id="modal-review-upd">
+<div class="mbox" style="max-width:560px">
+  <div class="mhdr"><h2>📋 Review Contractor Update</h2><button class="mx" onclick="CM('modal-review-upd')">✕</button></div>
+  <div class="alert al-amber" style="margin-bottom:14px">You can approve the quantities as-is, adjust the quantities before approving, or reject this update entirely.</div>
+  <div id="review-upd-fields"></div>
+  <div class="fg" style="margin-top:12px"><label>Your Notes (optional)</label><input type="text" id="ru-notes" placeholder="e.g. Verified 18 Cum not 20 Cum on site"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+    <button class="btn" onclick="CM('modal-review-upd')">Cancel</button>
+    <button class="btn-reject" onclick="rejectUpdate()">✗ Reject Update</button>
+    <button class="btn btn-navy" onclick="approveWithEdit()">✓ Approve</button>
+  </div>
+</div></div>
+
+<!-- ═══════════════════════════════════════
+     JS MODULES — load order is critical
+     Each file can only use functions defined in files above it
+     ═══════════════════════════════════════ -->
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/boq.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/project_ops.js"></script>
+<script src="js/contractors.js"></script>
+<script src="js/finance.js"></script>
+<script src="js/documents.js"></script>
+<script src="js/interest.js"></script>
+<script src="js/integrity.js"></script>
+<script src="js/contractor_view.js"></script>
+<script src="js/offline.js"></script>
+<script>init();</script>
+</body>
+</html>
