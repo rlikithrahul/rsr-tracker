@@ -143,11 +143,56 @@ async function saveContractorDB(c) {
   } finally { setBusy(false); }
 }
 
-async function saveProjectDB(p) {
+async function saveProjectDB(p, eventMeta) {
   setBusy(true,'Saving…');
   try {
+    // Migrate schema before saving
+    migrateProject(p);
     await sbReq('projects', 'POST', {id:p.id, data:p, created_at:new Date().toISOString()});
+    // Append-only event ledger write (fire-and-forget, non-blocking)
+    if(eventMeta && dbOK){
+      appendLedgerEvent({
+        projectId: p.id,
+        contractorId: p.contractorId,
+        ...eventMeta,
+        ts: new Date().toISOString(),
+        user: CU ? CU.name : 'system'
+      }).catch(e => console.warn('Ledger event write failed:', e));
+    }
   } finally { setBusy(false); }
+}
+
+// ─── APPEND-ONLY EVENT LEDGER ─────────────────────────
+// One row per event — never updated, never deleted
+// Table: ledger_events (id, project_id, contractor_id, type, amount, ref, user, ts, meta)
+async function appendLedgerEvent(ev){
+  try{
+    await sbReq('ledger_events','POST',{
+      id: uid(),
+      project_id: ev.projectId||null,
+      contractor_id: ev.contractorId||null,
+      type: ev.type||'unknown',        // 'payment','receipt','settlement','edit','archive','status_change'
+      amount: ev.amount||0,
+      ref: ev.ref||null,
+      user: ev.user||null,
+      ts: ev.ts||new Date().toISOString(),
+      meta: JSON.stringify(ev.meta||{})
+    });
+  }catch(e){
+    // Non-critical — log but don't fail
+    console.warn('ledger_events write skipped (table may not exist yet):', e.message);
+  }
+}
+
+// Helper to write a ledger event directly (for non-project events)
+async function writeLedgerEvent(type, projectId, contractorId, amount, ref, meta){
+  if(!dbOK) return;
+  appendLedgerEvent({
+    projectId, contractorId, type, amount, ref,
+    ts: new Date().toISOString(),
+    user: CU ? CU.name : 'system',
+    meta: meta||{}
+  }).catch(()=>{});
 }
 
 async function savePwDB(val) {

@@ -292,11 +292,18 @@ function openEditBOQ(pid){
   boqPreviewItems = (p.boq||[]).map(item=>({...item, _selected:true}));
   if(!boqPreviewItems.length) boqPreviewItems = [];
 
+  const originalTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
+  const tenderValue = p.estimated || originalTotal;
+
   const modal = document.getElementById('modal-edit-boq');
   const body  = document.getElementById('edit-boq-body');
   body.innerHTML = `
     <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">${p.name}</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Edit quantities, units, rates. Add or remove items. Changes apply immediately after saving.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px;padding:10px;background:var(--surface2);border-radius:var(--rs)">
+      <div style="font-size:12px"><div style="color:var(--text3)">Original Tender Value</div><div style="font-weight:700;color:var(--navy)">${fmt(tenderValue)}</div></div>
+      <div style="font-size:12px"><div style="color:var(--text3)">Current BOQ Total</div><div style="font-weight:700;color:var(--navy)" id="boq-current-total">${fmt(originalTotal)}</div></div>
+      <div style="font-size:12px"><div style="color:var(--text3)">Difference</div><div style="font-weight:700" id="boq-diff">${fmt(originalTotal - tenderValue)}</div></div>
+    </div>
     <div style="margin-bottom:12px">
       <label style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface2);border:1.5px dashed var(--border);border-radius:var(--rs);font-size:13px;font-weight:600;color:var(--navy)">
         📊 Upload New BOQ Excel (replaces current)
@@ -306,8 +313,24 @@ function openEditBOQ(pid){
     <div id="boq-preview-table"></div>
     <button type="button" class="btn btn-sm" onclick="addManualBOQRow()" style="margin-top:8px">+ Add Item</button>`;
 
-  renderBOQPreviewTable();
+  // Use setTimeout to ensure DOM is updated before rendering table
+  setTimeout(()=>{
+    renderBOQPreviewTable();
+    updateBOQValueTracking(tenderValue);
+  }, 50);
   modal.classList.add('open');
+}
+
+function updateBOQValueTracking(tenderValue){
+  const currentTotal = boqPreviewItems.filter(x=>x._selected).reduce((s,x)=>s+(parseFloat(x.amount)||0),0);
+  const diff = currentTotal - (tenderValue||0);
+  const totalEl = document.getElementById('boq-current-total');
+  const diffEl = document.getElementById('boq-diff');
+  if(totalEl) totalEl.textContent = fmt(currentTotal);
+  if(diffEl){
+    diffEl.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
+    diffEl.style.color = diff > 0 ? 'var(--red)' : diff < 0 ? 'var(--green)' : 'var(--text2)';
+  }
 }
 
 async function handleBOQReplaceUpload(evt, pid){

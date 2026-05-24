@@ -1,3 +1,28 @@
+// ─── PASSWORD HASHING ─────────────────────────────────
+// SHA-256 + per-contractor salt using Web Crypto API
+// Salt stored alongside hash in contractor record
+async function hashPassword(password, salt){
+  if(!salt) salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {name:'PBKDF2', salt:enc.encode(salt), iterations:10000, hash:'SHA-256'},
+    keyMaterial, 256
+  );
+  const hash = Array.from(new Uint8Array(bits))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+  return {hash, salt};
+}
+
+async function verifyPassword(password, storedHash, salt){
+  if(!storedHash || !salt) return false;
+  const {hash} = await hashPassword(password, salt);
+  return hash === storedHash;
+}
+
 // ═══════════════════════════════════════
 // auth.js
 // RSR Constructions Tracker v17
@@ -38,10 +63,39 @@ async function contLogin(){
   if(!dbOK){ showErr('Database unreachable. Check your internet.'); return; }
   const name=document.getElementById('cl-name').value.trim();
   const pw=document.getElementById('cl-pw').value;
+  if(!name||!pw){ showErr('Enter name and password.'); return; }
   try { await loadDB(); } catch(e){}
-  const f=D.contractors.find(c=>c.name.trim().toLowerCase()===name.toLowerCase()&&c.password===pw);
-  if(f){ CU={role:'contractor',id:f.id,name:f.name}; saveSession(CU); enterCont(); }
-  else showErr('Name or password incorrect. Contact RSR office.');
+
+  const contractor = D.contractors.find(c=>c.name.trim().toLowerCase()===name.toLowerCase());
+  if(!contractor){ showErr('Name or password incorrect. Contact RSR office.'); return; }
+
+  let authenticated = false;
+
+  if(contractor.passwordHash && contractor.passwordSalt){
+    // Modern: hashed password
+    authenticated = await verifyPassword(pw, contractor.passwordHash, contractor.passwordSalt);
+  } else if(contractor.password){
+    // Legacy: plaintext — verify then migrate to hash on the spot
+    authenticated = (contractor.password === pw);
+    if(authenticated){
+      // Migrate to hashed storage silently
+      try{
+        const {hash, salt} = await hashPassword(pw);
+        contractor.passwordHash = hash;
+        contractor.passwordSalt = salt;
+        delete contractor.password; // remove plaintext
+        await saveContractorDB(contractor);
+        console.log('[Auth] Password migrated to hash for:', contractor.name);
+      }catch(e){ console.warn('[Auth] Hash migration failed:', e); }
+    }
+  }
+
+  if(authenticated){
+    CU={role:'contractor',id:contractor.id,name:contractor.name};
+    saveSession(CU); enterCont();
+  } else {
+    showErr('Name or password incorrect. Contact RSR office.');
+  }
 }
 
 function logout(){

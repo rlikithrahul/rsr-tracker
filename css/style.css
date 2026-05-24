@@ -12,7 +12,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* NAV */
-.nav{background:var(--navy);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);overflow:hidden}
+.nav{background:var(--navy);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .nav-logo{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .nav-logo-circle{height:32px;width:32px;border-radius:50%;border:2px solid var(--gold);background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231a2744%22/><text x=%2250%22 y=%2258%22 font-size=%2228%22 fill=%22%23c9a84c%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-weight=%22900%22>RSR</text></svg>') center/cover;flex-shrink:0}
 .nav-logo-text{font-size:15px;font-weight:700;color:#fff;white-space:nowrap}.nav-logo-text span{color:var(--gold)}
@@ -285,3 +285,75 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
 /* Calendar day hover */
 .cal-day-cell:hover{ transform: scale(1.12) !important; }
+
+/* ─── v21c ADDITIONS ──────────────────────────────── */
+
+/* Offline queue badge */
+#offline-queue-badge {
+  display: none;
+  position: absolute;
+  top: -4px; right: -4px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 1.5px solid var(--navy);
+}
+
+/* Alert banner types */
+.ab-info { background: #e8f0fe; color: #1a56db; border-left: 3px solid #1a56db; }
+.ab-red  { background: #fef2f2; color: var(--red); border-left: 3px solid var(--red); }
+.ab-amber{ background: #fffbeb; color: #92400e; border-left: 3px solid var(--amber); }
+.ab-green{ background: #f0fdf4; color: #166534; border-left: 3px solid var(--green); }
+
+/* Dashboard filter bar pills */
+#dash-filter-bar button:hover {
+  border-color: var(--navy) !important;
+  color: var(--navy) !important;
+}
+
+/* Timeline dot ring */
+.tl-dot {
+  position: absolute;
+  left: -22px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff; font-weight: 700;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+
+/* Receipt row highlight in tally table */
+.receipt-row { background: #f0faf0; }
+
+/* Pending badge on card */
+.pend-badge {
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Archive section */
+.archive-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: var(--rs);
+  margin-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
+}

@@ -34,6 +34,7 @@ async function init() {
   try {
     await loadDBSummary();
     dbOK = true;
+    migrateAllProjects(); // silent schema migration
   } catch(e) {
     console.error('DB failed:', e);
     dbOK = false;
@@ -72,6 +73,7 @@ function startAutoRefresh(){
         if (dpid) renderDetail(dpid);
         else if (atab === 0) renderDash();
         else if (atab === 1) renderProjects();
+        updateOfflineQueueBadge();
       } else {
         // Contractor: refresh their home if on home screen
         if (!document.getElementById('cp-home').classList.contains('hidden')) renderCHome();
@@ -85,6 +87,7 @@ function stopAutoRefresh(){
 }
 
 async function manualRefresh(){
+  updateOfflineQueueBadge();
   if (!dbOK) return;
   const btn = document.getElementById('refresh-btn');
   btn.classList.add('spin');
@@ -103,10 +106,15 @@ async function manualRefresh(){
 
 // ─── DASHBOARD & PROJECT LIST ───────────────────────
 function renderDash(){
-  // Read search value — element may be in DOM even if section hidden
-  const dashSearchEl = document.getElementById('dash-search');
-  const searchQ = (dashSearchEl?.value||'').toLowerCase().trim();
-  const allProjects = D.projects;
+  const searchQ = '';
+  let allProjects = D.projects.filter(p=>!isArchived(p));
+  // Apply contractor filter
+  if(dashContractorFilter) allProjects=allProjects.filter(p=>p.contractorId===dashContractorFilter);
+  // Apply status filter
+  if(dashFilter==='attn') allProjects=allProjects.filter(p=>getAutoWarnings(p).some(w=>w.type==='red'||w.type==='amber'));
+  else if(dashFilter==='active') allProjects=allProjects.filter(p=>projStatus(p)==='active');
+  else if(dashFilter==='onhold') allProjects=allProjects.filter(p=>projStatus(p)==='onhold');
+  else if(dashFilter==='completed') allProjects=allProjects.filter(p=>projStatus(p)==='completed');
   // Filter by search
   const pp = searchQ ? allProjects.filter(p=>{
     const c = GC(p.contractorId);
@@ -166,26 +174,126 @@ function renderDash(){
     }
   }
   document.getElementById('dash-cards').innerHTML=html;
-  // Restore search value after re-render (innerHTML rebuild clears input)
-  const searchElAfter = document.getElementById('dash-search');
-  if(searchElAfter && searchQ) searchElAfter.value = searchQ;
+
+  // Render filter bar
+  renderDashFilterBar();
+}
+
+function renderDashFilterBar(){
+  const bar = document.getElementById('dash-filter-bar');
+  if(!bar) return;
+  const all=D.projects.filter(p=>!isArchived(p));
+  const counts={
+    all:all.length,
+    attn:all.filter(p=>getAutoWarnings(p).some(w=>w.type==='red'||w.type==='amber')).length,
+    active:all.filter(p=>projStatus(p)==='active').length,
+    onhold:all.filter(p=>projStatus(p)==='onhold').length,
+    completed:all.filter(p=>projStatus(p)==='completed').length,
+    archived:D.projects.filter(p=>isArchived(p)).length
+  };
+  const contractors=[...new Set(all.map(p=>p.contractorId).filter(Boolean))];
+  const filters=[
+    {k:'all',label:'All',count:counts.all},
+    {k:'attn',label:'⚠️ Needs Attention',count:counts.attn},
+    {k:'active',label:'Active',count:counts.active},
+    {k:'onhold',label:'On Hold',count:counts.onhold},
+    {k:'completed',label:'Completed',count:counts.completed}
+  ];
+  bar.innerHTML=`
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 12px">
+      ${filters.map(f=>`<button onclick="setDashFilter('${f.k}')"
+        style="padding:5px 12px;border-radius:20px;border:1.5px solid ${dashFilter===f.k?'var(--navy)':'var(--border)'};
+        background:${dashFilter===f.k?'var(--navy)':'#fff'};color:${dashFilter===f.k?'#fff':'var(--text2)'};
+        font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">
+        ${f.label}${f.count>0?` <span style="opacity:.7">(${f.count})</span>`:''}
+      </button>`).join('')}
+      <select onchange="setDashContractorFilter(this.value)"
+        style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-family:'Inter',sans-serif;background:#fff;color:var(--text2);cursor:pointer">
+        <option value="">All Contractors</option>
+        ${contractors.map(cid=>{const c=GC(cid);return c?`<option value="${cid}" ${dashContractorFilter===cid?'selected':''}>${c.name}</option>`:''}).join('')}
+      </select>
+      ${counts.archived>0?`<button onclick="renderArchive()"
+        style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text3);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;margin-left:auto">
+        📦 Archive (${counts.archived})
+      </button>`:''}
+    </div>`;
+}
+
+function setDashFilter(f){ dashFilter=f; renderDash(); }
+function setDashContractorFilter(cid){ dashContractorFilter=cid; renderDash(); }
+
+function renderArchive(){
+  const archived=D.projects.filter(p=>isArchived(p));
+  if(!archived.length){ toast('No archived projects','ok'); return; }
+  
+  // Use or create a dedicated archive modal
+  let modal = document.getElementById('modal-archive');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className = 'mov';
+    modal.id = 'modal-archive';
+    document.body.appendChild(modal);
+  }
+  
+  modal.innerHTML = `<div class="mbox" style="max-width:560px">
+    <div class="mhdr">
+      <h2>📦 Archived Projects (${archived.length})</h2>
+      <button class="mx" onclick="CM('modal-archive')">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Archived projects are hidden from the dashboard. All data is preserved. Restore anytime or permanently delete.
+    </div>
+    ${archived.map(p=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px">${p.name}</div>
+          <div style="font-size:12px;color:var(--text3)">
+            #${p.tender||'—'} · Archived ${p._archivedAt?new Date(p._archivedAt).toLocaleDateString('en-IN'):''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm btn-navy" onclick="restoreProject('${p.id}')">↩️ Restore</button>
+          <button class="btn btn-sm" style="color:var(--red);border:1px solid var(--red)" onclick="permanentDeleteProject('${p.id}')">🗑️ Delete Forever</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+  
+  modal.classList.add('open');
+}
+
+async function restoreProject(pid){
+  const p=GP(pid); if(!p) return;
+  delete p._archived;
+  delete p._archivedAt;
+  try{
+    await saveProjectDB(p);
+    CM('modal-archive');
+    renderDash();
+    toast('✓ Project restored to dashboard','ok');
+  }catch(e){ toast('Restore failed','error'); }
 }
 
 function dashCardHTML(p){
   const c=GC(p.contractorId);
   const rel=totRel(p),max=maxF(p),el=eligR(p),vp=verPct(p);
-  const rp=Math.min(rel/max*100,100); const s=pStat(p); const hw=hdroom(p);
-  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed).length;
-  const lv=(p.verifications||[]).slice(-1)[0];
+  const rp=max>0?Math.min(rel/max*100,100):0; const s=pStat(p); const hw=hdroom(p);
+  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length;
+  const lv=(p.verifications||[]).filter(v=>!isArchived(v)).slice(-1)[0];
   const alerts=getProjectAlerts(p);
-  const alertsHtml=alerts.map(a=>`<div class="alert-banner ab-${a.type}" onclick="openDetail('${p.id}')">${a.msg}</div>`).join('');
-  return `<div class="card" style="${alerts.some(a=>a.type==='red')?'border-color:var(--red);border-left:4px solid var(--red)':''}">
+  const autoW=getAutoWarnings(p);
+  const allWarnings=[...alerts,...autoW.filter(w=>w.code!=='pending_updates')];
+  const alertsHtml=allWarnings.slice(0,2).map(a=>`<div class="alert-banner ab-${a.type}" onclick="openDetail('${p.id}')">${a.msg}</div>`).join('');
+  const capColor=rp>=85?'var(--red)':rp>=70?'var(--amber)':'var(--green)';
+  const capFill=rp>=85?'pf-red':rp>=70?'pf-amber':'pf-green';
+  return `<div class="card" style="${allWarnings.some(a=>a.type==='red')?'border-color:var(--red);border-left:4px solid var(--red)':''}">
     <div class="card-hdr">
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="card-title">${p.name}</span>${sBadge(s,p)}
+          ${pend>0?`<span style="background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px">${pend} pending</span>`:''}
         </div>
         <div class="card-sub">${p.type} · ${p.location||'—'} · ${c?c.name:'—'} · #${p.tender}</div>
+        <div style="margin-top:3px">${lastActivityHTML(p)}</div>
       </div>
       <div class="card-acts">
         <button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button>
@@ -194,26 +302,31 @@ function dashCardHTML(p){
           <div class="amenu" id="pm-${p.id}">
             <button class="amenu-item" onclick="openDetail('${p.id}')">📋 View Detail</button>
             <button class="amenu-item" onclick="openOwnerNotes('${p.id}')">📝 Owner Notes${p.ownerNotes?' ●':''}</button>
-            <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Payment</button>
-            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
+            <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Settlement</button>
+            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">📦 Archive Project</button>
           </div>
         </div>
       </div>
     </div>
     ${alertsHtml}
-    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:${alerts.length?'10px':'0'}">
+    <div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;color:var(--text3)">Funding: ${fmt(rel)} net / ${fmt(max)} cap</span>
+        <span style="font-size:11px;font-weight:700;color:${capColor}">${Math.round(rp)}%</span>
+      </div>
+      <div class="prog-track" style="height:6px;margin-bottom:8px"><div class="prog-fill ${capFill}" style="width:${rp}%"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
       <div>
         <div class="prog"><div class="prog-lbl"><span style="color:var(--amber)">Contractor reported</span><span style="color:var(--amber)">${pct(reportedPct(p))}</span></div><div class="prog-track" style="background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${Math.min(reportedPct(p),100)}%"></div></div></div>
         <div class="prog"><div class="prog-lbl"><span>RSR verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
-        <div class="prog"><div class="prog-lbl"><span>Cap used (${fmt(rel)} / ${fmt(max)})</span><span>${pct(rp)}</span></div><div class="prog-track"><div class="prog-fill ${s==='red'?'pf-red':s==='amber'?'pf-amber':'pf-green'}" style="width:${rp}%"></div></div></div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last verified: '+lv.date:'No verification yet'}</div>
       </div>
       <div style="font-size:12px">
         <div class="fr" style="font-size:12px"><span class="fl">Agreement</span><span class="fv">${fmt(agAmt(p))}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Max (70%)</span><span class="fv">${fmt(max)}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Eligible</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Headroom</span><span class="fv" style="color:${s==='red'?'var(--red)':s==='amber'?'var(--amber)':'var(--green)'}">${fmt(hw)}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Interest</span><span class="int-val">${fmt(intr(p))}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Headroom</span><span class="fv" style="color:${capColor}">${fmt(hw)}</span></div>
+        <div class="fr" style="font-size:12px"><span class="fl">Net deployed</span><span class="fv">${fmt(rel)}</span></div>
+        <!-- Interest removed from dashboard — see Interest tab for full breakdown -->
       </div>
     </div>
   </div>`;
@@ -224,27 +337,50 @@ function dashCardHTML(p){
 // ═══════════════════════════════════════════════════════
 function renderProjects(){
   const q=(document.getElementById('psearch')?.value||'').toLowerCase();
+  const activeFilter = document.getElementById('proj-status-filter')?.value || 'all';
+
   const list=D.projects.filter(p=>{
-    if(!q) return true;
     const c=GC(p.contractorId);
-    return p.name.toLowerCase().includes(q)||p.tender.includes(q)||(c&&c.name.toLowerCase().includes(q));
+    const matchQ = !q || p.name.toLowerCase().includes(q)||
+      (p.tender||'').includes(q)||(c&&c.name.toLowerCase().includes(q));
+    const status = p.status || 'active';
+    const matchStatus = activeFilter==='all' || status===activeFilter;
+    return matchQ && matchStatus;
   });
+
   const el=document.getElementById('proj-tbl');
   if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects found.</div></div>';return;}
-  el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Type</th><th>Contractor</th><th>Agreement</th><th>Released</th><th>Verified</th><th>Status</th><th></th></tr></thead><tbody>
-  ${list.map(p=>{const c=GC(p.contractorId);return`<tr>
-    <td><div style="font-weight:700;color:var(--navy)">${p.name}</div><div style="font-size:11px;color:var(--text3)">#${p.tender}</div></td>
-    <td>${p.type}</td><td>${c?c.name:'—'}</td>
-    <td class="fv">${fmt(agAmt(p))}</td><td class="fv">${fmt(totRel(p))}</td>
-    <td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td>
-    <td><button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button></td>
-  </tr>`;}).join('')}</tbody></table></div>`;
+  el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Type</th><th>Contractor</th><th>Status</th><th>Agreement</th><th>BOQ Value</th><th>Cap Used</th><th>JV Date</th><th></th></tr></thead><tbody>
+    ${list.map(p=>{
+      const c=GC(p.contractorId);
+      const status = p.status||'active';
+      const statusBadge = {
+        'active':'<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">🟢 Active</span>',
+        'onhold':'<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">⏸ On Hold</span>',
+        'completed':'<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">✅ Completed</span>',
+        'settled':'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">💰 Settled</span>'
+      }[status]||'';
+      const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
+      const rel = (p.releases||[]).reduce((s,r)=>s+r.amount,0);
+      const max70 = (p.agreeAmt||boqTotal)*0.7;
+      const capPct = max70>0?Math.round(rel/max70*100):0;
+      const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
+      return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
+        <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}</td>
+        <td>${p.type||'—'}</td>
+        <td>${c?c.name:'—'}</td>
+        <td>${statusBadge}</td>
+        <td style="white-space:nowrap">${p.agreeDate||'<span style="color:var(--text3)">Not set</span>'}</td>
+        <td style="text-align:right">${fmt(boqTotal)}</td>
+        <td style="text-align:right;color:${capPct>=70?'var(--red)':'var(--navy)'}">${capPct}%</td>
+        <td style="white-space:nowrap">${jvDate}</td>
+        <td><button class="btn btn-sm" onclick="event.stopPropagation();openDetail('${p.id}')">View</button></td>
+      </tr>`;
+    }).join('')}
+  </tbody></table></div>`;
 }
 
-// ═══════════════════════════════════════════════════════
-// PROJECT DETAIL — owner view
-// ═══════════════════════════════════════════════════════
-// ─── OWNER TAB NAVIGATION ─────────────────────────────
+
 function ownerTab(i){
   atab=i; dpid=null;
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
@@ -256,17 +392,42 @@ function ownerTab(i){
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
   if(i===0) renderDash();
   if(i===1) renderProjects();
-  if(i===2) renderConts();
+  if(i===2){ renderConts(); renderContractorPerformance(); }
   if(i===3) renderFunds();
   if(i===4) renderInterest();
 }
+// ─── SEARCH POSITIONING ───────────────────────────────
+function positionSearchResults(){
+  const inputEl = document.getElementById('gsearch-input');
+  const resultsEl = document.getElementById('gsearch-results');
+  if(!inputEl || !resultsEl) return;
+  // Get bounding rect — if input is hidden, wrap may need to be visible first
+  const wrap = document.getElementById('gsearch-wrap');
+  if(!wrap || wrap.style.display === 'none') return;
+  const rect = inputEl.getBoundingClientRect();
+  if(!rect.width) return; // element not rendered yet
+  const top = rect.bottom + window.scrollY + 6;
+  const left = Math.max(8, rect.left + window.scrollX);
+  const width = Math.min(480, Math.max(280, rect.width + 40));
+  resultsEl.style.top = top + 'px';
+  resultsEl.style.left = left + 'px';
+  resultsEl.style.width = width + 'px';
+  resultsEl.style.transform = 'none';
+}
+
 // ─── GLOBAL SEARCH ────────────────────────────────────
 function toggleGlobalSearch(){
   const wrap = document.getElementById('gsearch-wrap');
   if(!wrap) return;
   const isVisible = wrap.style.display !== 'none';
   wrap.style.display = isVisible ? 'none' : 'flex';
-  if(!isVisible) document.getElementById('gsearch-input')?.focus();
+  if(!isVisible){
+    document.getElementById('gsearch-input')?.focus();
+    // Pre-position the dropdown container as soon as search is shown
+    requestAnimationFrame(positionSearchResults);
+  } else {
+    closeGlobalSearch();
+  }
 }
 
 function globalSearch(query){
@@ -299,6 +460,9 @@ function globalSearch(query){
         sub:`📞 ${c.phone||'—'} · ${pp.length} project${pp.length!==1?'s':''}` });
     }
   });
+
+  // Position results below search input
+  positionSearchResults();
 
   if(!results.length){
     resultsEl.innerHTML=`<div style="padding:14px 16px;font-size:13px;color:#666">No results for "${query}"</div>`;
@@ -338,4 +502,146 @@ function closeGlobalSearch(){
   if(resultsEl) resultsEl.style.display='none';
   const input = document.getElementById('gsearch-input');
   if(input) input.value='';
+}
+
+
+// Reposition search results on resize (e.g. orientation change on mobile)
+window.addEventListener('resize', function(){
+  const el = document.getElementById('gsearch-results');
+  if(el && el.style.display !== 'none') positionSearchResults();
+});
+// ─── FINANCIAL YEAR REPORT ────────────────────────────
+function getFY(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr);
+  const y = d.getFullYear(), m = d.getMonth();
+  return m >= 3 ? `${y}-${String(y+1).slice(2)}` : `${y-1}-${String(y).slice(2)}`;
+}
+
+function showFYReport(){
+  const section = document.getElementById('fy-report-section');
+  if(section.style.display !== 'none'){ section.style.display='none'; return; }
+
+  // Group completed projects by FY (JV date)
+  const jvByFY = {}, settledByFY = {};
+
+  D.projects.forEach(p=>{
+    const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt);
+    if(jvDate){
+      const fy = getFY(jvDate);
+      if(fy){
+        if(!jvByFY[fy]) jvByFY[fy]=[];
+        jvByFY[fy].push(p);
+      }
+    }
+    const settled = (p.releases||[]).filter(r=>r.source==='settlement');
+    settled.forEach(s=>{
+      const fy = getFY(s.date);
+      if(fy){
+        if(!settledByFY[fy]) settledByFY[fy]=[];
+        settledByFY[fy].push({...s, projectName:p.name});
+      }
+    });
+  });
+
+  const allFYs = [...new Set([...Object.keys(jvByFY),...Object.keys(settledByFY)])].sort().reverse();
+
+  if(!allFYs.length){
+    section.innerHTML=`<div class="card"><div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No JV or settlement data yet.</div></div>`;
+    section.style.display='block';
+    return;
+  }
+
+  section.innerHTML = allFYs.map(fy=>`
+    <div class="card" style="margin-bottom:12px">
+      <div class="st">📅 Financial Year ${fy}</div>
+      ${jvByFY[fy]?.length ? `
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px">JV Received (${jvByFY[fy].length} projects)</div>
+        ${jvByFY[fy].map(p=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;gap:4px">
+            <span>${p.name}</span>
+            <span style="color:var(--text3)">${p.jvDate||'—'}</span>
+          </div>`).join('')}` : ''}
+      ${settledByFY[fy]?.length ? `
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin:12px 0 8px">💰 Cheques Received (${settledByFY[fy].length})</div>
+        ${settledByFY[fy].map(s=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;gap:4px">
+            <span>${s.projectName}</span>
+            <div style="text-align:right"><div style="font-weight:700;color:var(--navy)">${fmt(s.amount)}</div><div style="font-size:11px;color:var(--text3)">${s.date}</div></div>
+          </div>`).join('')}
+        <div style="text-align:right;font-weight:700;color:var(--navy);padding-top:8px">Total: ${fmt(settledByFY[fy].reduce((s,x)=>s+x.amount,0))}</div>` : ''}
+    </div>`).join('');
+  section.style.display='block';
+}
+
+// ─── OFFLINE QUEUE BADGE ─────────────────────────────
+async function updateOfflineQueueBadge(){
+  try{
+    const queue = await getOfflineQueue();
+    const badge = document.getElementById('offline-queue-badge');
+    if(!badge) return;
+    if(queue && queue.length>0){
+      badge.textContent = queue.length;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }catch(e){}
+}
+
+// ─── BACKUP EXPORT ───────────────────────────────────
+function exportBackup(){
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    version: APP_VERSION,
+    projects: D.projects,
+    contractors: D.contractors
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `RSR_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ Backup downloaded','ok');
+}
+
+// ─── CONTRACTOR PERFORMANCE ──────────────────────────
+function renderContractorPerformance(){
+  const el=document.getElementById('contractor-perf-section');
+  if(!el) return;
+  const html=D.contractors.map(c=>{
+    const cProjs=D.projects.filter(p=>p.contractorId===c.id&&!isArchived(p));
+    const totalRel=cProjs.reduce((s,p)=>s+totRel(p),0);
+    const totalPay=cProjs.reduce((s,p)=>s+totPayments(p),0);
+    const pending=cProjs.reduce((s,p)=>s+(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length,0);
+    const lastDays=cProjs.map(p=>lastActivityDays(p)).filter(d=>d!==null);
+    const minDays=lastDays.length?Math.min(...lastDays):null;
+    const actColor=minDays===null?'var(--text3)':minDays>14?'var(--red)':minDays>7?'var(--amber)':'var(--green)';
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${c.type||'—'} · ${cProjs.length} project${cProjs.length!==1?'s':''}</div>
+        </div>
+        ${pending>0?`<span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px">${pending} pending review</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px">
+        <div style="text-align:center;padding:8px;background:var(--surface2);border-radius:var(--rs)">
+          <div style="font-size:11px;color:var(--text3)">Total Released</div>
+          <div style="font-weight:700;font-size:13px;color:var(--navy)">${fmt(totalPay)}</div>
+        </div>
+        <div style="text-align:center;padding:8px;background:var(--surface2);border-radius:var(--rs)">
+          <div style="font-size:11px;color:var(--text3)">Net Deployed</div>
+          <div style="font-weight:700;font-size:13px;color:var(--navy)">${fmt(totalRel)}</div>
+        </div>
+        <div style="text-align:center;padding:8px;background:var(--surface2);border-radius:var(--rs)">
+          <div style="font-size:11px;color:var(--text3)">Last Activity</div>
+          <div style="font-weight:700;font-size:13px;color:${actColor}">${minDays===null?'None':minDays===0?'Today':minDays+'d ago'}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">No contractors yet.</div>';
 }

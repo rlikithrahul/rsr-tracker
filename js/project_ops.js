@@ -56,6 +56,7 @@ async function saveProject(){
   if(!loc){toast('Location is required','error');document.getElementById('np-loc').focus();return;}
   if(!cc){toast('Tally Cost Centre name is required','error');document.getElementById('np-cc').focus();return;}
   if(!contractorId){toast('Please select a contractor','error');return;}
+  // Agreement date is OPTIONAL — can be added later
 
   // Get BOQ from the upload/preview system
   const boq=getBOQForSave();
@@ -160,13 +161,31 @@ function getProjectAlerts(p){
 // DELETE / EDIT — PROJECTS
 // ═══════════════════════════════════════════════════════
 async function deleteProject(pid){
-  if(!confirm('Delete this project? This cannot be undone. All data including releases and updates will be lost.')) return;
-  try {
-    await sbReq(`projects?id=eq.${pid}`, 'DELETE');
-    D.projects = D.projects.filter(p=>p.id!==pid);
-    toast('Project deleted','ok');
-    ownerTab(0);
-  } catch(e){ toast('Delete failed: '+e.message,'error'); }
+  if(!confirm('Archive this project? It will be hidden from dashboard but all data is preserved. You can restore it from the Archive section.')) return;
+  const p=GP(pid); if(!p) return;
+  p._archived=true;
+  p._archivedAt=new Date().toISOString();
+  try{
+    await saveProjectDB(p);
+    if(dpid===pid){ dpid=null; CM('modal-detail'); }
+    renderDash();
+    toast('✓ Project archived — restore it anytime from Archive','ok');
+  }catch(e){ toast('Archive failed: '+e.message,'error'); }
+}
+
+async function permanentDeleteProject(pid){
+  const p=GP(pid); if(!p) return;
+  if(!confirm(`PERMANENT DELETE: "${p.name}"\n\nThis removes ALL data — releases, updates, photos, verifications. This CANNOT be undone.\n\nType DELETE to confirm.`)) return;
+  try{
+    await sbReq(`projects?id=eq.${pid}`,'DELETE');
+    D.projects=D.projects.filter(x=>x.id!==pid);
+    CM('modal-archive');
+    // Refresh archive modal if there are still archived projects
+    const stillArchived=D.projects.filter(p=>isArchived(p));
+    if(stillArchived.length) setTimeout(renderArchive,300);
+    else ownerTab(0);
+    toast('Project permanently deleted','ok');
+  }catch(e){ toast('Delete failed: '+e.message,'error'); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -203,6 +222,11 @@ async function saveEditRelease(){
   const r=(p.releases||[]).find(x=>x.id===editReleaseId); if(!r) return;
   const newAmt=parseFloat(document.getElementById('er-amt').value);
   if(!newAmt||newAmt<=0){alert('Enter a valid amount');return;}
+  const newDate=document.getElementById('er-date').value;
+  if(r.txType!=='receipt'){
+    const dup=checkDuplicateRelease(p,newAmt,newDate,editReleaseId);
+    if(dup && !confirm(`⚠️ Similar transaction of ${fmt(dup.amount)} exists on ${dup.date}. Save anyway?`)) return;
+  }
   r.amount=newAmt;
   r.date=document.getElementById('er-date').value;
   r.method=document.getElementById('er-meth').value;
@@ -216,28 +240,24 @@ async function saveEditRelease(){
   } catch(e){ toast('Save failed','error'); }
 }
 async function deleteRelease(pid, rid){
-  if(!confirm('Delete this fund release? This will also reduce the interest calculation.')) return;
+  if(!confirm('Archive this transaction? Data is preserved and recoverable.')) return;
   const p=GP(pid); if(!p) return;
-  p.releases=(p.releases||[]).filter(r=>r.id!==rid);
-  try {
-    await saveProjectDB(p);
-    renderDetail(pid);
-    toast('Release deleted','ok');
-  } catch(e){ toast('Delete failed','error'); }
+  const r=(p.releases||[]).find(x=>x.id===rid);
+  if(r){ r._archived=true; r._archivedAt=new Date().toISOString(); }
+  try{ await saveProjectDB(p); renderDetail(pid); toast('✓ Transaction archived','ok'); }
+  catch(e){ toast('Archive failed','error'); }
 }
 
 // ═══════════════════════════════════════════════════════
 // DELETE / EDIT — VERIFICATIONS
 // ═══════════════════════════════════════════════════════
 async function deleteVerification(pid, vid){
-  if(!confirm('Delete this verification record? Verified quantities will revert to previous verification.')) return;
+  if(!confirm('Archive this verification? Data is preserved.')) return;
   const p=GP(pid); if(!p) return;
-  p.verifications=(p.verifications||[]).filter(v=>v.id!==vid);
-  try {
-    await saveProjectDB(p);
-    renderDetail(pid);
-    toast('Verification deleted','ok');
-  } catch(e){ toast('Delete failed','error'); }
+  const v=(p.verifications||[]).find(x=>x.id===vid);
+  if(v){ v._archived=true; v._archivedAt=new Date().toISOString(); }
+  try{ await saveProjectDB(p); renderDetail(pid); toast('✓ Verification archived','ok'); }
+  catch(e){ toast('Archive failed','error'); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -344,14 +364,12 @@ async function rejectUpdate(){
 }
 
 async function deleteUpdate(pid, uid_val){
-  if(!confirm('Delete this update completely?')) return;
+  if(!confirm('Archive this update? It will be hidden but data is preserved.')) return;
   const p=GP(pid); if(!p) return;
-  p.contractorUpdates=(p.contractorUpdates||[]).filter(u=>u.id!==uid_val);
-  try {
-    await saveProjectDB(p);
-    renderDetail(pid);
-    toast('Update deleted','ok');
-  } catch(e){ toast('Delete failed','error'); }
+  const u=(p.contractorUpdates||[]).find(x=>x.id===uid_val);
+  if(u){ u._archived=true; u._archivedAt=new Date().toISOString(); }
+  try{ await saveProjectDB(p); renderDetail(pid); toast('✓ Update archived','ok'); }
+  catch(e){ toast('Archive failed','error'); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -360,14 +378,39 @@ async function deleteUpdate(pid, uid_val){
 function openSettle(pid){
   settlePid=pid;
   const p=GP(pid); if(!p) return;
-  const rel=totRel(p);
-  const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
-  const outstanding=rel-settled;
-  document.getElementById('settle-summary').innerHTML=`<div class="calc" style="margin-bottom:14px">
-    <div class="fr"><span class="fl">Total Released to Contractor</span><span class="fv">${fmt(rel)}</span></div>
-    <div class="fr"><span class="fl">Already Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
-    <div class="fr"><span class="fl">Outstanding Balance</span><span class="fv" style="color:var(--red)">${fmt(outstanding)}</span></div>
-  </div>`;
+  const pay=totPayments(p);
+  const rec=totReceipts(p);
+  const net=totRel(p);
+  const settled=(p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0);
+  const outstanding=Math.max(0,net-settled);
+
+  // Build receipt transaction list from Tally imports for this project (not yet used as settlement)
+  const usedRefs=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>s.tallyRef));
+  const availableReceipts=(p.releases||[]).filter(r=>r.txType==='receipt'&&!usedRefs.has(r.ref)&&!isArchived(r));
+
+  const txOptions=availableReceipts.length
+    ? availableReceipts.map((r,i)=>`<option value="${i}">${r.date} · Vch #${r.ref||'—'} · ${fmt(r.amount)}${r.notes?' · '+r.notes:''}</option>`).join('')
+    : '<option value="">No Tally receipt transactions available — enter manually</option>';
+
+  document.getElementById('settle-summary').innerHTML=`
+    <div class="calc" style="margin-bottom:14px">
+      <div class="fr"><span class="fl">Total Payments (gross)</span><span class="fv">${fmt(pay)}</span></div>
+      <div class="fr"><span class="fl">Total Receipts</span><span class="fv" style="color:var(--green)">− ${fmt(rec)}</span></div>
+      <div class="fr"><span class="fl">Net Deployed</span><span class="fv" style="color:var(--navy)">${fmt(net)}</span></div>
+      <div class="fr"><span class="fl">Already Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
+      <div class="fr" style="border-top:2px solid var(--border);padding-top:6px;margin-top:4px"><span class="fl" style="font-weight:700">Outstanding Balance</span><span class="fv" style="color:var(--red);font-weight:700">${fmt(outstanding)}</span></div>
+    </div>
+    ${availableReceipts.length?`
+    <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:10px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:6px">📥 Select from Tally Receipt Transactions</div>
+      <select id="settle-tx-select" onchange="prefillSettleFromTx(${JSON.stringify(availableReceipts.map(r=>({ref:r.ref,amount:r.amount,date:r.date,notes:r.notes||''})))})" style="width:100%;padding:7px;border:1px solid #a5d6a7;border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px">
+        <option value="">— Select a Tally receipt transaction —</option>
+        ${txOptions}
+      </select>
+      <div style="font-size:11px;color:#2e7d32;margin-top:4px">Selecting a transaction auto-fills amount, date and reference below.</div>
+    </div>`
+    :'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">ℹ️ No unmatched Tally receipts found — enter settlement details manually or import from Tally first.</div>'}`;
+
   document.getElementById('settle-amt').value='';
   document.getElementById('settle-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('settle-ref').value='';
@@ -375,21 +418,52 @@ function openSettle(pid){
   document.getElementById('modal-settle').classList.add('open');
 }
 
+function prefillSettleFromTx(txArr){
+  const sel=document.getElementById('settle-tx-select');
+  if(!sel||sel.value==='') return;
+  const idx=parseInt(sel.value);
+  if(isNaN(idx)||!txArr[idx]) return;
+  const tx=txArr[idx];
+  document.getElementById('settle-amt').value=tx.amount;
+  document.getElementById('settle-date').value=tx.date;
+  document.getElementById('settle-ref').value=tx.ref||'';
+  document.getElementById('settle-notes').value=tx.notes||'';
+}
+
 async function confirmSettle(){
   const p=GP(settlePid); if(!p) return;
   const amt=parseFloat(document.getElementById('settle-amt').value);
   if(!amt||amt<=0){alert('Enter valid amount');return;}
+  const date=document.getElementById('settle-date').value;
+  const ref=document.getElementById('settle-ref').value;
+
+  // Duplicate detection
+  const dup=checkDuplicateSettlement(p,amt,date);
+  if(dup){
+    if(!confirm(`⚠️ A similar settlement of ${fmt(dup.amount)} already exists on ${dup.date}. Record anyway?`)) return;
+  }
+
+  // Get tallyRef if selected from Tally transaction
+  const sel=document.getElementById('settle-tx-select');
+  const tallyRef=sel&&sel.value!==''?ref:null;
+
   if(!p.settlements) p.settlements=[];
   p.settlements.push({
     id:uid(),
     amount:amt,
-    date:document.getElementById('settle-date').value,
+    date,
     mode:document.getElementById('settle-mode').value,
-    ref:document.getElementById('settle-ref').value,
-    notes:document.getElementById('settle-notes').value
+    ref,
+    tallyRef,
+    notes:document.getElementById('settle-notes').value,
+    recordedAt:new Date().toISOString()
   });
   try {
-    await saveProjectDB(p);
+    await saveProjectDB(p, {
+      type:'settlement', amount:amt,
+      ref: document.getElementById('settle-ref').value,
+      meta:{ mode: document.getElementById('settle-mode').value, notes: document.getElementById('settle-notes').value }
+    });
     CM('modal-settle');
     renderDetail(settlePid);
     toast(`✓ Settlement of ${fmt(amt)} recorded`,'ok');
@@ -404,9 +478,62 @@ async function changeProjectStatus(pid, newStatus){
   p.statusChangedAt = new Date().toISOString();
   p.statusChangedBy = CU.name;
   try {
-    await saveProjectDB(p);
+    await saveProjectDB(p, {type:'status_change', amount:0, ref:null, meta:{newStatus, oldStatus: p.status}});
     toast(`✓ Project marked as ${labels[newStatus]}`, 'ok');
     if(dpid===pid) renderDetail(pid);
     else renderDash();
   } catch(e){ toast('Save failed','error'); }
+}
+
+// ─── EDIT PROJECT ─────────────────────────────────────
+let editProjId = null;
+
+function openEditProject(pid){
+  const p = GP(pid); if(!p) return;
+  editProjId = pid;
+
+  document.getElementById('ep-name').value = p.name||'';
+  document.getElementById('ep-tender').value = p.tender||'';
+  document.getElementById('ep-date').value = p.agreeDate||'';
+  document.getElementById('ep-jvdate').value = p.jvDate||'';
+  document.getElementById('ep-bid').value = p.bidPct||'';
+  document.getElementById('ep-loc').value = p.location||'';
+  document.getElementById('ep-cc').value = p.costCentre||'';
+  document.getElementById('ep-status').value = p.status||'active';
+
+  const contSel = document.getElementById('ep-cont');
+  contSel.innerHTML = D.contractors.map(c=>
+    `<option value="${c.id}" ${c.id===p.contractorId?'selected':''}>${c.name}</option>`
+  ).join('');
+
+  OM('modal-edit-proj');
+}
+
+async function saveEditProject(){
+  const p = GP(editProjId); if(!p) return;
+  const name = document.getElementById('ep-name').value.trim();
+  if(!name){ toast('Project name is required','error'); return; }
+
+  p.name = name;
+  p.tender = document.getElementById('ep-tender').value.trim();
+  p.agreeDate = document.getElementById('ep-date').value;
+  p.jvDate = document.getElementById('ep-jvdate').value;
+  p.bidPct = parseFloat(document.getElementById('ep-bid').value)||0;
+  p.location = document.getElementById('ep-loc').value.trim();
+  p.costCentre = document.getElementById('ep-cc').value.trim().toUpperCase();
+  p.contractorId = document.getElementById('ep-cont').value;
+  p.status = document.getElementById('ep-status').value;
+
+  // Recalculate agreement amount
+  const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
+  const base = p.estimated || boqTotal;
+  p.agreeAmt = Math.round(base * (1 + p.bidPct/100) * 100)/100;
+
+  try {
+    await saveProjectDB(p);
+    CM('modal-edit-proj');
+    renderDetail(editProjId);
+    ownerTab(0);
+    toast('✅ Project updated','ok');
+  } catch(e){ toast('Save failed: '+e.message,'error'); }
 }

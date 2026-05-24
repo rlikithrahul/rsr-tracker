@@ -52,7 +52,15 @@ async function saveContractorPw(){
   if(nw !== conf){ err.textContent='Passwords do not match.'; err.style.display='block'; return; }
   const c = D.contractors.find(x=>x.id===changePwContractorId);
   if(!c) return;
-  c.password = nw;
+  // Hash new password before saving
+  try{
+    const {hash, salt} = await hashPassword(nw);
+    c.passwordHash = hash;
+    c.passwordSalt = salt;
+    delete c.password; // remove any old plaintext
+  }catch(e){
+    c.password = nw; // fallback
+  }
   try {
     await saveContractorDB(c);
     CM('modal-cpw');
@@ -92,7 +100,19 @@ async function saveContractor(){
   const notes=document.getElementById('nc-notes').value.trim();
   if(!name||!phone||!password){alert('Name, phone, and password are required.');return;}
   if(password.length<4){alert('Password must be at least 4 characters.');return;}
-  const c={id:uid(),name,phone,password,notes,createdAt:new Date().toISOString()};
+
+  // Hash password before storing — never store plaintext
+  let pwData = {};
+  try{
+    const {hash, salt} = await hashPassword(password);
+    pwData = {passwordHash: hash, passwordSalt: salt};
+  }catch(e){
+    // Fallback to plaintext if Web Crypto unavailable (very old browsers)
+    console.warn('Password hashing failed, storing plaintext as fallback:', e);
+    pwData = {password};
+  }
+
+  const c={id:uid(),name,phone,...pwData,notes,createdAt:new Date().toISOString()};
   D.contractors.push(c);
   try {
     await saveContractorDB(c);

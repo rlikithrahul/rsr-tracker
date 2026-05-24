@@ -26,7 +26,9 @@ function GP(id){ return D.projects.find(p=>p.id===id)||null; }
 function GC(id){ return D.contractors.find(c=>c.id===id)||null; }
 function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }
-function totRel(p){ return (p.releases||[]).reduce((s,r)=>s+r.amount,0); }
+function totPayments(p){ return (p.releases||[]).filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
+function totReceipts(p){ return (p.releases||[]).filter(r=>r.txType==='receipt').reduce((s,r)=>s+r.amount,0); }
+function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p)); } // NET deployed = payments minus receipts
 function verPct(p){
   // Based on RSR physical verification only — controls funding
   const lv=(p.verifications||[]).slice(-1)[0]; if(!lv) return 0;
@@ -122,4 +124,179 @@ function intrOutstanding(p){
   const earliest = releases.reduce((min,r)=>r.date<min?r.date:min, releases[0].date);
   const days = Math.max(0, Math.round((Date.now()-new Date(earliest).getTime())/86400000));
   return outstanding * 0.24 * days / 365;
+}
+
+// ─── LAST ACTIVITY ────────────────────────────────────
+function lastActivityDays(p){
+  const dates = [
+    ...(p.releases||[]).map(r=>r.date),
+    ...(p.contractorUpdates||[]).map(u=>u.date),
+    ...(p.verifications||[]).map(v=>v.date),
+    ...(p.settlements||[]).map(s=>s.date)
+  ].filter(Boolean);
+  if(!dates.length) return null;
+  const latest = dates.sort().reverse()[0];
+  return Math.round((Date.now()-new Date(latest).getTime())/86400000);
+}
+
+function lastActivityHTML(p){
+  const days = lastActivityDays(p);
+  if(days===null) return '<span style="color:var(--text3);font-size:11px">No activity yet</span>';
+  if(days===0) return '<span style="color:var(--green);font-size:11px">⚡ Activity today</span>';
+  if(days<=3) return `<span style="color:var(--green);font-size:11px">✓ ${days}d ago</span>`;
+  if(days<=7) return `<span style="color:var(--text2);font-size:11px">🕐 ${days}d ago</span>`;
+  if(days<=14) return `<span style="color:var(--amber);font-size:11px">⚠️ ${days}d ago</span>`;
+  return `<span style="color:var(--red);font-size:11px">🔴 No activity: ${days}d</span>`;
+}
+
+// ─── AUTO WARNINGS ENGINE ─────────────────────────────
+function getAutoWarnings(p){
+  const warnings = [];
+  const status = projStatus(p);
+  if(status !== 'active') return warnings;
+
+  // 1. No contractor update in 7 days
+  const updDates = (p.contractorUpdates||[]).map(u=>u.date).filter(Boolean).sort().reverse();
+  const daysSinceUpdate = updDates.length
+    ? Math.round((Date.now()-new Date(updDates[0]).getTime())/86400000)
+    : null;
+  if(daysSinceUpdate===null) warnings.push({type:'amber',code:'no_updates',msg:'📭 No contractor updates submitted yet'});
+  else if(daysSinceUpdate>14) warnings.push({type:'red',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days — follow up with contractor`});
+  else if(daysSinceUpdate>7) warnings.push({type:'amber',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days`});
+
+  // 2. No RSR verification in 14 days
+  const verDates = (p.verifications||[]).map(v=>v.date).filter(Boolean).sort().reverse();
+  const daysSinceVer = verDates.length
+    ? Math.round((Date.now()-new Date(verDates[0]).getTime())/86400000)
+    : null;
+  if(daysSinceVer!==null && daysSinceVer>14) warnings.push({type:'amber',code:'no_verification',msg:`🔍 No RSR verification for ${daysSinceVer} days`});
+
+  // 3. Funding above 75%
+  const rel=totRel(p), max=maxF(p);
+  if(max>0){
+    const pct=rel/max;
+    if(pct>=0.85) warnings.push({type:'red',code:'high_cap',msg:`🚨 ${Math.round(pct*100)}% of cap used — urgent review`});
+    else if(pct>=0.75) warnings.push({type:'amber',code:'high_cap',msg:`⚠️ ${Math.round(pct*100)}% of cap used — monitor closely`});
+  }
+
+  // 4. No BOQ items configured
+  if(!(p.boq||[]).length) warnings.push({type:'amber',code:'no_boq',msg:'📋 No BOQ items configured — add work items'});
+
+  // 5. JV received but no settlement after 300 days
+  if(p.jvDate){
+    const jvDays = Math.round((Date.now()-new Date(p.jvDate).getTime())/86400000);
+    const hasSettlement = (p.settlements||[]).length > 0;
+    if(jvDays>300 && !hasSettlement) warnings.push({type:'amber',code:'settlement_overdue',msg:`🏦 JV received ${jvDays} days ago — settlement overdue`});
+  }
+
+  // 6. Pending unreviewed updates
+  const pending = (p.contractorUpdates||[]).filter(u=>!u.reviewed).length;
+  if(pending>0) warnings.push({type:'info',code:'pending_updates',msg:`📸 ${pending} update${pending>1?'s':''} awaiting your review`});
+
+  return warnings;
+}
+
+// ─── SOFT DELETE / ARCHIVE ────────────────────────────
+function isArchived(item){ return item && item._archived === true; }
+
+// ─── DUPLICATE DETECTION ─────────────────────────────
+function checkDuplicateRelease(p, amount, date, excludeId){
+  const releases = (p.releases||[]).filter(r=>!isArchived(r) && r.id!==excludeId && r.txType!=='receipt');
+  return releases.find(r=>{
+    if(Math.abs(r.amount-amount)>1) return false;
+    const daysDiff = Math.abs(new Date(r.date)-new Date(date))/(1000*60*60*24);
+    return daysDiff<=3;
+  });
+}
+function checkDuplicateSettlement(p, amount, date, excludeId){
+  const settlements = (p.settlements||[]).filter(s=>!isArchived(s) && s.id!==excludeId);
+  return settlements.find(s=>{
+    if(Math.abs(s.amount-amount)>1) return false;
+    const daysDiff = Math.abs(new Date(s.date)-new Date(date))/(1000*60*60*24);
+    return daysDiff<=3;
+  });
+}
+
+// ─── FUZZY MATCH (Levenshtein distance) ──────────────
+function levenshtein(a, b){
+  a = a.toUpperCase(); b = b.toUpperCase();
+  const m = a.length, n = b.length;
+  const dp = Array.from({length:m+1}, (_,i) => Array.from({length:n+1}, (_,j) => i===0?j:j===0?i:0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function fuzzyMatchProject(costCentre){
+  if(!costCentre) return null;
+  let best = null, bestDist = 999;
+  for(const p of D.projects){
+    if(!p.costCentre || isArchived(p)) continue;
+    const dist = levenshtein(costCentre, p.costCentre);
+    if(dist < bestDist && dist <= 3){ bestDist = dist; best = p; }
+  }
+  return best && bestDist > 0 ? {project: best, distance: bestDist} : null;
+}
+
+// ─── TRANSACTION FINGERPRINT ─────────────────────────
+function txFingerprint(tx){
+  // Hash of date+amount+costCentre+ledger — catches re-entered transactions
+  // Simple deterministic string, no crypto needed
+  const raw = [
+    tx.date||'',
+    Math.round(tx.amount)||0,
+    (tx.costCentre||'').toUpperCase().trim(),
+    (tx.ledger||'').toUpperCase().trim().slice(0,20),
+    Math.round(tx.amount * 100) // extra precision guard
+  ].join('|');
+  // DJB2 hash — fast, good distribution, no crypto dependency
+  let h = 5381;
+  for(let i=0;i<raw.length;i++) h = ((h<<5)+h) ^ raw.charCodeAt(i);
+  return (h >>> 0).toString(36); // unsigned 32-bit, base36
+}
+
+function isDuplicateTx(proj, tx){
+  if(!proj.releases) return false;
+  const fp = txFingerprint(tx);
+  return proj.releases.some(r =>
+    (r.ref && r.ref === tx.vchNo && Math.abs(r.amount - tx.amount) < 1 && r.date === tx.date) ||
+    (r._fp && r._fp === fp)
+  );
+}
+
+// ─── DATA MIGRATION FRAMEWORK ────────────────────────
+const CURRENT_SCHEMA = 4;
+
+function migrateProject(p){
+  if((p._schemaVersion||0) >= CURRENT_SCHEMA) return p;
+
+  // v1 → v2: add txType to releases
+  if((p._schemaVersion||0) < 2){
+    (p.releases||[]).forEach(r => { if(!r.txType) r.txType = 'payment'; });
+  }
+  // v2 → v3: add _archived:false default (implicit — checks use isArchived() which returns false if missing)
+  // v3 → v4: add fingerprint to existing releases
+  if((p._schemaVersion||0) < 4){
+    (p.releases||[]).forEach(r => {
+      if(!r._fp) r._fp = txFingerprint({
+        date: r.date, amount: r.amount,
+        costCentre: r.costCentre||'', ledger: r.notes||''
+      });
+    });
+  }
+
+  p._schemaVersion = CURRENT_SCHEMA;
+  return p;
+}
+
+function migrateAllProjects(){
+  let migrated = 0;
+  D.projects.forEach(p => {
+    if((p._schemaVersion||0) < CURRENT_SCHEMA){
+      migrateProject(p);
+      migrated++;
+    }
+  });
+  if(migrated > 0) console.log(`[Migration] Migrated ${migrated} projects to schema v${CURRENT_SCHEMA}`);
+  return migrated;
 }

@@ -12,6 +12,7 @@ function renderCHome(){
   document.getElementById('cp-upd').classList.add('hidden');
   document.getElementById('cp-funds').classList.add('hidden');
   const mine=D.projects.filter(p=>p.contractorId===CU.id);
+  const activeFilter = document.getElementById('cont-proj-filter')?.value || 'active';
   const el=document.getElementById('cp-home');
 
   // Check offline queue count asynchronously and update UI
@@ -87,6 +88,15 @@ async function cOpenProj(id){
     <div class="card" style="margin-bottom:12px">
       <div class="st" style="margin-bottom:10px">📊 Bill of Quantities</div>
       ${renderBOQContractorView(p)}
+    </div>
+    <!-- Update History -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="st" style="margin-bottom:10px">📋 My Update History</div>
+      ${renderUpdateHistory(p.id)}
+    </div>
+    <!-- Notes Diary -->
+    <div id="contractor-notes-${p.id}">
+      ${renderContractorNotes(p.id)}
     </div>
     <div class="card"><div class="st">Work Status</div>
       <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Total</th><th style="color:var(--amber)">You Reported</th><th style="color:var(--navy)">RSR Verified</th><th>Progress</th></tr></thead><tbody>
@@ -186,24 +196,42 @@ function cOpenUpd(id){
         <span class="gps-tag" id="gps-tag">📍 Getting your location…</span>
       </div>
       <div class="pgrid" id="cu-pgrid">
-        <label class="padd" for="cu-photo-camera" style="min-height:90px;border-color:var(--navy)">
+        <label class="padd" onclick="triggerCamera()" style="min-height:90px;border-color:var(--navy)" onclick="triggerCamera()">
           <div class="padd-icon">📷</div>
           <div style="font-weight:600;color:var(--navy)">Take Photo</div>
           <div style="font-size:11px">Open Camera</div>
         </label>
-        <label class="padd" for="cu-photo-gallery" style="min-height:90px">
+        <label class="padd" onclick="triggerGallery()" style="min-height:90px" onclick="triggerGallery()">
           <div class="padd-icon">🖼️</div>
           <div style="font-weight:600">From Gallery</div>
           <div style="font-size:11px">Choose File</div>
         </label>
       </div>
-      <input type="file" id="cu-photo-camera" accept="image/*" capture="environment" multiple style="display:none" onchange="handlePhotos(event,'camera')">
-      <input type="file" id="cu-photo-gallery" accept="image/*" multiple style="display:none" onchange="handlePhotos(event,'gallery')">
+      <!-- Separate inputs for better iOS/Android compatibility -->
+      <input type="file" id="cu-photo-camera" accept="image/*" capture="environment" style="display:none;position:fixed;top:-9999px">
+      <input type="file" id="cu-photo-gallery" accept="image/*" multiple style="display:none;position:fixed;top:-9999px">
     </div>
     <button class="btn btn-navy btn-full" style="padding:16px;font-size:16px;margin-bottom:16px" id="cu-submit-btn" onclick="submitUpd('${id}')">
       ✅ Submit Update to RSR
     </button>`;
   captureGPS();
+}
+
+function triggerCamera(){
+  const input = document.getElementById('cu-photo-camera');
+  if(!input) return;
+  // Reset input so same photo can be selected again
+  input.value = '';
+  input.onchange = (e) => handlePhotos(e, 'camera');
+  input.click();
+}
+
+function triggerGallery(){
+  const input = document.getElementById('cu-photo-gallery');
+  if(!input) return;
+  input.value = '';
+  input.onchange = (e) => handlePhotos(e, 'gallery');
+  input.click();
 }
 
 async function handlePhotos(evt, source='unknown'){
@@ -234,10 +262,10 @@ async function handlePhotos(evt, source='unknown'){
 function renderPhotoPreview(){
   const g=document.getElementById('cu-pgrid');if(!g)return;
   const addBtns=photos.length<5?`
-    <label class="padd" for="cu-photo-camera" style="min-height:70px;border-color:var(--navy)">
+    <label class="padd" onclick="triggerCamera()" style="min-height:70px;border-color:var(--navy)">
       <div style="font-size:18px">📷</div><div style="font-size:11px;font-weight:600;color:var(--navy)">Camera</div>
     </label>
-    <label class="padd" for="cu-photo-gallery" style="min-height:70px">
+    <label class="padd" onclick="triggerGallery()" style="min-height:70px">
       <div style="font-size:18px">🖼️</div><div style="font-size:11px;font-weight:600">Gallery</div>
     </label>`:'';
   g.innerHTML=photos.map((ph,i)=>`
@@ -341,4 +369,77 @@ async function submitUpd(pid){
     toast('⚠️ Saved offline — will sync when internet is available','ok',5000);
     setTimeout(()=>cOpenProj(pid),1500);
   }
+}
+
+// ─── CONTRACTOR NOTES DIARY ───────────────────────────
+function renderContractorNotes(pid){
+  const p = GP(pid); if(!p) return '';
+  const notes = p.contractorNotes || [];
+  
+  return `<div class="card" style="margin-top:12px">
+    <div class="st">📓 My Notes</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Write anything you want to remember for this project.</div>
+    
+    <!-- Add new note -->
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:14px">
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;font-weight:600;color:var(--text2)">Date (optional):</label>
+        <input type="date" id="note-date-${pid}" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif">
+      </div>
+      <textarea id="note-text-${pid}" placeholder="Write your note here… e.g. Paid laborer ₹500, bought cement bags, engineer visited site…"
+        style="width:100%;min-height:80px;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+      <button class="btn btn-navy btn-sm" onclick="saveContractorNote('${pid}')" style="margin-top:8px;width:100%">💾 Save Note</button>
+    </div>
+    
+    <!-- Existing notes -->
+    ${notes.length ? notes.slice().reverse().map(n=>`
+      <div style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface);border-radius:0 var(--rs) var(--rs) 0">
+        ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
+        <div style="font-size:13px;color:var(--text)">${n.text.replace(/\n/g,'<br>')}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`).join('') : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">No notes yet. Add your first note above.</div>'}
+  </div>`;
+}
+
+async function saveContractorNote(pid){
+  const p = GP(pid); if(!p) return;
+  const text = document.getElementById(`note-text-${pid}`)?.value?.trim();
+  if(!text){ toast('Write something first','error'); return; }
+  const date = document.getElementById(`note-date-${pid}`)?.value || '';
+  if(!p.contractorNotes) p.contractorNotes = [];
+  p.contractorNotes.push({
+    id: uid(), text, date,
+    createdAt: new Date().toISOString(),
+    by: CU.name, contractorId: CU.id
+  });
+  try {
+    await saveProjectDB(p);
+    toast('✅ Note saved','ok');
+    // Re-render notes section
+    const notesEl = document.getElementById(`contractor-notes-${pid}`);
+    if(notesEl) notesEl.innerHTML = renderContractorNotes(pid);
+  } catch(e){ toast('Save failed','error'); }
+}
+
+// ─── UPDATE HISTORY FOR CONTRACTOR ────────────────────
+function renderUpdateHistory(pid){
+  const p = GP(pid); if(!p) return '';
+  const updates = (p.contractorUpdates||[]).filter(u=>u.contractorId===CU.id);
+  if(!updates.length) return `<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No updates submitted yet.</div>`;
+  
+  return updates.slice().reverse().map(u=>{
+    const status = u.reviewed ? (u.rejected ? '❌ Rejected' : '✅ Approved') : '⏳ Pending Review';
+    const statusColor = u.reviewed ? (u.rejected ? 'var(--red)' : 'var(--green)') : 'var(--amber)';
+    const totalQty = Object.values(u.quantities||{}).reduce((s,v)=>s+v,0);
+    return `<div style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${u.date}</div>
+        <span style="font-size:11px;font-weight:700;color:${statusColor};background:${u.reviewed?(u.rejected?'#fde8e8':'#d4edda'):'#fff3cd'};padding:2px 8px;border-radius:10px">${status}</span>
+      </div>
+      ${u.notes?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}
+      ${totalQty>0?`<div style="font-size:12px;color:var(--text3)">Quantities reported: ${totalQty} units across ${Object.keys(u.quantities||{}).length} items</div>`:''}
+      ${u.rejected&&u.reviewNotes?`<div style="margin-top:8px;padding:8px;background:#fde8e8;border-radius:var(--rs);font-size:12px;color:var(--red)"><strong>Reason:</strong> ${u.reviewNotes}</div>`:''}
+      ${u.photos&&u.photos.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">📷 ${u.photos.length} photo${u.photos.length>1?'s':''} submitted</div>`:''}
+    </div>`;
+  }).join('');
 }

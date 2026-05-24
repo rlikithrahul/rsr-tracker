@@ -187,7 +187,7 @@ function markDayChecked(dateStr){
 }
 
 function prefillDaybookDate(dateStr){
-  document.getElementById('tally-type').value='daybook';
+  // tally-type selector removed — auto-detection handles file type
   const uploadCard=document.getElementById('tally-upload-card');
   if(uploadCard){
     uploadCard.scrollIntoView({behavior:'smooth',block:'start'});
@@ -199,9 +199,11 @@ function prefillDaybookDate(dateStr){
 
 function renderFunds(){
   const all=[];
-  D.projects.forEach(p=>{(p.releases||[]).forEach(r=>{const c=GC(p.contractorId);all.push({...r,project:p.name,contractor:c?c.name:'—',pid:p.id});});});
+  D.projects.forEach(p=>{(p.releases||[]).filter(r=>!isArchived(r)).forEach(r=>{const c=GC(p.contractorId);all.push({...r,project:p.name,contractor:c?c.name:'—',pid:p.id});});});
   all.sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const tot=all.reduce((s,r)=>s+r.amount,0);
+  const totPay=all.filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0);
+  const totRec=all.filter(r=>r.txType==='receipt').reduce((s,r)=>s+r.amount,0);
+  const tot=Math.max(0,totPay-totRec);
   const ccMap = D.projects.filter(p=>p.costCentre).map(p=>`<tr><td style="font-family:monospace;font-size:12px">${p.costCentre}</td><td style="font-weight:700;color:var(--navy)">${p.name}</td><td>${GC(p.contractorId)?.name||'—'}</td></tr>`).join('');
 
   document.getElementById('tally-wrap').innerHTML=`
@@ -225,52 +227,99 @@ function renderFunds(){
     </div>
 
     <!-- UPLOAD PANEL -->
-    <div class="card" id="tally-upload-card" style="border-top:4px solid var(--gold);transition:outline .3s">
-      <div class="st">Upload Tally Export File</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload the Daybook or Cost Centre report exported from Tally as XLS/XLSX. The app reads each transaction, matches it by Cost Centre, and posts to the correct project automatically.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div class="fg"><label>File Type</label>
-          <select id="tally-type">
-            <option value="daybook">Day Book (daily export)</option>
-            <option value="ledger">Ledger / Cost Centre Report</option>
-            <option value="monthly">Monthly Verification</option>
+    <div class="card" id="tally-upload-card" style="border-top:4px solid var(--gold)">
+      <div class="st">Upload Tally Export</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        Upload any Tally export — Day Book, Monthly Day Book, or Cost Centre report. Exported as XLS or XLSX from Tally.
+        The app auto-detects the file type, reads every transaction, matches by Cost Centre name, and imports into the correct project.
+      </div>
+      <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;font-size:12px">
+        <strong style="color:#2e7d32">✅ Supported formats (auto-detected):</strong><br>
+        📄 <strong>Day Book</strong> — single day export &nbsp;·&nbsp;
+        📅 <strong>Monthly Day Book</strong> — date range export &nbsp;·&nbsp;
+        🏷️ <strong>Cost Centre Report</strong> — per-project report<br>
+        <span style="color:var(--text3);margin-top:4px;display:block">Payments (Debit) add to deployed amount. Receipts (Credit) reduce it. Both are imported automatically.</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="fg">
+          <label>File Type</label>
+          <select id="tally-type" style="padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;width:100%">
+            <option value="daybook">📄 Day Book (single day)</option>
+            <option value="monthly">📅 Monthly Day Book (date range)</option>
+            <option value="costcentre">🏷️ Cost Centre Report</option>
           </select>
         </div>
-        <div class="fg"><label>Select File (XLS or XLSX)</label>
+        <div class="fg">
+          <label>Select File (XLS or XLSX from Tally)</label>
           <input type="file" id="tally-file" accept=".xls,.xlsx" style="padding:8px">
         </div>
       </div>
-      <button class="btn btn-navy" onclick="processTallyFile()" style="padding:10px 24px">⚡ Process & Import</button>
+      <button class="btn btn-navy" onclick="processTallyFile()" style="padding:10px 28px;font-size:14px">⚡ Process & Import</button>
       <div id="tally-progress" style="display:none;margin-top:12px">
-        <div class="alert al-navy">Processing file…</div>
+        <div class="alert al-navy">⏳ Reading file and matching transactions…</div>
       </div>
     </div>
 
     <!-- MONTHLY VERIFICATION RESULTS -->
     <div id="monthly-verify-section" style="display:none"></div>
 
-    <!-- UNMATCHED TRANSACTIONS -->
+    <!-- UNMATCHED PAYMENTS -->
     <div id="tally-unmatched-section" style="${tallyUnmatched.length?'':'display:none'}">
       <div class="card" style="border-top:4px solid var(--amber)">
-        <div class="st" style="color:var(--amber)">⚠️ Unmatched Transactions (${tallyUnmatched.length}) — Needs Manual Assignment</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These transactions did not match any project's Cost Centre. Assign them to a project or delete them.</div>
+        <div class="st" style="color:var(--amber)">⚠️ Unmatched Payments (${tallyUnmatched.length}) — Needs Manual Assignment</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These payment transactions did not match any project's Cost Centre. Assign them to a project or delete them.</div>
         ${tallyUnmatched.map((t,i)=>`
           <div style="background:var(--amber-bg);border:1px solid #f5d5a0;border-radius:var(--rs);padding:12px;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <div>
-                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo}</div>
+                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px">PAYMENT</span></div>
                 <div style="font-size:12px;color:var(--text2)">${t.ledger} · CC: <span style="font-family:monospace">${t.costCentre||'(no cost centre)'}</span></div>
                 <div style="font-size:12px;color:var(--text3)">${t.narration||''}</div>
+                ${t._fuzzyMatch?`<div style="font-size:12px;background:#fffde7;border:1px solid #f9a825;border-radius:4px;padding:4px 8px;margin-top:4px">
+                  🔍 Did you mean: <strong>${t._fuzzyMatch.name}</strong>? (${t._fuzzyMatch.dist} char difference)
+                  <button class="btn btn-sm" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="quickAssignUnmatched(${t._fuzzyMatch.id?`'${t._fuzzyMatch.id}'`:'null'},${`${tallyUnmatched.indexOf(t)}`},false)">✓ Yes, assign</button>
+                </div>`:''}
               </div>
               <div style="font-size:18px;font-weight:800;color:var(--navy)">₹${t.amount.toLocaleString('en-IN')}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <select id="um-assign-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+              <select id="um-assign-p-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
                 <option value="">— Assign to project —</option>
                 ${D.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
               </select>
-              <button class="btn btn-sm btn-navy" onclick="assignUnmatched(${i})">✓ Assign</button>
-              <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i})">🗑️ Delete</button>
+              <button class="btn btn-sm btn-navy" onclick="assignUnmatched(${i},false)">✓ Assign</button>
+              <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},false)">🗑️ Delete</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- UNMATCHED RECEIPTS -->
+    <div id="tally-unmatched-receipts-section" style="${tallyUnmatchedReceipts.length?'':'display:none'}">
+      <div class="card" style="border-top:4px solid var(--green)">
+        <div class="st" style="color:var(--green)">📥 Unmatched Receipts (${tallyUnmatchedReceipts.length}) — Needs Manual Assignment</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These receipt transactions (money received from contractor/govt) did not match any project. Assign to a project to reduce net deployed amount.</div>
+        ${tallyUnmatchedReceipts.map((t,i)=>`
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div>
+                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#c8e6c9;color:#2e7d32;padding:1px 6px;border-radius:3px">RECEIPT</span></div>
+                <div style="font-size:12px;color:var(--text2)">${t.ledger} · CC: <span style="font-family:monospace">${t.costCentre||'(no cost centre)'}</span></div>
+                <div style="font-size:12px;color:var(--text3)">${t.narration||''}</div>
+                ${t._fuzzyMatch?`<div style="font-size:12px;background:#fffde7;border:1px solid #f9a825;border-radius:4px;padding:4px 8px;margin-top:4px">
+                  🔍 Did you mean: <strong>${t._fuzzyMatch.name}</strong>? (${t._fuzzyMatch.dist} char difference)
+                  <button class="btn btn-sm" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="quickAssignUnmatched('${t._fuzzyMatch.id}',${`${tallyUnmatchedReceipts.indexOf(t)}`},true)">✓ Yes, assign</button>
+                </div>`:''}
+              </div>
+              <div style="font-size:18px;font-weight:800;color:var(--green)">₹${t.amount.toLocaleString('en-IN')}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="um-assign-r-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+                <option value="">— Assign to project —</option>
+                ${D.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+              </select>
+              <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="assignUnmatched(${i},true)">✓ Assign</button>
+              <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},true)">🗑️ Delete</button>
             </div>
           </div>`).join('')}
       </div>
@@ -279,16 +328,20 @@ function renderFunds(){
     <!-- ALL TRANSACTIONS LOG -->
     <div class="card">
       <div class="st">All Tally Transactions — All Projects</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Total imported: <strong style="color:var(--navy)">${fmt(tot)}</strong></div>
-      ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Project</th><th>Contractor</th><th>Vch No</th><th>Cost Centre</th><th>Narration</th><th style="text-align:right">Amount</th></tr></thead><tbody>
-        ${all.map(r=>`<tr>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+        Total payments: <strong style="color:var(--navy)">${fmt(totPay)}</strong> &nbsp;·&nbsp;
+        Total receipts: <strong style="color:var(--green)">${fmt(totRec)}</strong> &nbsp;·&nbsp;
+        Net deployed: <strong style="color:var(--navy)">${fmt(Math.max(0,totPay-totRec))}</strong>
+      </div>
+      ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Project</th><th>Contractor</th><th>Vch No</th><th>Narration</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+        ${all.map(r=>`<tr style="${r.txType==='receipt'?'background:#f0faf0':''}">
           <td style="white-space:nowrap">${r.date}</td>
+          <td><span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;${r.txType==='receipt'?'background:#c8e6c9;color:#2e7d32':'background:#fff3cd;color:#856404'}">${r.txType==='receipt'?'RECEIPT':'PAYMENT'}</span></td>
           <td><a href="#" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td>
           <td>${r.contractor}</td>
           <td style="font-family:monospace;font-size:11px">${r.ref||'—'}</td>
-          <td style="font-size:11px;font-family:monospace;color:var(--text3)">${r.costCentre||'—'}</td>
-          <td style="font-size:12px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes||''}">${r.notes||'—'}</td>
-          <td style="text-align:right;font-weight:700">${fmt(r.amount)}</td>
+          <td style="font-size:12px;color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes||''}">${r.notes||'—'}</td>
+          <td style="text-align:right;font-weight:700;color:${r.txType==='receipt'?'var(--green)':'var(--navy)'}">${r.txType==='receipt'?'−':''}${fmt(r.amount)}</td>
         </tr>`).join('')}</tbody></table></div>`
       :'<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No transactions imported yet. Upload a Tally file above.</div>'}
     </div>
@@ -305,20 +358,29 @@ function renderFunds(){
 // ─── PARSE TALLY FILE ─────────────────────────────────
 async function processTallyFile(){
   const fileInput=document.getElementById('tally-file');
-  const type=document.getElementById('tally-type').value;
+  const typeEl=document.getElementById('tally-type');
+  const type=typeEl?typeEl.value:'daybook';
   if(!fileInput.files.length){toast('Select a file first','error');return;}
   const file=fileInput.files[0];
   document.getElementById('tally-progress').style.display='block';
   setBusy(true,'Reading Tally file…');
   try{
-    const parseType=type==='monthly'?'daybook':type;
-    const transactions=await parseTallyXLSReal(file,parseType);
-    if(!transactions.length){toast('No transactions found. Check file format.','error',4000);setBusy(false);document.getElementById('tally-progress').style.display='none';return;}
+    const transactions=await parseTallyXLSReal(file, type);
+    if(!transactions.length){
+      toast('No transactions found. Check file type selection and format.','error',5000);
+      setBusy(false);
+      document.getElementById('tally-progress').style.display='none';
+      return;
+    }
     document.getElementById('tally-progress').style.display='none';
     fileInput.value='';
     setBusy(false);
     if(type==='monthly'){
-      await runMonthlyVerification(transactions);
+      // Monthly daybook — run verification against existing imports
+      await matchAndImport(transactions);
+      renderFunds();
+      setTimeout(()=>{const c=document.getElementById('daybook-calendar');if(c)c.innerHTML=renderDaybookCalendar();},100);
+      toast(`✅ Monthly daybook imported — ${transactions.length} transactions processed`,'ok',4000);
     } else {
       await matchAndImport(transactions);
       renderFunds();
@@ -333,87 +395,26 @@ async function processTallyFile(){
 }
 
 
-async function parseTallyXLS(file, type){
-  // Read file as ArrayBuffer then parse with a simple XLS reader
-  const buffer = await file.arrayBuffer();
-  const wb = parseXLSX(buffer);
-  const sheet = wb[0]; // first sheet
-  const transactions = [];
+// parseTallyXLS removed — parseTallyXLSReal handles all formats
 
-  if(type === 'daybook'){
-    // DAYBOOK format: multi-row per transaction
-    // Row with date in col0 = transaction header → date, ledger, vchType, vchNo, amount in col6
-    // Next row: col1=cost centre name, col2=amount
-    // Skip rows until we find header row (has 'Date' in col0)
-    let i=0;
-    while(i<sheet.length){
-      const row = sheet[i];
-      const col0 = str(row[0]);
-      // Transaction row: col0 is a date, col4='Payment'/'Receipt', col5=vchNo, col6=amount
-      if(isDate(col0) && row[6] && !isNaN(parseFloat(str(row[6])))){
-        const date = fmtDate(col0);
-        const ledger = str(row[1]);
-        const vchType = str(row[4]);
-        const vchNo = str(row[5]);
-        const amount = Math.abs(parseFloat(str(row[6]))||0);
-        // Next row has cost centre
-        let costCentre='', narration='';
-        if(i+1<sheet.length){
-          const r2=sheet[i+1];
-          costCentre = str(r2[1]);
-          // narration is usually 2 rows down
-          if(i+3<sheet.length) narration=str(sheet[i+3]?.[1])||'';
-        }
-        if(amount>0) transactions.push({date,ledger,vchType,vchNo,amount,costCentre:costCentre.toUpperCase(),narration});
-      }
-      i++;
-    }
-  } else {
-    // LEDGER / COST CENTRE format
-    // Header row has 'Date' in col0. Each transaction:
-    // Main row: col0=date, col1=ledger, col5=vchType, col6=vchNo, col7=debit
-    // Next row: col2=costCentre, col3=amount
-    // narration: col2 of row after that
-    // Also handle cost centre report which has cost centre name in row 3
-    let headerCC = ''; // from "Cost Centre: ..." line
-    let i=0;
-    while(i<sheet.length){
-      const row=sheet[i];
-      const col0=str(row[0]);
-      // Check for cost centre name line
-      if(col0.startsWith('Cost Centre:')){
-        headerCC = col0.replace('Cost Centre:','').trim().toUpperCase();
-      }
-      if(isDate(col0)){
-        const date=fmtDate(col0);
-        const ledger=str(row[1]);
-        const vchType=str(row[5]);
-        const vchNo=str(row[6]);
-        const debit=parseFloat(str(row[7]))||0;
-        const credit=parseFloat(str(row[8]))||0;
-        const amount=debit||credit;
-        // Next row has cost centre (col2) and amount (col3)
-        let costCentre=headerCC, narration='';
-        if(i+1<sheet.length){
-          const r2=sheet[i+1];
-          const cc=str(r2[2]);
-          if(cc && !isNaN(parseFloat(str(r2[3])))) costCentre=cc.toUpperCase();
-          if(i+2<sheet.length) narration=str(sheet[i+2]?.[2])||'';
-        }
-        if(amount>0) transactions.push({date,ledger,vchType,vchNo:vchNo||str(row[4]),amount,costCentre:costCentre.toUpperCase(),narration});
-      }
-      i++;
-    }
-  }
-  return transactions;
-}
 
 // Simple XLS/XLSX reader using FileReader + raw parsing
 // Uses a minimal approach: convert to CSV-like structure
-function parseXLSX(buffer){
-  // Use a simple approach: read as text and find cell values
-  // For proper XLS we need a library — load SheetJS from CDN
-  throw new Error('Use the SheetJS-powered version below');
+// parseXLSX removed — use parseTallyXLSReal
+
+// ─── DYNAMIC SCRIPT LOADER ───────────────────────────
+function loadScript(src){
+  return new Promise((resolve, reject) => {
+    if(document.querySelector(`script[src="${src}"]`)){
+      // Already loaded
+      resolve(); return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load: ' + src));
+    document.head.appendChild(s);
+  });
 }
 
 // Override with SheetJS-based reader (loaded dynamically)
@@ -427,144 +428,272 @@ async function parseTallyXLSReal(file, type){
   const wsName = wb.SheetNames[0];
   const ws = wb.Sheets[wsName];
   const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-  return parseRowsByType(rows, type);
+
+  // Use manually selected type — trust the user's selection
+  // Only force costcentre if we see the Cost Centre: header (safety guard)
+  const firstRows = rows.slice(0,8).map(r=>String(r[0]||'').trim());
+  let detectedType = type || 'daybook';
+  if(firstRows.some(r=>r.startsWith('Cost Centre:'))) detectedType = 'costcentre';
+  console.log('[Tally Import] Auto-detected type:', detectedType, '| File:', file.name);
+  return parseRowsByType(rows, detectedType);
 }
 
 function parseRowsByType(rows, type){
-  const transactions=[];
-  if(type==='daybook'){
-    // DAYBOOK: col0=date, col1=ledger, col4=vchType, col5=vchNo, col6=amount
-    // then next row: col1=costCentre
-    // then skip row (bank/cash), then col1=narration
-    for(let i=0;i<rows.length;i++){
-      const r=rows[i];
-      const d=r[0];
-      const amt=parseFloat(String(r[6]).replace(/,/g,''))||0;
-      if(isDateVal(d) && amt>0){
-        const vchNo=String(r[5]||'');
-        const costCentre=i+1<rows.length?String(rows[i+1][1]||'').toUpperCase():'';
-        const narration=i+3<rows.length?String(rows[i+3][1]||''):'';
-        transactions.push({
-          date:fmtDateVal(d),
-          ledger:String(r[1]||''),
-          vchType:String(r[4]||'Payment'),
-          vchNo, amount:amt,
-          costCentre, narration
-        });
-      }
-    }
-  } else {
-    // LEDGER/COSTCENTRE report
-    let headerCC='';
-    for(let i=0;i<rows.length;i++){
-      const r=rows[i];
-      const c0=String(r[0]||'');
-      if(c0.startsWith('Cost Centre:')) headerCC=c0.replace('Cost Centre:','').trim().toUpperCase();
-      const d=r[0];
-      if(isDateVal(d)){
-        const debit=parseFloat(String(r[7]||'').replace(/,/g,''))||0;
-        const credit=parseFloat(String(r[8]||'').replace(/,/g,''))||0;
-        const amt=debit||credit;
-        const vchNo=String(r[6]||r[4]||'');
-        // next row: col2=costCentre, col3=amount (confirms)
-        let costCentre=headerCC;
-        let narration='';
-        if(i+1<rows.length){
-          const r2=rows[i+1];
-          const cc=String(r2[2]||'').trim();
-          const ccAmt=parseFloat(String(r2[3]||'').replace(/,/g,''));
-          if(cc && !isNaN(ccAmt) && cc!=='nan') costCentre=cc.toUpperCase();
-          if(i+2<rows.length) narration=String(rows[i+2][2]||'');
-        }
-        if(amt>0) transactions.push({
-          date:fmtDateVal(d),
-          ledger:String(r[1]||''),
-          vchType:String(r[5]||'Payment'),
-          vchNo, amount:amt,
-          costCentre, narration
-        });
-      }
-    }
+  // ─── VERIFIED AGAINST REAL TALLY EXPORTS ─────────────
+  // Daybook/Monthly: 4-row blocks per transaction
+  //   R0: [DATE, LEDGER, '', '', VCH_TYPE, VCH_NO, DEBIT, CREDIT]
+  //   R1: ['', COST_CENTRE, CC_AMT, 'Dr'/'Cr', ...]
+  //   R2: ['', 'Cash'/'Bank', ...]
+  //   R3: ['', NARRATION, ...]
+  // Cost Centre: 2-row blocks, CC name in header
+  //   R0: [DATE, LEDGER, '', '', VCH_TYPE, VCH_NO, DEBIT, CREDIT]
+  //   R1: ['', NARRATION, ...]
+  // Debit col6 = payment out. Credit col7 = receipt in.
+  // VchType col4 = 'Payment' or 'Receipt' (most reliable signal)
+  // ─────────────────────────────────────────────────────
+
+  const STOP_WORDS = ['Opening Balance', 'Current Total', 'Closing Balance', 'Grand Total'];
+  const SKIP_CC = ['Cash', 'cash', 'Bank', 'bank', 'SBI', 'HDFC', 'ICICI', 'Axis'];
+  const transactions = [];
+
+  // Find header row (row with 'Date' in col0)
+  let headerIdx = -1;
+  let headerCC = ''; // for cost centre reports
+  let headerLedger = ''; // for cost centre reports
+
+  for(let i=0; i<rows.length; i++){
+    const c0 = String(rows[i][0]||'').trim();
+    if(c0.startsWith('Cost Centre:')) headerCC = c0.replace('Cost Centre:','').trim();
+    if(c0.startsWith('Under Ledger:')) headerLedger = c0.replace('Under Ledger:','').trim();
+    if(c0 === 'Date') { headerIdx = i; break; }
   }
+  if(headerIdx < 0) return transactions; // no header found
+
+  for(let i = headerIdx+1; i < rows.length; i++){
+    const row = rows[i];
+    const c0 = String(row[0]||'').trim();
+
+    // Stop at summary rows
+    if(STOP_WORDS.some(w => c0.includes(w))) break;
+
+    // Detect date in col0 — Tally exports dates as Excel serial or ISO string
+    const dateStr = parseTallyDate(row[0]);
+    if(!dateStr) continue;
+
+    const ledger   = String(row[1]||'').trim();
+    const vchType  = String(row[4]||'').trim();
+    const vchNo    = String(row[5]||'').trim();
+    const debit    = parseFloat(String(row[6]||'').replace(/,/g,''))||0;
+    const credit   = parseFloat(String(row[7]||'').replace(/,/g,''))||0;
+
+    // txType from VchType column — most reliable
+    const txType = vchType.toLowerCase().includes('receipt') ? 'receipt' : 'payment';
+    const amount = txType === 'receipt' ? credit : debit;
+    if(amount <= 0) continue;
+
+    // Cost centre resolution
+    let costCentre = headerCC; // for cost centre reports, already set
+    let narration  = '';
+
+    if(type === 'daybook' || type === 'monthly'){
+      // Next row (R+1) has cost centre in col1, confirmed by Dr/Cr in col3
+      if(i+1 < rows.length){
+        const r1 = rows[i+1];
+        const cc = String(r1[1]||'').trim();
+        const drCr = String(r1[3]||'').trim();
+        if((drCr === 'Dr' || drCr === 'Cr') && cc && !SKIP_CC.some(s=>cc.startsWith(s))){
+          costCentre = cc;
+        }
+      }
+      // Narration is R+3 col1
+      if(i+3 < rows.length){
+        narration = String(rows[i+3][1]||'').trim();
+      }
+    } else {
+      // Cost centre report: narration in R+1 col1
+      if(i+1 < rows.length){
+        const r1 = rows[i+1];
+        const c1 = String(r1[1]||'').trim();
+        // Narration row has no date and no vch type
+        if(c1 && !parseTallyDate(r1[0]) && !String(r1[4]||'').trim()){
+          narration = c1;
+        }
+      }
+      // ledger from header if set
+      if(headerLedger && !ledger) ledger = headerLedger;
+    }
+
+    transactions.push({
+      date:       dateStr,
+      ledger:     ledger || headerLedger,
+      vchType,
+      vchNo,
+      txType,
+      amount,
+      costCentre: costCentre.toUpperCase(),
+      narration
+    });
+  }
+
   return transactions;
 }
 
-function isDateVal(v){
-  if(!v) return false;
-  if(v instanceof Date) return !isNaN(v.getTime());
-  const s=String(v);
-  return /^\d{4}-\d{2}-\d{2}/.test(s)||/^\d{1,2}[-\/]\w{3}[-\/]\d{2,4}/.test(s);
-}
-function fmtDateVal(v){
-  if(v instanceof Date) return v.toISOString().split('T')[0];
-  const d=new Date(String(v));
-  if(!isNaN(d)) return d.toISOString().split('T')[0];
-  return String(v).split('T')[0]||String(v);
-}
-function isDate(s){ return /^\d{4}-\d{2}-\d{2}/.test(s)||/^\d{1,2}[-\/]\w{3}/.test(s); }
-function fmtDate(s){ try{ return new Date(s).toISOString().split('T')[0]; }catch(e){return s;} }
-function str(v){ return v===null||v===undefined?'':String(v); }
-function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s); }); }
+// Parse Tally date — handles datetime objects from SheetJS and ISO strings
+function parseTallyDate(val){
+  if(!val && val !== 0) return null;
+  const s = String(val).trim();
+  if(!s || s === 'None' || s === 'null') return null;
 
-// ─── MATCH TRANSACTIONS TO PROJECTS ──────────────────
+  // ISO datetime: "2025-04-02 00:00:00" or "2025-04-02T00:00:00"
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(isoMatch) return isoMatch[1];
+
+  // Date object (SheetJS returns these as JS Date)
+  if(val instanceof Date && !isNaN(val.getTime())){
+    return val.toISOString().split('T')[0];
+  }
+
+  // Excel serial number (SheetJS sometimes returns numbers)
+  if(typeof val === 'number' && val > 40000 && val < 60000){
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return d.toISOString().split('T')[0];
+  }
+
+  // "2-Apr-25" or "1-Apr-25" format from Tally
+  const tallyMatch = s.match(/^(\d{1,2})-(\w{3})-(\d{2,4})$/);
+  if(tallyMatch){
+    const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const day = parseInt(tallyMatch[1]);
+    const mon = months[tallyMatch[2]];
+    let yr = parseInt(tallyMatch[3]);
+    if(yr < 100) yr += 2000;
+    if(mon === undefined) return null;
+    const d = new Date(yr, mon, day);
+    return d.toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
+
 async function matchAndImport(transactions){
-  let matched=0, skipped=0, unmatched=0;
+  let matchedPayments=0, matchedReceipts=0, skipped=0, unmatchedCount=0;
+
   for(const tx of transactions){
-    // Find project by cost centre (case-insensitive)
-    const proj = D.projects.find(p=>p.costCentre && p.costCentre.toUpperCase()===tx.costCentre.toUpperCase());
+    // Exact cost centre match (case-insensitive)
+    const proj = D.projects.find(p=>p.costCentre && p.costCentre.toUpperCase()===tx.costCentre.toUpperCase() && !isArchived(p));
+
     if(!proj){
-      // Check if already in unmatched (by vchNo+amount)
-      const dup = tallyUnmatched.find(u=>u.vchNo===tx.vchNo&&u.amount===tx.amount&&u.date===tx.date);
-      if(!dup){ tallyUnmatched.push(tx); unmatched++; }
+      // Fuzzy match suggestion — attach to tx for UI display
+      const fuzzy = fuzzyMatchProject(tx.costCentre);
+      const txWithFuzzy = {...tx, _fuzzyMatch: fuzzy ? {id: fuzzy.project.id, name: fuzzy.project.name, dist: fuzzy.distance} : null};
+
+      if(tx.txType==='receipt'){
+        const dup=tallyUnmatchedReceipts.find(u=>u.vchNo===tx.vchNo&&Math.abs(u.amount-tx.amount)<1&&u.date===tx.date);
+        if(!dup){ tallyUnmatchedReceipts.push(txWithFuzzy); unmatchedCount++; }
+      } else {
+        const dup=tallyUnmatched.find(u=>u.vchNo===tx.vchNo&&Math.abs(u.amount-tx.amount)<1&&u.date===tx.date);
+        if(!dup){ tallyUnmatched.push(txWithFuzzy); unmatchedCount++; }
+      }
       continue;
     }
-    // Check for duplicate (same vchNo already in project releases)
+
     if(!proj.releases) proj.releases=[];
-    const dup = proj.releases.find(r=>r.ref===tx.vchNo&&r.amount===tx.amount&&r.date===tx.date);
-    if(dup){ skipped++; continue; }
-    // Add to project releases
+
+    // Dual duplicate check: voucher number match OR fingerprint match
+    if(isDuplicateTx(proj, tx)){ skipped++; continue; }
+
+    const fp = txFingerprint(tx);
     proj.releases.push({
       id: uid(),
       date: tx.date,
       amount: tx.amount,
       method: tx.vchType||'Payment',
+      txType: tx.txType||'payment',
       ref: tx.vchNo,
       notes: tx.narration||'',
       costCentre: tx.costCentre,
-      source: 'tally'
+      source: 'tally',
+      _fp: fp
     });
-    await saveProjectDB(proj);
-    matched++;
+    await saveProjectDB(proj, {
+      type: tx.txType||'payment',
+      amount: tx.amount,
+      ref: tx.vchNo,
+      meta: { costCentre: tx.costCentre, narration: tx.narration, vchType: tx.vchType, source:'tally' }
+    });
+    if(tx.txType==='receipt') matchedReceipts++; else matchedPayments++;
   }
-  if(synced>0 || unmatched>0){
-    // Record the dates of all imported transactions for the calendar
-    const importedDates = new Set(transactions.map(t=>t.date).filter(Boolean));
+
+  if(matchedPayments+matchedReceipts+unmatchedCount>0){
+    const importedDates=new Set(transactions.map(t=>t.date).filter(Boolean));
     importedDates.forEach(d=>recordDaybookUpload(d));
   }
-  toast(`✅ Imported: ${matched} matched · ${unmatched} unmatched · ${skipped} duplicates skipped`,'ok',5000);
+
+  const parts=[];
+  if(matchedPayments) parts.push(`${matchedPayments} payments`);
+  if(matchedReceipts) parts.push(`${matchedReceipts} receipts`);
+  if(unmatchedCount) parts.push(`${unmatchedCount} unmatched`);
+  if(skipped) parts.push(`${skipped} duplicates skipped`);
+  toast(`✅ Imported: ${parts.join(' · ')}`,'ok',5000);
+  renderFunds();
+  updateOfflineQueueBadge();
 }
 
 // Override processTallyFile to use real parser
 
 // ─── UNMATCHED ACTIONS ────────────────────────────────
-async function assignUnmatched(i){
-  const tx=tallyUnmatched[i];
-  const pid=document.getElementById('um-assign-'+i)?.value;
+
+// Quick assign from fuzzy suggestion (one click)
+async function quickAssignUnmatched(pid, i, isReceipt){
+  if(!pid){ toast('Project not found','error'); return; }
+  const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
+  const tx = queue[i]; if(!tx) return;
+  const proj = GP(pid); if(!proj) return;
+  if(!proj.releases) proj.releases=[];
+  const fp = txFingerprint(tx);
+  proj.releases.push({
+    id:uid(), date:tx.date, amount:tx.amount,
+    method:tx.vchType||(isReceipt?'Receipt':'Payment'),
+    txType:isReceipt?'receipt':'payment',
+    ref:tx.vchNo, notes:tx.narration||'',
+    costCentre:tx.costCentre||'FUZZY-MATCHED',
+    source:'tally-fuzzy', _fp:fp
+  });
+  try{
+    await saveProjectDB(proj);
+    queue.splice(i,1);
+    renderFunds(); ownerTab(3);
+    toast(`✓ Assigned to ${proj.name} (fuzzy match)`,'ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+async function assignUnmatched(i, isReceipt){
+  const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
+  const tx=queue[i];
+  const pid=document.getElementById(`um-assign-${isReceipt?'r':'p'}-${i}`)?.value;
   if(!pid){toast('Select a project first','error');return;}
   const proj=GP(pid); if(!proj)return;
   if(!proj.releases) proj.releases=[];
-  proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,method:tx.vchType||'Payment',ref:tx.vchNo,notes:tx.narration||'',costCentre:tx.costCentre||'MANUAL',source:'tally-manual'});
+  proj.releases.push({
+    id:uid(),date:tx.date,amount:tx.amount,
+    method:tx.vchType||(isReceipt?'Receipt':'Payment'),
+    txType:isReceipt?'receipt':'payment',
+    ref:tx.vchNo,notes:tx.narration||'',
+    costCentre:tx.costCentre||'MANUAL',source:'tally-manual'
+  });
   try{
     await saveProjectDB(proj);
-    tallyUnmatched.splice(i,1);
+    queue.splice(i,1);
     renderFunds(); ownerTab(3);
-    toast('✓ Transaction assigned to project','ok');
+    toast(`✓ ${isReceipt?'Receipt':'Payment'} assigned to project`,'ok');
   }catch(e){toast('Save failed','error');}
 }
 
-function deleteUnmatched(i){
-  if(!confirm('Delete this unmatched transaction?'))return;
-  tallyUnmatched.splice(i,1);
+function deleteUnmatched(i, isReceipt){
+  if(!confirm(`Delete this unmatched ${isReceipt?'receipt':'payment'}?`))return;
+  const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
+  queue.splice(i,1);
   renderFunds(); ownerTab(3);
   toast('Deleted','ok');
 }

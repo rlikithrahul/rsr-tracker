@@ -19,9 +19,9 @@ function renderDetail(id){
   const p=GP(id); if(!p)return;
   const c=GC(p.contractorId);
   const rel=totRel(p),max=maxF(p),el=eligR(p),hw=hdroom(p),s=pStat(p);
-  const lv=(p.verifications||[]).slice(-1)[0];
-  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed);
-  const allUpdates=(p.contractorUpdates||[]).slice().reverse();
+  const lv=(p.verifications||[]).filter(v=>!isArchived(v)).slice(-1)[0];
+  const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u));
+  const allUpdates=(p.contractorUpdates||[]).filter(u=>!isArchived(u)).slice().reverse();
   let ah='';
   if(s==='red') ah=`<div class="alert al-red">🚨 Warning: Funding is at ${Math.round(totRel(p)/maxF(p)*100)}% of agreement cap. Tally imports continue but review urgently.</div>`;
   else if(s==='amber') ah=`<div class="alert al-amber">🟡 Caution: ${Math.round(totRel(p)/maxF(p)*100)}% of funding cap used. Monitor closely.</div>`;
@@ -145,6 +145,7 @@ function renderDetail(id){
         <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
         <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
         <button class="btn btn-sm" onclick="openEditBOQ('${p.id}')">📊 Edit BOQ</button>
+        <button class="btn btn-sm" onclick="openEditProject('${p.id}')">✏️ Edit</button>
         <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')" title="Private owner notes">📝 Notes${p.ownerNotes?` <span style="width:7px;height:7px;background:var(--gold);border-radius:50%;display:inline-block;margin-left:2px"></span>`:''}</button>
         <div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('detail-menu')">⋮</button>
@@ -171,7 +172,7 @@ function renderDetail(id){
         <div class="fr"><span class="fl">Total Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
         <div class="fr"><span class="fl">Outstanding</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
         <div class="fr"><span class="fl">Eligible (verified work)</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-        <div class="fr"><span class="fl">Interest Accrued</span><span class="int-val">${fmt(intr(p))}</span></div>
+        <!-- Interest accrued — see Interest tab --><div style="font-size:11px;color:var(--text3);margin-top:4px"><a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a></div>
         ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
       </div>
       <div class="card">
@@ -210,7 +211,28 @@ function renderDetail(id){
       ${p.ownerNotesUpdated?`<div style="font-size:11px;color:var(--text3);margin-top:8px">Last updated: ${new Date(p.ownerNotesUpdated).toLocaleString('en-IN')}</div>`:''}
     </div>`:''}
     ${allUpdHtml}
-    ${renderDocVault(p, true)}`;
+    <!-- Contractor Notes (visible to owner) -->
+    ${(()=>{
+      const notes = p.contractorNotes||[];
+      if(!notes.length) return '';
+      return `<div class="card" style="border-top:3px solid var(--gold)">
+        <div class="st">📓 Contractor Notes (${notes.length})</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Notes written by ${GC(p.contractorId)?.name||'contractor'} for this project.</div>
+        ${notes.slice().reverse().map(n=>`
+          <div style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface2);border-radius:0 var(--rs) var(--rs) 0">
+            ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
+            <div style="font-size:13px">${n.text.replace(/\n/g,'<br>')}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} · by ${n.by||'contractor'}</div>
+          </div>`).join('')}
+      </div>`;
+    })()}
+    ${renderDocVault(p, true)}
+    <div class="card">
+      <div class="st">📅 Project Timeline</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Complete chronological log — every payment, receipt, update, verification and settlement.</div>
+      ${renderTimeline(id)}
+    </div>
+  `;
 }
 
 async function markRev(pid,uid_val){
@@ -279,3 +301,86 @@ async function saveVer(){
 // ═══════════════════════════════════════════════════════
 // CONTRACTORS
 // ═══════════════════════════════════════════════════════
+// ─── PROJECT TIMELINE ────────────────────────────────
+function renderTimeline(pid){
+  const p=GP(pid); if(!p) return '';
+  const events=[];
+
+  // Releases (payments + receipts)
+  (p.releases||[]).filter(r=>!isArchived(r)).forEach(r=>{
+    const isRec=r.txType==='receipt';
+    events.push({
+      date:r.date,
+      icon:isRec?'📥':'💸',
+      type:isRec?'receipt':'payment',
+      title:isRec?`Receipt: ${fmt(r.amount)}`:`Payment: ${fmt(r.amount)}`,
+      sub:`Vch #${r.ref||'—'} · ${r.notes||r.method||''}`,
+      color:isRec?'var(--green)':'var(--navy)'
+    });
+  });
+
+  // Contractor updates
+  (p.contractorUpdates||[]).filter(u=>!isArchived(u)).forEach(u=>{
+    events.push({
+      date:u.date,
+      icon:u.rejected?'✗':u.reviewed?'✓':'⏳',
+      type:'update',
+      title:`Site Update by ${u.submittedBy||'contractor'}`,
+      sub:`${u.notes||'No notes'} · ${u.photos&&u.photos.length?u.photos.length+' photos':'no photos'} · ${u.rejected?'Rejected':u.reviewed?'Approved':'Pending review'}`,
+      color:u.rejected?'var(--red)':u.reviewed?'var(--green)':'var(--amber)'
+    });
+  });
+
+  // Verifications
+  (p.verifications||[]).filter(v=>!isArchived(v)).forEach(v=>{
+    events.push({
+      date:v.date,
+      icon:'🔍',
+      type:'verification',
+      title:`RSR Verification`,
+      sub:`Verified by ${v.verifiedBy||'RSR'} · ${v.notes||''}`,
+      color:'var(--navy)'
+    });
+  });
+
+  // Settlements
+  (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{
+    events.push({
+      date:s.date,
+      icon:'🏦',
+      type:'settlement',
+      title:`Government Settlement: ${fmt(s.amount)}`,
+      sub:`${s.mode||'—'} · Ref: ${s.ref||'—'} · ${s.notes||''}`,
+      color:'var(--green)'
+    });
+  });
+
+  // Status changes
+  if(p.statusChangedAt) events.push({
+    date:p.statusChangedAt.split('T')[0],
+    icon:'📋',
+    type:'status',
+    title:`Status changed to ${p.status}`,
+    sub:`By ${p.statusChangedBy||'owner'}`,
+    color:'var(--text2)'
+  });
+
+  if(!events.length) return '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No activity recorded yet.</div>';
+
+  events.sort((a,b)=>b.date.localeCompare(a.date));
+
+  return `<div style="position:relative;padding-left:28px">
+    <div style="position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--border)"></div>
+    ${events.map(e=>`
+      <div style="position:relative;margin-bottom:14px">
+        <div style="position:absolute;left:-22px;width:22px;height:22px;border-radius:50%;background:${e.color};display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15)">${e.icon}</div>
+        <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 12px;border:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+            <div style="font-weight:700;font-size:13px;color:${e.color}">${e.title}</div>
+            <div style="font-size:11px;color:var(--text3);white-space:nowrap">${e.date}</div>
+          </div>
+          ${e.sub?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${e.sub}</div>`:''}
+        </div>
+      </div>`).join('')}
+  </div>`;
+}

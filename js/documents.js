@@ -10,6 +10,7 @@
 const DOC_SLOTS = [
   { id: 'jv',    label: 'Journal Voucher (JV)',          icon: '📋', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after work completion & recording' },
   { id: 'ea',    label: 'EA Number',                     icon: '🔢', type: 'text', note: 'Accounts number — filled after 1-2 months of receiving JV' },
+  { id: 'gencode', label: 'Gen Code',                    icon: '🏷️', type: 'text', note: 'Unique generation code for this tender' },
   { id: 'wec',   label: 'Work Experience Certificate',   icon: '🏆', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after certificate is issued' },
   { id: 'wo',    label: 'Work Order',                    icon: '📄', accept: '.pdf,.jpg,.jpeg,.png', note: 'Original tender work order document' },
   { id: 'other1',label: 'Other Document 1',              icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
@@ -41,7 +42,7 @@ function renderDocVault(p, isOwner) {
         ${isOwner ? `
           <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
             <input type="text" id="ea-input-${p.id}" value="${doc || ''}"
-              placeholder="Enter EA number / Accounts number"
+              placeholder="${slot.id === 'ea' ? 'Enter EA number / Accounts number' : 'Enter Gen Code'}"
               style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px"
               onkeydown="if(event.key==='Enter')saveEANumber('${p.id}')">
             <button class="btn btn-sm btn-navy" onclick="saveEANumber('${p.id}')">Save</button>
@@ -106,6 +107,35 @@ async function handleDocUpload(evt, pid, slotId) {
   if (!file) return;
   if (file.size > 50 * 1024 * 1024) { toast('File too large. Max 50MB.', 'error'); return; }
 
+  // For JV — show date picker modal first, then upload
+  if(slotId === 'jv'){
+    // Store file reference for after date is confirmed
+    window._pendingJVFile = file;
+    window._pendingJVPid = pid;
+    // Set today's date as default
+    document.getElementById('jv-date-input').value = new Date().toISOString().split('T')[0];
+    OM('modal-jv-date');
+    evt.target.value = '';
+    return;
+  }
+
+  await _doDocUpload(file, pid, slotId, null);
+  evt.target.value = '';
+}
+
+async function confirmJVDate(){
+  const jvDate = document.getElementById('jv-date-input')?.value;
+  if(!jvDate){ toast('Please select the JV date','error'); return; }
+  CM('modal-jv-date');
+  const file = window._pendingJVFile;
+  const pid = window._pendingJVPid;
+  window._pendingJVFile = null;
+  window._pendingJVPid = null;
+  if(!file || !pid){ toast('Upload error — please try again','error'); return; }
+  await _doDocUpload(file, pid, 'jv', jvDate);
+}
+
+async function _doDocUpload(file, pid, slotId, jvDate){
   setBusy(true, `Uploading ${file.name}…`);
   try {
     const url = await uploadDocument(file, pid, slotId);
@@ -116,10 +146,16 @@ async function handleDocUpload(evt, pid, slotId) {
       uploadedAt: new Date().toISOString(),
       uploadedBy: CU.name
     };
+    if(slotId === 'jv' && jvDate){
+      p.jvDate = jvDate;
+      if(!p.status || p.status === 'active'){
+        p.status = 'completed';
+        toast('✅ JV uploaded — project marked as Completed','ok',4000);
+      }
+    }
     await saveProjectDB(p);
     setBusy(false);
     toast(`✅ ${file.name} uploaded`, 'ok');
-    // Refresh the document vault section only
     const vaultEl = document.getElementById(`doc-vault-${pid}`);
     if (vaultEl) vaultEl.outerHTML = renderDocVault(p, CU.role === 'owner');
     else renderDetail(pid);
@@ -128,9 +164,7 @@ async function handleDocUpload(evt, pid, slotId) {
     toast('Upload failed: ' + e.message, 'error', 5000);
     console.error('Doc upload error:', e);
   }
-  evt.target.value = '';
 }
-
 async function saveEANumber(pid) {
   const p = GP(pid); if (!p) return;
   const val = document.getElementById(`ea-input-${pid}`)?.value?.trim() || '';
@@ -139,6 +173,19 @@ async function saveEANumber(pid) {
   try {
     await saveProjectDB(p);
     toast('✓ EA Number saved', 'ok');
+  } catch(e) { toast('Save failed', 'error'); }
+}
+
+async function saveGenCode(pid) {
+  const p = GP(pid); if (!p) return;
+  const val = document.getElementById(`gencode-input-${pid}`)?.value?.trim() || '';
+  if (!p.documents) p.documents = {};
+  p.documents['gencode'] = val;
+  p.genCode = val;
+  try {
+    await saveProjectDB(p);
+    toast('✓ Gen Code saved', 'ok');
+    renderDocVault(pid);
   } catch(e) { toast('Save failed', 'error'); }
 }
 

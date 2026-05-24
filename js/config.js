@@ -6,7 +6,7 @@
 const SB_URL = 'https://qflczjaugzaryfcfcqor.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmbGN6amF1Z3phcnlmY2ZjcW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzM1MDQsImV4cCI6MjA5NDc0OTUwNH0.IrBrqM-VSIBeOGUzBqjmZmEcKUseuJhIE3koCSNnc5g';
 const OPW_KEY = 'rsr_owner_pw_v1';
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v21d';
 
 // ─── CLOUDFLARE R2 — PUBLIC READ URLS ONLY ───────────
 // Secret keys are now in the Cloudflare Worker (server-side)
@@ -20,7 +20,7 @@ const R2_DOCS_BUCKET     = 'rsr-documents';
 // All uploads go through this Cloudflare Worker
 // The Worker holds the secret keys — browser never sees them
 // After deploying worker.js, replace this URL with your worker URL
-const UPLOAD_WORKER_URL = 'https://rsr-upload-worker.likithrahul.workers.dev';
+const UPLOAD_WORKER_URL = 'https://rsr-upload-worker.likithrahul-rlr.workers.dev';
 
 // Photo auto-delete after this many days (1 year)
 const PHOTO_RETENTION_DAYS = 365;
@@ -35,6 +35,9 @@ let editReleasePid = null, editReleaseId = null;
 let photos = [], gpsData = null;
 let dbOK = false, autoRefreshTimer = null, deferredInstallPrompt = null;
 let tallyUnmatched = [];
+let tallyUnmatchedReceipts = []; // NEW: unmatched receipts from Tally
+let dashFilter = 'all'; // NEW: dashboard filter state
+let dashContractorFilter = ''; // NEW: contractor filter
 let calViewYear = new Date().getFullYear();
 let calViewMonth = new Date().getMonth();
 const projectCache = {};
