@@ -115,9 +115,13 @@ function enterOwner(){
     ['Dashboard','Projects','Contractors','Tally','Interest'].map((t,i)=>
       `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
     ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>';
-  // Show global search for owner
+  // Show owner-only nav elements
   const gsw = document.getElementById('gsearch-wrap');
   if(gsw) gsw.style.display='flex';
+  const backupBtn = document.getElementById('nav-backup-btn');
+  if(backupBtn) backupBtn.style.display='inline-block';
+  const offBadge = document.getElementById('offline-queue-badge');
+  if(offBadge) offBadge.parentElement.style.display='flex';
   const bnav=document.getElementById('bnav');
   bnav.style.display='flex';
   bnav.innerHTML=`
@@ -136,9 +140,15 @@ function enterCont(){
   rb.textContent='Contractor'; rb.style.background='rgba(255,255,255,.15)'; rb.style.color='#fff';
   document.getElementById('nav-uname').textContent=CU.name;
   document.getElementById('nav-links').innerHTML='';
-  // Hide global search for contractors
+  // Hide owner-only nav elements for contractors
   const gsw = document.getElementById('gsearch-wrap');
   if(gsw) gsw.style.display='none';
+  const backupBtn = document.getElementById('nav-backup-btn');
+  if(backupBtn) backupBtn.style.display='none';
+  const refreshBtn = document.getElementById('refresh-btn');
+  if(refreshBtn) refreshBtn.style.display='none';
+  // Show install app banner for contractors
+  setTimeout(showInstallBanner, 1500);
   // Show contractor-specific bottom nav
   const bnav = document.getElementById('bnav');
   bnav.style.display='flex';

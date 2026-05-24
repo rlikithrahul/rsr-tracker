@@ -28,7 +28,11 @@ function renderCHome(){
   }).catch(()=>{});
 
   if(!mine.length){
-    el.innerHTML='<div id="offline-pending-banner"></div><div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>';
+    el.innerHTML=`<div id="offline-pending-banner"></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button onclick="triggerInstall()" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">📲 Install App</button>
+    </div>
+    <div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>`;
     return;
   }
   el.innerHTML=`

@@ -12,33 +12,119 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* NAV */
-.nav{background:var(--navy);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-.nav-logo{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.nav-logo-circle{height:32px;width:32px;border-radius:50%;border:2px solid var(--gold);background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231a2744%22/><text x=%2250%22 y=%2258%22 font-size=%2228%22 fill=%22%23c9a84c%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-weight=%22900%22>RSR</text></svg>') center/cover;flex-shrink:0}
-.nav-logo-text{font-size:15px;font-weight:700;color:#fff;white-space:nowrap}.nav-logo-text span{color:var(--gold)}
-.nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.nav-role{background:rgba(201,168,76,.2);color:var(--gold);border:1px solid rgba(201,168,76,.4);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
-.nav-uname{color:rgba(255,255,255,.8);font-size:12px;font-weight:500;white-space:nowrap}
-.nav-links{display:flex;gap:2px}
+/* ─── NAV — FULLY RESPONSIVE ─────────────────────────── */
+.nav{
+  background:var(--navy);
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 clamp(8px,2vw,16px);
+  position:sticky;top:0;
+  z-index:100;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+  gap:8px;
+  min-width:0;
+  overflow:visible;
+}
+.nav-logo{display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:0}
+.nav-logo-circle{height:32px;width:32px;min-width:32px;border-radius:50%;border:2px solid var(--gold);background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231a2744%22/><text x=%2250%22 y=%2258%22 font-size=%2228%22 fill=%22%23c9a84c%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-weight=%22900%22>RSR</text></svg>') center/cover;flex-shrink:0}
+.nav-logo-text{font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-logo-text span{color:var(--gold)}
+/* Search — grows to fill available space */
+.gsearch-wrap{flex:1;min-width:0;max-width:400px;position:relative}
+#gsearch-input{
+  width:100%;box-sizing:border-box;
+  padding:7px 12px;
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:20px;
+  background:rgba(255,255,255,.1);
+  color:#fff;
+  font-size:13px;
+  font-family:'Inter',sans-serif;
+  outline:none;
+  min-width:0;
+}
+#gsearch-input::placeholder{color:rgba(255,255,255,.5)}
+/* Nav right — flex, no wrapping, gaps scale with space */
+.nav-right{display:flex;align-items:center;gap:clamp(3px,1vw,8px);flex-shrink:0;min-width:0}
+/* Icon buttons — consistent size */
+.nav-icon-btn{
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.2);
+  color:#fff;
+  border-radius:var(--rs);
+  cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;
+  padding:5px 8px;
+  font-size:12px;
+  font-family:'Inter',sans-serif;
+  white-space:nowrap;
+  flex-shrink:0;
+  transition:background .15s;
+}
+.nav-icon-btn:hover{background:rgba(255,255,255,.2)}
+.nav-icon-btn .nav-btn-icon{font-size:14px;line-height:1}
+.nav-icon-btn .nav-btn-label{font-size:11px}
+.nav-logout{background:rgba(255,255,255,.08)}
+.nav-role{background:rgba(201,168,76,.2);color:var(--gold);border:1px solid rgba(201,168,76,.4);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
+.nav-uname{color:rgba(255,255,255,.8);font-size:12px;font-weight:500;white-space:nowrap;display:none} /* shown via media query on large screens */
+.nav-links{display:flex;gap:2px;flex-shrink:0}
 .nav-link{padding:6px 10px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;color:rgba(255,255,255,.6);transition:all .15s;white-space:nowrap;background:none;border:none;font-family:'Inter',sans-serif}
 .nav-link:hover{color:#fff;background:rgba(255,255,255,.1)}
 .nav-link.active{color:var(--gold);background:rgba(201,168,76,.15)}
-.btn-out{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.9);padding:5px 10px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0}
+.btn-out{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.9);padding:5px 10px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center}
 .btn-out:hover{background:rgba(255,255,255,.2)}
 .bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:1px solid rgba(255,255,255,.1);z-index:100;padding:6px 0 env(safe-area-inset-bottom,8px)}
+/* ─── RESPONSIVE BREAKPOINTS ─────────────────────────── */
+
+/* Tablet and below (≤768px) */
+@media(max-width:768px){
+  .nav-links{display:none} /* bottom nav used instead */
+  .nav-uname{display:none} /* save space — role badge enough */
+}
+
+/* Mobile (≤640px) */
 @media(max-width:640px){
   .bnav{display:flex}
-  .nav-links{display:none}
-  .nav-uname{display:none}
   .wrap{padding-bottom:80px}
-  .nav{padding:0 10px}
   .frow{grid-template-columns:1fr}
   .stats{grid-template-columns:1fr 1fr}
   .card{padding:14px}
-}
-@media(max-width:400px){
-  .nav-logo-text{font-size:13px}
+  /* Nav: hide logo text, keep circle */
+  .nav-logo-text{display:none}
+  .nav{height:52px;gap:6px}
+  /* Search fills available space */
+  .gsearch-wrap{max-width:none}
+  #gsearch-input{padding:6px 10px;font-size:13px}
+  /* Backup: icon only */
+  #nav-backup-btn .nav-btn-label{display:none}
+  #nav-backup-btn{padding:5px 7px}
+  /* Logout: compact */
+  .nav-logout{padding:5px 8px}
   .nav-role{font-size:10px;padding:2px 6px}
+}
+
+/* Small phones (≤400px) */
+@media(max-width:400px){
+  .nav{height:48px;gap:4px}
+  #gsearch-input{font-size:12px;padding:5px 8px}
+  .nav-icon-btn{padding:4px 6px}
+  .nav-role{font-size:9px;padding:2px 4px}
+  .nav-btn-label{font-size:10px}
+}
+
+/* Very small phones (≤360px) */
+@media(max-width:360px){
+  .nav-role{display:none} /* extreme — only circle + search + logout */
+  #nav-backup-btn{display:none !important}
+}
+
+/* Large screens — show more */
+@media(min-width:1024px){
+  .nav-logo-text{font-size:16px}
+  .gsearch-wrap{max-width:480px}
+  #nav-backup-btn .nav-btn-label{display:inline}
+  .nav-uname{display:inline;color:rgba(255,255,255,.8);font-size:12px;font-weight:500;white-space:nowrap}
 }
 .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:rgba(255,255,255,.4);font-size:10px;font-weight:500;padding:4px 0;background:none;border:none;font-family:'Inter',sans-serif}
 .bn.active{color:var(--gold)}.bn-icon{font-size:22px;line-height:1}
@@ -187,7 +273,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 .ppill{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:10px;cursor:pointer;transition:all .2s}
 .ppill:hover{border-color:var(--gold);box-shadow:0 4px 12px rgba(0,0,0,.08)}
 .int-val{color:var(--amber);font-weight:700}
-.wrap{max-width:960px;margin:0 auto;padding:24px 16px}
+.wrap{max-width:960px;margin:0 auto;padding:clamp(14px,3vw,24px) clamp(12px,4vw,20px)}
 .pg-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
 .pg-title{font-size:20px;font-weight:700;color:var(--navy)}
 
@@ -356,4 +442,19 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   margin-bottom: 8px;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* ─── SAFE AREA INSETS (notched phones, foldables) ───── */
+.nav{
+  padding-left:max(clamp(8px,2vw,16px), env(safe-area-inset-left));
+  padding-right:max(clamp(8px,2vw,16px), env(safe-area-inset-right));
+}
+.bnav{
+  padding-bottom:max(8px, env(safe-area-inset-bottom));
+  padding-left:max(0px, env(safe-area-inset-left));
+  padding-right:max(0px, env(safe-area-inset-right));
+}
+.wrap{
+  padding-left:max(clamp(12px,4vw,20px), env(safe-area-inset-left));
+  padding-right:max(clamp(12px,4vw,20px), env(safe-area-inset-right));
 }
