@@ -167,8 +167,10 @@ async function deleteProject(pid){
   p._archivedAt=new Date().toISOString();
   try{
     await saveProjectDB(p);
-    if(dpid===pid){ dpid=null; CM('modal-detail'); }
-    renderDash();
+    // Safely close any open modals without crashing
+    document.querySelectorAll('.mov.open').forEach(m=>m.classList.remove('open'));
+    dpid=null;
+    ownerTab(0);
     toast('✓ Project archived — restore it anytime from Archive','ok');
   }catch(e){ toast('Archive failed: '+e.message,'error'); }
 }
@@ -179,8 +181,8 @@ async function permanentDeleteProject(pid){
   try{
     await sbReq(`projects?id=eq.${pid}`,'DELETE');
     D.projects=D.projects.filter(x=>x.id!==pid);
-    CM('modal-archive');
-    // Refresh archive modal if there are still archived projects
+    document.querySelectorAll('.mov.open').forEach(m=>m.classList.remove('open'));
+    dpid=null;
     const stillArchived=D.projects.filter(p=>isArchived(p));
     if(stillArchived.length) setTimeout(renderArchive,300);
     else ownerTab(0);
