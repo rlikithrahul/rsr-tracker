@@ -64,6 +64,7 @@ async function saveProject(){
 
   const proj={
     id:uid(), name, tender,
+    firm:document.getElementById('np-firm').value||'RSR Constructions',
     type:document.getElementById('np-type').value,
     contractorId, estimated:est,
     bidPct:parseFloat(document.getElementById('np-bid').value)||0,
@@ -494,10 +495,16 @@ function openEditProject(pid){
   const p = GP(pid); if(!p) return;
   editProjId = pid;
 
+  document.getElementById('ep-firm').value = p.firm||'RSR Constructions';
   document.getElementById('ep-name').value = p.name||'';
   document.getElementById('ep-tender').value = p.tender||'';
   document.getElementById('ep-date').value = p.agreeDate||'';
   document.getElementById('ep-jvdate').value = p.jvDate||'';
+  document.getElementById('ep-jvnum').value = p.jvNumber||'';
+  document.getElementById('ep-jvamt').value = p.jvAmount||'';
+  document.getElementById('ep-emd').value = p.emd||'';
+  document.getElementById('ep-asd').value = p.asd||'';
+  document.getElementById('ep-fsd').value = p.fsd||'';
   document.getElementById('ep-bid').value = p.bidPct||'';
   document.getElementById('ep-loc').value = p.location||'';
   document.getElementById('ep-cc').value = p.costCentre||'';
@@ -516,10 +523,16 @@ async function saveEditProject(){
   const name = document.getElementById('ep-name').value.trim();
   if(!name){ toast('Project name is required','error'); return; }
 
+  p.firm = document.getElementById('ep-firm').value||'RSR Constructions';
   p.name = name;
   p.tender = document.getElementById('ep-tender').value.trim();
   p.agreeDate = document.getElementById('ep-date').value;
   p.jvDate = document.getElementById('ep-jvdate').value;
+  p.jvNumber = document.getElementById('ep-jvnum').value.trim();
+  p.jvAmount = parseFloat(document.getElementById('ep-jvamt').value)||0;
+  p.emd = parseFloat(document.getElementById('ep-emd').value)||0;
+  p.asd = parseFloat(document.getElementById('ep-asd').value)||0;
+  p.fsd = parseFloat(document.getElementById('ep-fsd').value)||0;
   p.bidPct = parseFloat(document.getElementById('ep-bid').value)||0;
   p.location = document.getElementById('ep-loc').value.trim();
   p.costCentre = document.getElementById('ep-cc').value.trim().toUpperCase();

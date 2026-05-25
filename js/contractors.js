@@ -21,6 +21,7 @@ function renderConts(){
           <div class="amenu-wrap">
             <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('cm-${c.id}')">⋮</button>
             <div class="amenu" id="cm-${c.id}">
+              <button class="amenu-item" onclick="openEditContractor('${c.id}')">✏️ Edit Details</button>
               <button class="amenu-item" onclick="openChangeCPw('${c.id}')">🔑 Change Password</button>
               <button class="amenu-item danger" onclick="deleteContractor('${c.id}')">🗑️ Delete Contractor</button>
             </div>
@@ -126,3 +127,33 @@ async function saveContractor(){
 // ═══════════════════════════════════════════════════════
 // FUNDS LOG
 // ═══════════════════════════════════════════════════════
+// ─── EDIT CONTRACTOR ─────────────────────────────────
+let editContractorId = null;
+
+function openEditContractor(cid){
+  const c = D.contractors.find(x=>x.id===cid); if(!c) return;
+  editContractorId = cid;
+  document.getElementById('ec-name').value = c.name||'';
+  document.getElementById('ec-phone').value = c.phone||'';
+  document.getElementById('ec-type').value = c.type||'';
+  document.getElementById('ec-notes').value = c.notes||'';
+  OM('modal-edit-contractor');
+}
+
+async function saveEditContractor(){
+  const c = D.contractors.find(x=>x.id===editContractorId); if(!c) return;
+  const name = document.getElementById('ec-name').value.trim();
+  const phone = document.getElementById('ec-phone').value.trim();
+  if(!name){ toast('Name is required','error'); return; }
+  c.name = name;
+  c.phone = phone;
+  c.type = document.getElementById('ec-type').value.trim();
+  c.notes = document.getElementById('ec-notes').value.trim();
+  try{
+    await saveContractorDB(c);
+    CM('modal-edit-contractor');
+    renderConts();
+    renderContractorPerformance();
+    toast('✓ Contractor updated','ok');
+  }catch(e){ toast('Save failed','error'); }
+}

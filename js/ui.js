@@ -338,6 +338,7 @@ function dashCardHTML(p){
 function renderProjects(){
   const q=(document.getElementById('psearch')?.value||'').toLowerCase();
   const activeFilter = document.getElementById('proj-status-filter')?.value || 'all';
+  const firmFilter = document.getElementById('proj-firm-filter')?.value || 'all';
 
   const list=D.projects.filter(p=>{
     const c=GC(p.contractorId);
@@ -345,14 +346,18 @@ function renderProjects(){
       (p.tender||'').includes(q)||(c&&c.name.toLowerCase().includes(q));
     const status = p.status || 'active';
     const matchStatus = activeFilter==='all' || status===activeFilter;
-    return matchQ && matchStatus;
+    const matchFirm = firmFilter==='all' || (p.firm||'RSR Constructions')===firmFilter;
+    return matchQ && matchStatus && matchFirm && !isArchived(p);
   });
 
   const el=document.getElementById('proj-tbl');
   if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects found.</div></div>';return;}
-  el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Type</th><th>Contractor</th><th>Status</th><th>Agreement</th><th>BOQ Value</th><th>Cap Used</th><th>JV Date</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Firm</th><th>Type</th><th>Contractor</th><th>Status</th><th>Agreement</th><th>BOQ Value</th><th>Cap Used</th><th>JV Date</th><th></th></tr></thead><tbody>
     ${list.map(p=>{
       const c=GC(p.contractorId);
+      const firmName = p.firm||'RSR Constructions';
+      const firmShort = firmName==='RSR Constructions'?'RSR':firmName==='R Sadhu Rao'?'RS.Rao':firmName==='R Likith Rahul'?'RLR':firmName;
+      const firmColor = firmName==='RSR Constructions'?'var(--navy)':firmName==='R Sadhu Rao'?'#7b3f00':'var(--green)';
       const status = p.status||'active';
       const statusBadge = {
         'active':'<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">🟢 Active</span>',
@@ -367,6 +372,7 @@ function renderProjects(){
       const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
       return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
         <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}</td>
+        <td><span style="font-size:11px;font-weight:700;color:${firmColor};white-space:nowrap">${firmShort}</span></td>
         <td>${p.type||'—'}</td>
         <td>${c?c.name:'—'}</td>
         <td>${statusBadge}</td>

@@ -140,7 +140,7 @@ function renderDetail(id){
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="ownerTab(0)">← Dashboard</button>
       <div style="flex:1;min-width:200px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:18px;font-weight:700;color:var(--navy)">${p.name}</div>${statusBadge(p)}</div>
-      <div style="font-size:12px;color:var(--text3)">#${p.tender} · ${p.type} · ${c?c.name:'—'} · ${p.location||''}</div></div>
+      <div style="font-size:12px;color:var(--text3)">#${p.tender} · <span style="color:var(--gold);font-weight:600">${p.firm||'RSR Constructions'}</span> · ${p.type} · ${c?c.name:'—'} · ${p.location||''}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
         <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
