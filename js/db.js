@@ -86,6 +86,8 @@ async function loadDB() {
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = (s||[]).find(x => x.key === OPW_KEY);
   if (pw) D.ownerPw = pw.value;
+  const staffRow = (s||[]).find(x => x.key === 'rsr_staff_v1');
+  D.staffMembers = staffRow ? JSON.parse(staffRow.value||'[]') : [];
 }
 
 async function loadDBSummary() {
@@ -116,6 +118,8 @@ async function loadDBSummary() {
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = (s||[]).find(x => x.key === OPW_KEY);
   if (pw) D.ownerPw = pw.value;
+  const staffRow2 = (s||[]).find(x => x.key === 'rsr_staff_v1');
+  D.staffMembers = staffRow2 ? JSON.parse(staffRow2.value||'[]') : [];
 }
 
 async function fetchProjectFull(id) {

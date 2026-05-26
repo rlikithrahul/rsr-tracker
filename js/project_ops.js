@@ -92,6 +92,7 @@ async function saveProject(){
     }
     CM('modal-np');
     toast('✓ Project created with '+boq.length+' BOQ items','ok');
+    writeActivityLog('project_create', `Project created: ${proj.name}`, proj.id).catch(()=>{});
     ownerTab(0);
   } catch(e){ setBusy(false); toast('Save failed: '+e.message,'error'); }
 }
@@ -483,6 +484,7 @@ async function changeProjectStatus(pid, newStatus){
   try {
     await saveProjectDB(p, {type:'status_change', amount:0, ref:null, meta:{newStatus, oldStatus: p.status}});
     toast(`✓ Project marked as ${labels[newStatus]}`, 'ok');
+    writeActivityLog('status_change', `${p.name} → ${labels[newStatus]}`, p.id).catch(()=>{});
     if(dpid===pid) renderDetail(pid);
     else renderDash();
   } catch(e){ toast('Save failed','error'); }
@@ -550,5 +552,6 @@ async function saveEditProject(){
     renderDetail(editProjId);
     ownerTab(0);
     toast('✅ Project updated','ok');
+    writeActivityLog('project_edit',`Project edited: ${p.name}`,pid).catch(()=>{});
   } catch(e){ toast('Save failed: '+e.message,'error'); }
 }

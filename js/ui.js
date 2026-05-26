@@ -134,10 +134,11 @@ function renderDash(){
     },0);
   },0);
   const at=pp.filter(p=>getProjectAlerts(p).some(a=>a.type==='red'||a.type==='amber')).length;
+  const pendingUpd = pp.reduce((s,p)=>s+(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length,0);
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat"><div class="stat-lbl">Active Projects</div><div class="stat-val">${pp.length}</div><div class="stat-sub">all contractors</div></div>
     <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
-    <div class="stat"><div class="stat-lbl">Interest Accruing</div><div class="stat-val int-val" style="font-size:17px">${fmt(it)}</div><div class="stat-sub">@ 24% p.a.</div></div>
+    <div class="stat" style="cursor:pointer" onclick="setDashFilter('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to see':'all clear'}</div></div>
     <div class="stat"><div class="stat-lbl">Need Attention</div><div class="stat-val" style="color:${at>0?'var(--red)':'var(--green)'}">${at}</div><div class="stat-sub">caution or stop</div></div>`;
   document.getElementById('dash-banner').innerHTML='';
   if(!pp.length){
@@ -392,7 +393,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-settings'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -401,6 +402,7 @@ function ownerTab(i){
   if(i===2){ renderConts(); renderContractorPerformance(); }
   if(i===3) renderFunds();
   if(i===4) renderInterest();
+  if(i===5) renderSettings();
 }
 // ─── SEARCH POSITIONING ───────────────────────────────
 function positionSearchResults(){

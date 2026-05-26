@@ -54,9 +54,29 @@ function selRole(r){
 async function ownerLogin(){
   if(!dbOK){ showErr('Database unreachable. Check your internet.'); return; }
   const pw=document.getElementById('owner-pw').value;
+  if(!pw){ showErr('Enter your password.'); return; }
   try { await loadDB(); } catch(e){}
-  if(pw===D.ownerPw){ CU={role:'owner',name:'RSR Admin'}; saveSession(CU); enterOwner(); }
-  else showErr('Incorrect password.');
+
+  // Check master password first (Super Admin)
+  if(pw === D.ownerPw){
+    CU={role:'owner', name:'RSR Admin', isSuperAdmin:true};
+    saveSession(CU);
+    await writeActivityLog('login', 'RSR Admin logged in (Super Admin)');
+    enterOwner();
+    return;
+  }
+
+  // Check staff passwords
+  const staff = (D.staffMembers||[]).find(s=>s.password===pw);
+  if(staff){
+    CU={role:'owner', name:staff.name, isSuperAdmin:false, staffId:staff.id};
+    saveSession(CU);
+    await writeActivityLog('login', `${staff.name} logged in`);
+    enterOwner();
+    return;
+  }
+
+  showErr('Incorrect password.');
 }
 
 async function contLogin(){
@@ -66,8 +86,14 @@ async function contLogin(){
   if(!name||!pw){ showErr('Enter name and password.'); return; }
   try { await loadDB(); } catch(e){}
 
-  const contractor = D.contractors.find(c=>c.name.trim().toLowerCase()===name.toLowerCase());
-  if(!contractor){ showErr('Name or password incorrect. Contact RSR office.'); return; }
+  // Match by full name, username, or phone number
+  const contractor = D.contractors.find(c=>{
+    const nameMatch = c.name.trim().toLowerCase()===name.toLowerCase();
+    const usernameMatch = c.username && c.username.trim().toLowerCase()===name.toLowerCase();
+    const phoneMatch = c.phone && c.phone.trim()===name.trim();
+    return nameMatch || usernameMatch || phoneMatch;
+  });
+  if(!contractor){ showErr('Name, username or phone not found. Contact RSR office.'); return; }
 
   let authenticated = false;
 
@@ -99,6 +125,7 @@ async function contLogin(){
 }
 
 function logout(){
+  if(CU) writeActivityLog('logout', `${CU.name} logged out`).catch(()=>{});
   CU=null; clearSession(); stopAutoRefresh(); SP('page-login');
   document.getElementById('main-nav').style.display='none';
   document.getElementById('bnav').style.display='none';
@@ -110,11 +137,12 @@ function enterOwner(){
   document.getElementById('main-nav').style.display='flex';
   const rb=document.getElementById('nav-role');
   rb.textContent='Owner'; rb.style.background='rgba(201,168,76,.2)'; rb.style.color='var(--gold)';
-  document.getElementById('nav-uname').textContent='RSR Admin';
+  document.getElementById('nav-uname').textContent=(CU&&!CU.isSuperAdmin&&CU.name)?CU.name:'RSR Admin';
   document.getElementById('nav-links').innerHTML=
     ['Dashboard','Projects','Contractors','Tally','Interest'].map((t,i)=>
       `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
-    ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>';
+    ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>'
+    +((CU&&CU.isSuperAdmin)?'<div class="nav-link" onclick="ownerTab(5)">⚙️ Settings</div>':'');
   // Show owner-only nav elements
   const gsw = document.getElementById('gsearch-wrap');
   if(gsw) gsw.style.display='flex';

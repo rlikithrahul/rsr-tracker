@@ -14,7 +14,7 @@ function renderConts(){
     const cap=pp.reduce((s,p)=>s+totRel(p),0);
     return `<div class="card">
       <div class="card-hdr">
-        <div><div class="card-title">${c.name}</div><div class="card-sub">📞 ${c.phone||'—'} · ${c.notes||'—'}</div></div>
+        <div><div class="card-title">${c.name}</div><div class="card-sub">📞 ${c.phone||'—'}${c.username?' · Login: <strong>'+c.username+'</strong>':''} · ${c.notes||'—'}</div></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span class="badge bg-navy">${pp.length} project${pp.length!==1?'s':''}</span>
           <span class="badge bg-gold">${fmt(cap)} deployed</span>
@@ -113,7 +113,12 @@ async function saveContractor(){
     pwData = {password};
   }
 
-  const c={id:uid(),name,phone,...pwData,notes,createdAt:new Date().toISOString()};
+  const username = document.getElementById('nc-username').value.trim().toLowerCase();
+  // Check username uniqueness
+  if(username && D.contractors.some(x=>x.username&&x.username.toLowerCase()===username)){
+    toast('Username already taken — choose a different one','error'); return;
+  }
+  const c={id:uid(),name,phone,username:username||'', ...pwData,notes,createdAt:new Date().toISOString()};
   D.contractors.push(c);
   try {
     await saveContractorDB(c);
@@ -133,6 +138,7 @@ let editContractorId = null;
 function openEditContractor(cid){
   const c = D.contractors.find(x=>x.id===cid); if(!c) return;
   editContractorId = cid;
+  document.getElementById('ec-username').value = c.username||'';
   document.getElementById('ec-name').value = c.name||'';
   document.getElementById('ec-phone').value = c.phone||'';
   document.getElementById('ec-type').value = c.type||'';
@@ -145,6 +151,11 @@ async function saveEditContractor(){
   const name = document.getElementById('ec-name').value.trim();
   const phone = document.getElementById('ec-phone').value.trim();
   if(!name){ toast('Name is required','error'); return; }
+  const newUsername = (document.getElementById('ec-username').value||'').trim().toLowerCase();
+  if(newUsername && D.contractors.some(x=>x.id!==editContractorId&&x.username&&x.username.toLowerCase()===newUsername)){
+    toast('Username already taken — choose a different one','error'); return;
+  }
+  c.username = newUsername;
   c.name = name;
   c.phone = phone;
   c.type = document.getElementById('ec-type').value.trim();
