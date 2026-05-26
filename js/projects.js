@@ -175,6 +175,10 @@ function renderDetail(id){
         <!-- Interest accrued — see Interest tab --><div style="font-size:11px;color:var(--text3);margin-top:4px"><a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a></div>
         ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
       </div>
+
+      <!-- ACTION ITEMS: WEC + Refund -->
+      ${buildActionItems(p,id)}
+
       <div class="card">
         <div class="st">Fund Releases</div>${relLog}
         ${settleLog?`<div class="st" style="margin-top:14px">Government Payments Received</div>${settleLog}`:''}
@@ -382,5 +386,43 @@ function renderTimeline(pid){
           ${e.sub?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${e.sub}</div>`:''}
         </div>
       </div>`).join('')}
+  </div>`;
+}
+
+// ─── ACTION ITEMS SECTION ────────────────────────────
+function buildActionItems(p, id){
+  const eaNum = p.eaNumber || (p.docVault && p.docVault.ea) || '';
+  const today = new Date();
+
+  let showRefund = false;
+  let daysUntilRefund = null;
+  if(p.jvDate){
+    const twoYears = new Date(p.jvDate);
+    twoYears.setFullYear(twoYears.getFullYear() + 2);
+    daysUntilRefund = Math.round((twoYears - today) / 86400000);
+    showRefund = daysUntilRefund <= 30 && !p.refundApplied;
+  }
+
+  const showWEC = eaNum && !p.wecReceived;
+
+  if(!showWEC && !showRefund) return '';
+
+  return `<div class="card" style="border-top:3px solid var(--amber);margin-bottom:0">
+    <div class="st" style="margin-bottom:12px">📋 Action Items</div>
+    ${showWEC ? `<div style="padding:12px;background:#fffbeb;border-radius:var(--rs);margin-bottom:10px;border:1px solid #f59e0b">
+      <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:6px">📜 Work Experience Certificate</div>
+      ${p.wecApplied
+        ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">✓ Applied on <strong>${p.wecAppliedDate||'—'}</strong> — awaiting receipt from government</div>
+           <button class="btn btn-sm btn-navy" onclick="markWECReceived('${id}')">✓ Mark as Received</button>`
+        : `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">EA Number received — apply for Work Experience Certificate now</div>
+           <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none" onclick="markWECApplied('${id}')">✓ Mark WEC as Applied</button>`
+      }
+    </div>` : ''}
+    ${showRefund ? `<div style="padding:12px;background:#fef2f2;border-radius:var(--rs);border:1px solid var(--red)">
+      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">💰 ${daysUntilRefund<=0?'EMD/ASD/FSD Refund Eligible NOW':'EMD/ASD/FSD Refund Eligible Soon'}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${daysUntilRefund<=0?'2 years completed since JV — apply for deposit refund immediately':`Refund eligibility in ${daysUntilRefund} days — prepare documents`}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">EMD: ${fmt(p.emd||0)} · ASD: ${fmt(p.asd||0)} · FSD: ${fmt(p.fsd||0)}</div>
+      ${daysUntilRefund<=0?`<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="markRefundApplied('${id}')">✓ Mark Refund as Applied</button>`:''}
+    </div>` : ''}
   </div>`;
 }

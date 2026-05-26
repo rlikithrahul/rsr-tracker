@@ -59,9 +59,9 @@ async function ownerLogin(){
 
   // Check master password first (Super Admin)
   if(pw === D.ownerPw){
-    CU={role:'owner', name:'RSR Admin', isSuperAdmin:true};
+    CU={role:'owner', name:'Likith', isSuperAdmin:true};
     saveSession(CU);
-    await writeActivityLog('login', 'RSR Admin logged in (Super Admin)');
+    await writeActivityLog('login', 'Likith logged in (Super Admin)');
     enterOwner();
     return;
   }
@@ -137,7 +137,7 @@ function enterOwner(){
   document.getElementById('main-nav').style.display='flex';
   const rb=document.getElementById('nav-role');
   rb.textContent='Owner'; rb.style.background='rgba(201,168,76,.2)'; rb.style.color='var(--gold)';
-  document.getElementById('nav-uname').textContent=(CU&&!CU.isSuperAdmin&&CU.name)?CU.name:'RSR Admin';
+  document.getElementById('nav-uname').textContent=(CU&&!CU.isSuperAdmin&&CU.name)?CU.name:'Likith';
   document.getElementById('nav-links').innerHTML=
     ['Dashboard','Projects','Contractors','Tally','Interest'].map((t,i)=>
       `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
@@ -157,7 +157,8 @@ function enterOwner(){
     <button class="bn" id="obn-1" onclick="ownerTab(1)"><div class="bn-icon">🏗️</div><div>Projects</div></button>
     <button class="bn" id="obn-2" onclick="ownerTab(2)"><div class="bn-icon">👷</div><div>Contractors</div></button>
     <button class="bn" id="obn-3" onclick="ownerTab(3)"><div class="bn-icon">📂</div><div>Tally</div></button>
-    <button class="bn" id="obn-4" onclick="ownerTab(4)"><div class="bn-icon">📈</div><div>Interest</div></button>`;
+    <button class="bn" id="obn-4" onclick="ownerTab(4)"><div class="bn-icon">📈</div><div>Interest</div></button>
+    ${(CU&&CU.isSuperAdmin)?'<button class="bn" id="obn-5" onclick="ownerTab(5)"><div class="bn-icon">⚙️</div><div>Settings</div></button>':''}`;
   SP('page-owner'); ownerTab(0);
   startAutoRefresh();
 }

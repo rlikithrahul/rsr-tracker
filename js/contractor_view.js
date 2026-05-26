@@ -27,16 +27,26 @@ function renderCHome(){
     }
   }).catch(()=>{});
 
+  // Build contractor alerts
+  const cAlerts = (typeof getContractorAlerts === 'function') ? getContractorAlerts(CU.id) : [];
+  const alertsHtml = cAlerts.length ? `<div style="margin-bottom:14px">
+    ${cAlerts.map(a=>`<div style="padding:10px 12px;border-left:3px solid ${a.type==='red'?'var(--red)':'var(--amber)'};
+      background:${a.type==='red'?'#fef2f2':'#fffbeb'};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;font-size:13px">
+      ${a.msg}</div>`).join('')}
+  </div>` : '';
+
   if(!mine.length){
     el.innerHTML=`<div id="offline-pending-banner"></div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
       <button onclick="triggerInstall()" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">📲 Install App</button>
     </div>
+    ${alertsHtml}
     <div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>`;
     return;
   }
   el.innerHTML=`
     <div id="offline-pending-banner"></div>
+    ${alertsHtml}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
       <h2 style="font-size:20px;font-weight:700;color:var(--navy)">My Projects</h2>
       <button onclick="triggerInstall()" id="install-app-btn" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:'Inter',sans-serif">📲 Install App</button>

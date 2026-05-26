@@ -140,7 +140,7 @@ function renderDash(){
     <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
     <div class="stat" style="cursor:pointer" onclick="setDashFilter('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to see':'all clear'}</div></div>
     <div class="stat"><div class="stat-lbl">Need Attention</div><div class="stat-val" style="color:${at>0?'var(--red)':'var(--green)'}">${at}</div><div class="stat-sub">caution or stop</div></div>`;
-  document.getElementById('dash-banner').innerHTML='';
+  document.getElementById('dash-banner').innerHTML= renderDashAlertStrip();
   if(!pp.length){
     document.getElementById('dash-cards').innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects yet. Add your first project.</div></div>';
     return;
