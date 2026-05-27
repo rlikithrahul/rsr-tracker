@@ -451,6 +451,10 @@ function renderProjects(){
   });
 
   const el=document.getElementById('proj-tbl');
+  // Find duplicate tender IDs
+  const tenderCounts = {};
+  list.forEach(p=>{ if(p.tender) tenderCounts[p.tender.toLowerCase()] = (tenderCounts[p.tender.toLowerCase()]||0)+1; });
+  const dupTenders = new Set(Object.keys(tenderCounts).filter(t=>tenderCounts[t]>1));
   if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects found.</div></div>';return;}
   el.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Firm</th><th>Type</th><th>Contractor</th><th>Status</th><th>Agreement</th><th>BOQ Value</th><th>Cap Used</th><th>JV Date</th><th></th></tr></thead><tbody>
     ${list.map(p=>{
@@ -471,7 +475,7 @@ function renderProjects(){
       const capPct = max70>0?Math.round(rel/max70*100):0;
       const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
       return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
-        <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}</td>
+        <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}${p.tender&&dupTenders.has((p.tender||'').toLowerCase())?' <span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">⚠️ DUP</span>':''}</td>
         <td><span style="font-size:11px;font-weight:700;color:${firmColor};white-space:nowrap">${firmShort}</span></td>
         <td>${p.type||'—'}</td>
         <td>${c?c.name:'—'}</td>

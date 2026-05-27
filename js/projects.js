@@ -151,9 +151,10 @@ function renderDetail(id){
         <div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('detail-menu')">⋮</button>
           <div class="amenu" id="detail-menu">
-            <button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>
-            <button class="amenu-item success" onclick="changeProjectStatus('${p.id}','completed')">✓ Mark Completed</button>
-            <button class="amenu-item" onclick="changeProjectStatus('${p.id}','active')">▶ Mark Active</button>
+            <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV${p.expectedJVMonth?' ✓':''}</button>
+            ${(p.status||'active')==='active'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>`:''}
+            ${(p.status||'active')==='onhold'?`<button class="amenu-item" style="color:var(--green)" onclick="changeProjectStatus('${p.id}','active')">▶ Mark Active</button>`:''}
+            ${(p.status||'active')!=='completed'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','completed')">✓ Mark Completed</button>`:''}
             <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
           </div>
         </div>

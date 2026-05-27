@@ -88,6 +88,9 @@ async function saveProject(){
   // All fields mandatory
   if(!name){toast('Project name is required','error');document.getElementById('np-name').focus();return;}
   if(!tender){toast('Tender ID is required','error');document.getElementById('np-tender').focus();return;}
+  // Duplicate tender ID check
+  const dupTender = D.projects.find(p=>!isArchived(p)&&(p.tender||'').trim().toLowerCase()===tender.toLowerCase());
+  if(dupTender){ toast(`⚠️ Tender ID "${tender}" already exists — "${dupTender.name}". Check before saving.`,'error',6000); return; }
   if(!est){toast('Estimated BOQ value is required','error');document.getElementById('np-est').focus();return;}
   if(!loc){toast('Location is required','error');document.getElementById('np-loc').focus();return;}
   if(!cc){toast('Tally Cost Centre name is required','error');document.getElementById('np-cc').focus();return;}
