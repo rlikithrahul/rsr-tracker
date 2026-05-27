@@ -145,6 +145,7 @@ function renderDetail(id){
         <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
         <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
         <button class="btn btn-sm" onclick="openEditBOQ('${p.id}')">📊 Edit BOQ</button>
+        <button class="btn btn-sm" onclick="toggleFullBOQ('boq-full-${p.id}')" style="background:var(--surface2);color:var(--navy)">📋 View Full BOQ</button>
         <button class="btn btn-sm" onclick="openEditProject('${p.id}')">✏️ Edit</button>
         <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')" title="Private owner notes">📝 Notes${p.ownerNotes?` <span style="width:7px;height:7px;background:var(--gold);border-radius:50%;display:inline-block;margin-left:2px"></span>`:''}</button>
         <div class="amenu-wrap">
@@ -179,31 +180,64 @@ function renderDetail(id){
       <!-- ACTION ITEMS: WEC + Refund -->
       ${buildActionItems(p,id)}
 
+    <!-- Full BOQ (collapsible) -->
+    <div class="card" id="boq-full-${id}" style="display:none">
+      <div class="st" style="margin-bottom:12px">📋 Full BOQ — Items & Rates</div>
+      ${(p.boq&&p.boq.length)?`<div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Item Description</th><th>Unit</th>
+          <th style="text-align:right">Qty</th>
+          <th style="text-align:right">Rate (₹)</th>
+          <th style="text-align:right">Value (₹)</th>
+        </tr></thead>
+        <tbody>
+          ${p.boq.map(item=>`<tr>
+            <td style="font-size:12px">${item.desc||item.name||'—'}</td>
+            <td style="font-size:12px">${item.unit||'—'}</td>
+            <td style="text-align:right;font-size:12px">${item.qty||0}</td>
+            <td style="text-align:right;font-size:12px">${fmt(item.rate||0)}</td>
+            <td style="text-align:right;font-weight:600;font-size:12px">${fmt((item.qty||0)*(item.rate||0))}</td>
+          </tr>`).join('')}
+          <tr style="border-top:2px solid var(--border);background:var(--surface2)">
+            <td colspan="4" style="font-weight:700;font-size:13px">Total BOQ Value</td>
+            <td style="text-align:right;font-weight:800;font-size:13px;color:var(--navy)">${fmt(p.boq.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0))}</td>
+          </tr>
+        </tbody>
+      </table></div>`:'<div style="color:var(--text3);font-size:13px">No BOQ items added yet.</div>'}
+    </div>
+
       <div class="card">
         <div class="st">Fund Releases</div>${relLog}
         ${settleLog?`<div class="st" style="margin-top:14px">Government Payments Received</div>${settleLog}`:''}
       </div>
     </div>
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div class="st" style="margin:0;border:none;padding:0">BOQ Progress ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3);font-size:11px">— Last verified: ${lv.date}</span>`:''}</div>
-        <div style="display:flex;gap:12px;font-size:11px;font-weight:600">
-          <span style="color:var(--amber)">🟡 Contractor Reported</span>
-          <span style="color:var(--navy)">🔵 RSR Verified</span>
+      <details open>
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="st" style="margin:0;border:none;padding:0">📊 BOQ Progress ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3);font-size:11px">— Last verified: ${lv.date}</span>`:''}</div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:11px;font-weight:600">
+            <span style="color:var(--amber)">🟡 Reported</span>
+            <span style="color:var(--navy)">🔵 Verified</span>
+            <span style="color:var(--text3);font-size:11px">▼</span>
+          </div>
+        </summary>
+        <div style="margin-top:12px">
+          <div class="tbl-wrap"><table><thead><tr>
+            <th>Item</th><th>Unit</th>
+            <th style="text-align:center">BOQ Qty</th>
+            <th style="text-align:center;color:var(--amber)">Reported</th>
+            <th style="text-align:center;color:var(--navy)">RSR Verified</th>
+            <th>Progress</th>
+            <th style="text-align:right">Value</th>
+          </tr></thead><tbody>${brows}</tbody></table></div>
+          <div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">
+            <strong style="color:var(--amber)">Reported</strong> = accepted from contractor updates.&nbsp;&nbsp;
+            <strong style="color:var(--navy)">RSR Verified</strong> = physically confirmed on site — controls funding.
+          </div>
         </div>
-      </div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th>Item</th><th>Unit</th>
-        <th style="text-align:center">BOQ Qty</th>
-        <th style="text-align:center;color:var(--amber)">Reported</th>
-        <th style="text-align:center;color:var(--navy)">RSR Verified</th>
-        <th>Progress</th>
-        <th style="text-align:right">Value</th>
-      </tr></thead><tbody>${brows}</tbody></table></div>
-      <div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">
-        <strong style="color:var(--amber)">Reported</strong> = accepted from contractor updates.&nbsp;&nbsp;
-        <strong style="color:var(--navy)">RSR Verified</strong> = physically confirmed on site — controls funding.
-      </div>
+      </details>
     </div>
     <div class="card"><div class="st">Verification Log</div>${verLog}</div>
     ${p.ownerNotes?`<div class="card" style="border-left:4px solid var(--gold)">

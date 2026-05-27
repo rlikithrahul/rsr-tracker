@@ -126,6 +126,7 @@ async function saveContractor(){
     ['nc-name','nc-phone','nc-pw','nc-notes'].forEach(id=>document.getElementById(id).value='');
     renderConts();
     toast('✓ Contractor added','ok');
+    if(typeof writeActivityLog==='function') writeActivityLog('contractor_add',`Contractor added: ${name}`).catch(()=>{});
   } catch(e){ toast('Save failed','error'); }
 }
 

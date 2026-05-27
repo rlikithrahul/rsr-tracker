@@ -36,7 +36,7 @@ let photos = [], gpsData = null;
 let dbOK = false, autoRefreshTimer = null, deferredInstallPrompt = null;
 let tallyUnmatched = [];
 let tallyUnmatchedReceipts = []; // NEW: unmatched receipts from Tally
-let dashFilter = 'all'; // NEW: dashboard filter state
+let dashFilter = 'attn'; // NEW: dashboard filter state
 let dashContractorFilter = ''; // NEW: contractor filter
 let calViewYear = new Date().getFullYear();
 let calViewMonth = new Date().getMonth();

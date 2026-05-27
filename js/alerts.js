@@ -1,3 +1,12 @@
+
+// ─── OPEN PROJECT FROM ALERT ─────────────────────────
+// Properly switches to project detail from any tab
+function openProjectFromAlert(pid){
+  CM('modal-alerts'); // close alerts modal if open
+  ownerTab(1); // go to projects tab first
+  setTimeout(()=>openDetail(pid), 100); // then open detail
+}
+
 // ═══════════════════════════════════════════════════════
 // alerts.js — RSR Constructions Tracker
 // Priority alert system — EA Number, WEC, Refund, Operations
@@ -115,23 +124,31 @@ function getProjectAlerts(p){
 
   // ── OPERATIONAL ALERTS ────────────────────────────
   if((p.status||'active')==='active'){
-    // No update in 7 days
+    // No update alert — only if project has been active for 14+ days
     const updates = (p.contractorUpdates||[]).filter(u=>!isArchived(u));
-    if(updates.length){
-      const lastUpd = updates.map(u=>u.date).sort().reverse()[0];
-      const daysSince = Math.round((today - new Date(lastUpd)) / 86400000);
-      if(daysSince > 14){
-        alerts.push({
-          code: 'no_update',
-          type: 'amber',
-          priority: 4,
-          project: p,
-          msg: `⚠️ No site update for ${daysSince} days — "${p.name}"`,
-          shortMsg: `No update ${daysSince}d`,
-          action: `Follow up with contractor`,
-          projectId: p.id
-        });
+    const projectAge = p.agreeDate
+      ? Math.round((today - new Date(p.agreeDate)) / 86400000)
+      : Math.round((today - new Date(p.createdAt||today)) / 86400000);
+
+    if(projectAge > 14){
+      if(updates.length){
+        // Has had updates — check if last one was too long ago
+        const lastUpd = updates.map(u=>u.date).sort().reverse()[0];
+        const daysSince = Math.round((today - new Date(lastUpd)) / 86400000);
+        if(daysSince > 14){
+          alerts.push({
+            code: 'no_update',
+            type: 'amber',
+            priority: 4,
+            project: p,
+            msg: `⚠️ No site update for ${daysSince} days — "${p.name}"`,
+            shortMsg: `No update ${daysSince}d`,
+            action: `Follow up with contractor`,
+            projectId: p.id
+          });
+        }
       }
+      // Don't alert if project never had updates — too noisy for 37 new projects
     }
 
     // Funding above 75%
@@ -223,7 +240,7 @@ function renderAlertsPanel(){
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:800;color:${color};text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding:4px 10px;background:${bg};border-radius:4px;display:inline-block">${label} (${items.length})</div>
       ${items.map(a=>`
-        <div style="padding:10px 12px;border-left:3px solid ${color};background:${bg};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;cursor:pointer" onclick="openDetail('${a.projectId}')">
+        <div style="padding:10px 12px;border-left:3px solid ${color};background:${bg};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;cursor:pointer" onclick="openProjectFromAlert('${a.projectId}')">
           <div style="font-size:13px;color:var(--text1);margin-bottom:3px">${a.msg}</div>
           <div style="font-size:11px;color:${color};font-weight:600">→ ${a.action}</div>
         </div>`).join('')}
@@ -249,7 +266,7 @@ function renderDashAlertStrip(){
         border-left:3px solid ${a.type==='red'?'var(--red)':a.type==='amber'?'var(--amber)':'#1a56db'};
         background:${a.type==='red'?'#fef2f2':a.type==='amber'?'#fffbeb':'#e8f0fe'};
         border-radius:0 var(--rs) var(--rs) 0;margin-bottom:4px;cursor:pointer;gap:8px"
-        onclick="openDetail('${a.projectId}')">
+        onclick="openProjectFromAlert('${a.projectId}')">
         <span style="font-size:12px;color:var(--text1);flex:1">${a.msg}</span>
         <span style="font-size:11px;font-weight:700;color:${a.type==='red'?'var(--red)':'#92400e'};white-space:nowrap">View →</span>
       </div>`).join('')}

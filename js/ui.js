@@ -106,79 +106,171 @@ async function manualRefresh(){
 
 // ─── DASHBOARD & PROJECT LIST ───────────────────────
 function renderDash(){
-  const searchQ = '';
-  let allProjects = D.projects.filter(p=>!isArchived(p));
-  // Apply contractor filter
-  if(dashContractorFilter) allProjects=allProjects.filter(p=>p.contractorId===dashContractorFilter);
-  // Apply status filter
-  if(dashFilter==='attn') allProjects=allProjects.filter(p=>getAutoWarnings(p).some(w=>w.type==='red'||w.type==='amber'));
-  else if(dashFilter==='active') allProjects=allProjects.filter(p=>projStatus(p)==='active');
-  else if(dashFilter==='onhold') allProjects=allProjects.filter(p=>projStatus(p)==='onhold');
-  else if(dashFilter==='completed') allProjects=allProjects.filter(p=>projStatus(p)==='completed');
-  // Filter by search
-  const pp = searchQ ? allProjects.filter(p=>{
-    const c = GC(p.contractorId);
-    return p.name.toLowerCase().includes(searchQ) ||
-           (p.tender||'').toLowerCase().includes(searchQ) ||
-           (c&&c.name.toLowerCase().includes(searchQ)) ||
-           (p.location||'').toLowerCase().includes(searchQ);
-  }) : allProjects;
-  const cap=pp.reduce((s,p)=>s+totRel(p),0);
-  const settled=pp.reduce((s,p)=>s+(p.settlements||[]).reduce((a,x)=>a+x.amount,0),0);
-  const it=pp.reduce((s,p)=>{
-    const settledAmt=(p.settlements||[]).reduce((a,x)=>a+x.amount,0);
-    const outstanding=Math.max(0,totRel(p)-settledAmt);
-    return s+(p.releases||[]).reduce((a,r)=>{
-      const d=Math.max(0,Math.round((Date.now()-new Date(r.date).getTime())/86400000));
-      return a+r.amount*0.24*d/365;
-    },0);
-  },0);
-  const at=pp.filter(p=>getProjectAlerts(p).some(a=>a.type==='red'||a.type==='amber')).length;
-  const pendingUpd = pp.reduce((s,p)=>s+(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length,0);
+  const allProjects = D.projects.filter(p=>!isArchived(p));
+
+  // Stats
+  const active = allProjects.filter(p=>(p.status||'active')==='active');
+  const cap = allProjects.reduce((s,p)=>s+totRel(p),0);
+  const settled = allProjects.reduce((s,p)=>s+(p.settlements||[]).filter(x=>!isArchived(x)).reduce((a,x)=>a+x.amount,0),0);
+  const at = allProjects.filter(p=>getProjectAlerts(p).some(a=>a.type='red'||a.type==='amber')).length;
+  const pendingUpd = allProjects.reduce((s,p)=>s+(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length,0);
+  const totalAgreement = active.reduce((s,p)=>s+agAmt(p),0);
+  const allAlerts = getAllAlerts();
+
+  // Last Tally import date
+  let lastImport = null;
+  allProjects.forEach(p=>{
+    (p.releases||[]).filter(r=>r.source==='tally'||r.source==='tally-manual'||r.source==='tally-fuzzy').forEach(r=>{
+      if(!lastImport||r.date>lastImport) lastImport=r.date;
+    });
+  });
+  const importAgo = lastImport ? (() => {
+    const days = Math.round((new Date()-new Date(lastImport))/86400000);
+    return days===0?'Today':days===1?'Yesterday':`${days} days ago`;
+  })() : 'Never';
+  const importColor = !lastImport?'var(--red)':Math.round((new Date()-new Date(lastImport))/86400000)>3?'var(--amber)':'var(--green)';
+
   document.getElementById('dash-stats').innerHTML=`
-    <div class="stat"><div class="stat-lbl">Active Projects</div><div class="stat-val">${pp.length}</div><div class="stat-sub">all contractors</div></div>
+    <div class="stat"><div class="stat-lbl">Active Projects</div><div class="stat-val">${active.length}</div><div class="stat-sub">${fmt(totalAgreement)} value</div></div>
     <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
-    <div class="stat" style="cursor:pointer" onclick="setDashFilter('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to see':'all clear'}</div></div>
-    <div class="stat"><div class="stat-lbl">Need Attention</div><div class="stat-val" style="color:${at>0?'var(--red)':'var(--green)'}">${at}</div><div class="stat-sub">caution or stop</div></div>`;
-  document.getElementById('dash-banner').innerHTML= renderDashAlertStrip();
-  if(!pp.length){
-    document.getElementById('dash-cards').innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects yet. Add your first project.</div></div>';
+    <div class="stat" style="cursor:pointer" onclick="dashGoTo('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to view':'all clear'}</div></div>
+    <div class="stat" style="cursor:pointer" onclick="showAllAlerts()"><div class="stat-lbl">Alerts</div><div class="stat-val" style="color:${allAlerts.length>0?'var(--red)':'var(--green)'}">${allAlerts.length}</div><div class="stat-sub">${allAlerts.length>0?'tap to view':'all clear'}</div></div>`;
+
+  // Alert strip
+  document.getElementById('dash-banner').innerHTML = renderDashAlertStrip();
+
+  // Main dashboard body
+  document.getElementById('dash-cards').innerHTML=`
+    <!-- Last Tally Import -->
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:14px;font-size:12px">
+      <span style="color:var(--text3)">📤 Last Tally import:</span>
+      <span style="font-weight:700;color:${importColor}">${importAgo}</span>
+      ${lastImport?`<span style="color:var(--text3)">(${lastImport})</span>`:''}
+      <button onclick="ownerTab(3)" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:var(--rs);padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">Upload →</button>
+    </div>
+
+    <!-- Quick Access -->
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Quick Access</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px">
+      <button onclick="dashGoTo('attn')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
+        <div style="font-size:18px;margin-bottom:4px">⚠️</div>
+        <div style="font-size:11px;font-weight:700;color:var(--red)">Needs Attention</div>
+        <div style="font-size:13px;font-weight:800;color:var(--red)">${at}</div>
+      </button>
+      <button onclick="dashGoTo('active')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
+        <div style="font-size:18px;margin-bottom:4px">🏗️</div>
+        <div style="font-size:11px;font-weight:700;color:var(--navy)">Active</div>
+        <div style="font-size:13px;font-weight:800;color:var(--navy)">${active.length}</div>
+      </button>
+      <button onclick="dashGoTo('onhold')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
+        <div style="font-size:18px;margin-bottom:4px">⏸</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text2)">On Hold</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text2)">${allProjects.filter(p=>(p.status||'active')==='onhold').length}</div>
+      </button>
+    </div>
+
+    <div id="dash-capital-section"></div>
+    <div id="dash-jv-section"></div>`;
+
+  renderCapitalSection(allProjects);
+  renderExpectedJVSection(allProjects);
+}
+
+function renderCapitalSection(allProjects){
+  const el = document.getElementById('dash-capital-section');
+  if(!el) return;
+  const totalCap = allProjects.reduce((s,p)=>s+maxF(p),0);
+  const totalDep = allProjects.reduce((s,p)=>s+totRel(p),0);
+  const headroom = Math.max(0,totalCap-totalDep);
+  const pct = totalCap>0?Math.round(totalDep/totalCap*100):0;
+  const barColor = pct>=85?'var(--red)':pct>=70?'var(--amber)':'var(--green)';
+  el.innerHTML='<div class="card" style="margin-bottom:14px;padding:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Capital Deployment Summary</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;flex-wrap:wrap;gap:4px">'
+    +'<span>Deployed: <strong style="color:var(--navy)">'+fmt(totalDep)+'</strong></span>'
+    +'<span>Headroom: <strong style="color:'+barColor+'">'+fmt(headroom)+'</strong></span>'
+    +'</div>'
+    +'<div class="prog-track" style="height:8px;margin-bottom:6px">'
+    +'<div style="height:100%;border-radius:4px;background:'+barColor+';width:'+pct+'%"></div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">'
+    +'<span>'+pct+'% of total cap used</span>'
+    +'<span>Total cap: '+fmt(totalCap)+'</span>'
+    +'</div></div>';
+}
+
+function renderExpectedJVSection(allProjects){
+  const el = document.getElementById('dash-jv-section');
+  if(!el) return;
+
+  const today = new Date();
+  const thisY = today.getFullYear(), thisM = today.getMonth();
+  const nextY = thisM===11?thisY+1:thisY, nextM = thisM===11?0:thisM+1;
+  const thisKey = thisY+'-'+String(thisM+1).padStart(2,'0');
+  const nextKey = nextY+'-'+String(nextM+1).padStart(2,'0');
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const thisLabel = months[thisM]+' '+thisY;
+  const nextLabel = months[nextM]+' '+nextY;
+
+  const thisProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&(p.expectedJVMonth===thisKey||p.expectedJVMonth<thisKey));
+  const nextProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&p.expectedJVMonth===nextKey);
+
+  const buildTable = (projects, monthKey) => {
+    if(!projects.length) return '<div style="font-size:12px;color:var(--text3);padding:8px;text-align:center;font-style:italic">None tagged</div>';
+    const totalAmt = projects.reduce((s,p)=>s+agAmt(p),0);
+    let rows = '';
+    projects.forEach(p=>{
+      const c = GC(p.contractorId);
+      const carried = p.expectedJVMonth < monthKey;
+      rows += '<tr style="border-bottom:1px solid var(--surface2);cursor:pointer" onclick="openProjectFromAlert(\'' + p.id + '\')">' 
+        +'<td style="padding:6px;max-width:150px">'
+        +'<div style="font-weight:600;color:var(--navy);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
+        +(carried?'<div style="font-size:10px;color:var(--amber);font-weight:600">⚠️ Carried from prev month</div>':'')
+        +'</td>'
+        +'<td style="padding:6px;font-size:11px;color:var(--text2)">'+(c?c.name:'—')+'</td>'
+        +'<td style="padding:6px;text-align:right;font-weight:600;color:var(--navy);font-size:11px">'+fmt(agAmt(p))+'</td>'
+        +'</tr>';
+    });
+    return '<table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr style="border-bottom:1px solid var(--border)">'
+      +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Project</th>'
+      +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Contractor</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-size:11px;color:var(--text3)">Agreement</th>'
+      +'</tr></thead><tbody>'+rows+'</tbody>'
+      +'<tfoot><tr style="border-top:2px solid var(--border);background:var(--surface2)">'
+      +'<td colspan="2" style="padding:8px 6px;font-weight:700;font-size:12px">Total ('+projects.length+' projects)</td>'
+      +'<td style="padding:8px 6px;text-align:right;font-weight:800;color:var(--navy);font-size:13px">'+fmt(totalAmt)+'</td>'
+      +'</tr></tfoot></table>';
+  };
+
+  if(!thisProjects.length && !nextProjects.length){
+    el.innerHTML='<div class="card" style="padding:14px">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">📅 Expected JVs</div>'
+      +'<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No projects tagged. Use ⋮ menu on any project card to add.</div>'
+      +'</div>';
     return;
   }
 
-  // Split by status first, then by alerts
-  const active    = pp.filter(p=>projStatus(p)==='active');
-  const onhold    = pp.filter(p=>projStatus(p)==='onhold');
-  const completed = pp.filter(p=>projStatus(p)==='completed');
-  const needsAttn = active.filter(p=>getProjectAlerts(p).length>0);
-  const healthy   = active.filter(p=>getProjectAlerts(p).length===0);
-
-  let html='';
-  if(searchQ && !pp.length){
-    html='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects match your search.</div></div>';
-  } else {
-    if(needsAttn.length){
-      html+=`<div class="st" style="color:var(--red)">⚠️ Action Required (${needsAttn.length})</div>`;
-      html+=needsAttn.map(p=>dashCardHTML(p)).join('');
-    }
-    if(healthy.length){
-      html+=`<div class="st" style="margin-top:${needsAttn.length?'20px':'0'}">✅ On Track (${healthy.length})</div>`;
-      html+=healthy.map(p=>dashCardHTML(p)).join('');
-    }
-    if(onhold.length){
-      html+=`<div class="st" style="margin-top:20px;color:#4a6080">⏸ On Hold (${onhold.length})</div>`;
-      html+=onhold.map(p=>dashCardHTML(p)).join('');
-    }
-    if(completed.length){
-      html+=`<details style="margin-top:20px"><summary style="cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:8px 0;border-bottom:1px solid var(--border)">✓ Completed Projects (${completed.length}) — click to expand</summary>`;
-      html+=`<div style="margin-top:10px">${completed.map(p=>dashCardHTML(p)).join('')}</div></details>`;
-    }
-  }
-  document.getElementById('dash-cards').innerHTML=html;
-
-  // Render filter bar
-  renderDashFilterBar();
+  el.innerHTML='<div class="card" style="padding:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">📅 Expected JVs</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'
+    +'<div>'
+    +'<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--gold)">'+thisLabel+'</div>'
+    +buildTable(thisProjects,thisKey)
+    +'</div>'
+    +'<div>'
+    +'<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--border)">'+nextLabel+'</div>'
+    +buildTable(nextProjects,nextKey)
+    +'</div></div></div>';
 }
+
+function dashGoTo(filter){
+  dashFilter = fil
+  dashFilter = filter;
+  ownerTab(1);
+}
+
+
 
 function renderDashFilterBar(){
   const bar = document.getElementById('dash-filter-bar');
@@ -276,58 +368,50 @@ async function restoreProject(pid){
 
 function dashCardHTML(p){
   const c=GC(p.contractorId);
-  const rel=totRel(p),max=maxF(p),el=eligR(p),vp=verPct(p);
-  const rp=max>0?Math.min(rel/max*100,100):0; const s=pStat(p); const hw=hdroom(p);
+  const rel=totRel(p),max=maxF(p);
+  const rp=max>0?Math.min(rel/max*100,100):0;
+  const s=pStat(p);
   const pend=(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length;
-  const lv=(p.verifications||[]).filter(v=>!isArchived(v)).slice(-1)[0];
-  const alerts=getProjectAlerts(p);
-  const autoW=getAutoWarnings(p);
-  const allWarnings=[...alerts,...autoW.filter(w=>w.code!=='pending_updates')];
-  const alertsHtml=allWarnings.slice(0,2).map(a=>`<div class="alert-banner ab-${a.type}" onclick="openDetail('${p.id}')">${a.msg}</div>`).join('');
+  const allW=[...getProjectAlerts(p),...getAutoWarnings(p).filter(w=>w.code!=='pending_updates')];
+  const topAlert=allW[0];
   const capColor=rp>=85?'var(--red)':rp>=70?'var(--amber)':'var(--green)';
   const capFill=rp>=85?'pf-red':rp>=70?'pf-amber':'pf-green';
-  return `<div class="card" style="${allWarnings.some(a=>a.type==='red')?'border-color:var(--red);border-left:4px solid var(--red)':''}">
-    <div class="card-hdr">
+  const firmShort=(p.firm||'RSR Constructions')==='RSR Constructions'?'RSR':(p.firm||'').split(' ').map(w=>w[0]).join('');
+  const status=p.status||'active';
+  return `<div class="card" style="padding:12px 14px;${allW.some(a=>a.type==='red')?'border-left:3px solid var(--red)':''}">
+    <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span class="card-title">${p.name}</span>${sBadge(s,p)}
-          ${pend>0?`<span style="background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px">${pend} pending</span>`:''}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+          ${sBadge(s,p)}
+          <span style="font-size:10px;background:var(--surface2);color:var(--text3);padding:1px 5px;border-radius:3px">${firmShort}</span>
+          ${pend>0?`<span style="background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:8px">${pend} pending</span>`:''}
         </div>
-        <div class="card-sub">${p.type} · ${p.location||'—'} · ${c?c.name:'—'} · #${p.tender}</div>
-        <div style="margin-top:3px">${lastActivityHTML(p)}</div>
+        <div style="font-weight:700;font-size:13px;color:var(--navy);line-height:1.3;margin-bottom:2px">${p.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${c?c.name:'—'} · #${p.tender||'—'}</div>
+        ${topAlert?`<div style="font-size:11px;margin-top:4px;color:${topAlert.type==='red'?'var(--red)':'#92400e'}">${topAlert.msg}</div>`:''}
+        <div style="margin-top:6px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:2px">
+            <span>Cap: ${fmt(rel)} / ${fmt(max)}</span>
+            <span style="font-weight:700;color:${capColor}">${Math.round(rp)}%</span>
+          </div>
+          <div class="prog-track" style="height:4px"><div class="prog-fill ${capFill}" style="width:${rp}%"></div></div>
+        </div>
       </div>
-      <div class="card-acts">
-        <button class="btn btn-sm" onclick="openDetail('${p.id}')">View</button>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end">
+        <button class="btn btn-sm" onclick="openDetail('${p.id}')" style="padding:5px 12px">View</button>
         <div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pm-${p.id}')">⋮</button>
           <div class="amenu" id="pm-${p.id}">
             <button class="amenu-item" onclick="openDetail('${p.id}')">📋 View Detail</button>
             <button class="amenu-item" onclick="openOwnerNotes('${p.id}')">📝 Owner Notes${p.ownerNotes?' ●':''}</button>
             <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Settlement</button>
+            <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV${p.expectedJVMonth?' ✓':''}</button>
+            ${status==='active'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>`:''}
+            ${status==='onhold'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','active')" style="color:var(--green)">▶ Mark Active</button>`:''}
+            ${status!=='completed'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','completed')">✓ Mark Completed</button>`:''}
             <button class="amenu-item danger" onclick="deleteProject('${p.id}')">📦 Archive Project</button>
           </div>
         </div>
-      </div>
-    </div>
-    ${alertsHtml}
-    <div style="margin-top:8px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-        <span style="font-size:11px;color:var(--text3)">Funding: ${fmt(rel)} net / ${fmt(max)} cap</span>
-        <span style="font-size:11px;font-weight:700;color:${capColor}">${Math.round(rp)}%</span>
-      </div>
-      <div class="prog-track" style="height:6px;margin-bottom:8px"><div class="prog-fill ${capFill}" style="width:${rp}%"></div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
-      <div>
-        <div class="prog"><div class="prog-lbl"><span style="color:var(--amber)">Contractor reported</span><span style="color:var(--amber)">${pct(reportedPct(p))}</span></div><div class="prog-track" style="background:rgba(176,96,0,.15)"><div style="height:100%;border-radius:4px;background:var(--amber);width:${Math.min(reportedPct(p),100)}%"></div></div></div>
-        <div class="prog"><div class="prog-lbl"><span>RSR verified</span><span>${pct(vp)}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(vp,100)}%"></div></div></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">${lv?'Last verified: '+lv.date:'No verification yet'}</div>
-      </div>
-      <div style="font-size:12px">
-        <div class="fr" style="font-size:12px"><span class="fl">Agreement</span><span class="fv">${fmt(agAmt(p))}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Headroom</span><span class="fv" style="color:${capColor}">${fmt(hw)}</span></div>
-        <div class="fr" style="font-size:12px"><span class="fl">Net deployed</span><span class="fv">${fmt(rel)}</span></div>
-        <!-- Interest removed from dashboard — see Interest tab for full breakdown -->
       </div>
     </div>
   </div>`;
@@ -343,12 +427,27 @@ function renderProjects(){
 
   const list=D.projects.filter(p=>{
     const c=GC(p.contractorId);
+    const genCode = p.genCode||(p.docVault&&p.docVault.gencode)||'';
+    const eaNum = p.eaNumber||(p.docVault&&p.docVault.ea)||'';
     const matchQ = !q || p.name.toLowerCase().includes(q)||
-      (p.tender||'').includes(q)||(c&&c.name.toLowerCase().includes(q));
+      (p.tender||'').toLowerCase().includes(q)||
+      (c&&c.name.toLowerCase().includes(q))||
+      (c&&(c.phone||'').includes(q))||
+      (p.costCentre||'').toLowerCase().includes(q)||
+      genCode.toLowerCase().includes(q)||
+      eaNum.toLowerCase().includes(q)||
+      (p.jvNumber||'').toLowerCase().includes(q)||
+      (p.location||'').toLowerCase().includes(q);
     const status = p.status || 'active';
     const matchStatus = activeFilter==='all' || status===activeFilter;
     const matchFirm = firmFilter==='all' || (p.firm||'RSR Constructions')===firmFilter;
     return matchQ && matchStatus && matchFirm && !isArchived(p);
+  // Sort: oldest agreement date first, no date goes to bottom
+  }).sort((a,b)=>{
+    if(!a.agreeDate && !b.agreeDate) return 0;
+    if(!a.agreeDate) return 1;
+    if(!b.agreeDate) return -1;
+    return a.agreeDate.localeCompare(b.agreeDate);
   });
 
   const el=document.getElementById('proj-tbl');
@@ -381,7 +480,22 @@ function renderProjects(){
         <td style="text-align:right">${fmt(boqTotal)}</td>
         <td style="text-align:right;color:${capPct>=70?'var(--red)':'var(--navy)'}">${capPct}%</td>
         <td style="white-space:nowrap">${jvDate}</td>
-        <td><button class="btn btn-sm" onclick="event.stopPropagation();openDetail('${p.id}')">View</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" onclick="event.stopPropagation();openDetail('${p.id}')">View</button>
+          <div class="amenu-wrap" style="display:inline-block;margin-left:4px">
+            <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('ptm-${p.id}')">⋮</button>
+            <div class="amenu" id="ptm-${p.id}" style="right:0;min-width:180px">
+              <button class="amenu-item" onclick="openDetail('${p.id}')">📋 View Detail</button>
+              <button class="amenu-item" onclick="openEditProject('${p.id}')">✏️ Edit Project</button>
+              <button class="amenu-item" onclick="openOwnerNotes('${p.id}')">📝 Owner Notes${p.ownerNotes?' ●':''}</button>
+              <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV${p.expectedJVMonth?' ✓':''}</button>
+              <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Settlement</button>
+              ${(p.status||'active')==='active'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>`:''}
+              ${(p.status||'active')==='onhold'?`<button class="amenu-item" style="color:var(--green)" onclick="changeProjectStatus('${p.id}','active')">▶ Mark Active</button>`:''}
+              <button class="amenu-item danger" onclick="deleteProject('${p.id}')">📦 Archive</button>
+            </div>
+          </div>
+        </td>
       </tr>`;
     }).join('')}
   </tbody></table></div>`;
@@ -446,26 +560,40 @@ function globalSearch(query){
 
   const results = [];
 
-  // Search projects
-  D.projects.forEach(p=>{
+  // Search projects — all fields
+  D.projects.filter(p=>!isArchived(p)).forEach(p=>{
     const c = GC(p.contractorId);
-    if(p.name.toLowerCase().includes(q) ||
-       (p.tender||'').toLowerCase().includes(q) ||
-       (p.location||'').toLowerCase().includes(q) ||
-       (c&&c.name.toLowerCase().includes(q))){
+    const genCode = (p.genCode||(p.docVault&&p.docVault.gencode)||'').toLowerCase();
+    const eaNum = (p.eaNumber||(p.docVault&&p.docVault.ea)||'').toLowerCase();
+    const jvNum = (p.jvNumber||'').toLowerCase();
+    const cc = (p.costCentre||'').toLowerCase();
+    const matched =
+      p.name.toLowerCase().includes(q) ||
+      (p.tender||'').toLowerCase().includes(q) ||
+      (p.location||'').toLowerCase().includes(q) ||
+      (c&&c.name.toLowerCase().includes(q)) ||
+      genCode.includes(q) || eaNum.includes(q) ||
+      jvNum.includes(q) || cc.includes(q);
+    if(matched){
+      let hint = '';
+      if(genCode.includes(q)&&q) hint=`Gen: ${(p.genCode||(p.docVault&&p.docVault.gencode)||'')}`;
+      else if(eaNum.includes(q)&&q) hint=`EA: ${(p.eaNumber||(p.docVault&&p.docVault.ea)||'')}`;
+      else if(jvNum.includes(q)&&q) hint=`JV: ${p.jvNumber}`;
+      else if(cc.includes(q)&&q) hint=`CC: ${p.costCentre}`;
       results.push({ type:'project', id:p.id, name:p.name,
-        sub:`${p.type||''}${p.location?' · '+p.location:''} · #${p.tender||''}`,
+        sub:`#${p.tender||''} · ${c?c.name:'—'}${hint?' · '+hint:''}`,
         badge: sBadge(pStat(p),p) });
     }
   });
 
-  // Search contractors
+  // Search contractors — name, username, phone
   D.contractors.forEach(c=>{
     if(c.name.toLowerCase().includes(q) ||
+       (c.username||'').toLowerCase().includes(q) ||
        (c.phone||'').includes(q)){
-      const pp = D.projects.filter(p=>p.contractorId===c.id);
+      const pp = D.projects.filter(p=>p.contractorId===c.id&&!isArchived(p));
       results.push({ type:'contractor', id:c.id, name:c.name,
-        sub:`📞 ${c.phone||'—'} · ${pp.length} project${pp.length!==1?'s':''}` });
+        sub:`📞 ${c.phone||'—'}${c.username?' · @'+c.username:''} · ${pp.length} project${pp.length!==1?'s':''}` });
     }
   });
 

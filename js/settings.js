@@ -53,7 +53,7 @@ async function writeActivityLog(type, description, projectId){
 
 async function loadActivityLog(){
   try{
-    const rows = await sbReq('ledger_events?type=like.activity_%&order=ts.desc&limit=200','GET');
+    const rows = await sbReq('ledger_events?type=ilike.activity_*&order=ts.desc&limit=200','GET');
     return (rows||[]).map(r=>({
       id: r.id,
       ts: r.ts,

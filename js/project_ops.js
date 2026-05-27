@@ -1,3 +1,39 @@
+// ─── CUSTOM WORK TYPE ────────────────────────────────
+// Custom types are stored in settings and added to dropdown
+function handleCustomType(selectId, inputId){
+  const sel = document.getElementById(selectId);
+  const inp = document.getElementById(inputId);
+  if(!inp) return;
+  if(sel.value === '__custom__'){
+    inp.style.display = 'block';
+    inp.focus();
+  } else {
+    inp.style.display = 'none';
+  }
+}
+
+function getSelectedType(selectId, inputId){
+  const sel = document.getElementById(selectId);
+  const inp = document.getElementById(inputId);
+  if(sel.value === '__custom__') return (inp&&inp.value.trim()) || 'Other';
+  return sel.value;
+}
+
+function setTypeDropdown(selectId, inputId, value){
+  const sel = document.getElementById(selectId);
+  if(!sel || !value) return;
+  // Check if value exists in dropdown
+  const exists = Array.from(sel.options).some(o=>o.value===value);
+  if(exists){
+    sel.value = value;
+  } else {
+    // Custom type — select custom option and show input
+    sel.value = '__custom__';
+    const inp = document.getElementById(inputId);
+    if(inp){ inp.style.display='block'; inp.value=value; }
+  }
+}
+
 // ═══════════════════════════════════════
 // project_ops.js
 // RSR Constructions Tracker v17
@@ -65,7 +101,7 @@ async function saveProject(){
   const proj={
     id:uid(), name, tender,
     firm:document.getElementById('np-firm').value||'RSR Constructions',
-    type:document.getElementById('np-type').value,
+    type:getSelectedType('np-type','np-type-custom'),
     contractorId, estimated:est,
     bidPct:parseFloat(document.getElementById('np-bid').value)||0,
     agreeDate:document.getElementById('np-date').value,
@@ -498,6 +534,7 @@ function openEditProject(pid){
   editProjId = pid;
 
   document.getElementById('ep-firm').value = p.firm||'RSR Constructions';
+  setTypeDropdown('ep-type','ep-type-custom', p.type||'Road');
   document.getElementById('ep-name').value = p.name||'';
   document.getElementById('ep-tender').value = p.tender||'';
   document.getElementById('ep-date').value = p.agreeDate||'';
@@ -526,6 +563,7 @@ async function saveEditProject(){
   if(!name){ toast('Project name is required','error'); return; }
 
   p.firm = document.getElementById('ep-firm').value||'RSR Constructions';
+  p.type = getSelectedType('ep-type','ep-type-custom');
   p.name = name;
   p.tender = document.getElementById('ep-tender').value.trim();
   p.agreeDate = document.getElementById('ep-date').value;
@@ -552,6 +590,78 @@ async function saveEditProject(){
     renderDetail(editProjId);
     ownerTab(0);
     toast('✅ Project updated','ok');
-    writeActivityLog('project_edit',`Project edited: ${p.name}`,pid).catch(()=>{});
+    writeActivityLog('project_edit',`Project edited: ${p.name}`,editProjId).catch(()=>{});
   } catch(e){ toast('Save failed: '+e.message,'error'); }
+}
+
+// ─── TOGGLE FULL BOQ ──────────────────────────────────
+function toggleFullBOQ(elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+}
+
+// ─── EXPECTED JV TAGGING ─────────────────────────────
+function openExpectedJVMenu(pid){
+  const today = new Date();
+  const thisMonth = today.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  const nextMonthDate = new Date(today.getFullYear(), today.getMonth()+1, 1);
+  const nextMonth = nextMonthDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  const thisKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const nextKey = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth()+1).padStart(2,'0')}`;
+
+  // Show inline choice modal
+  let modal = document.getElementById('modal-expected-jv');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className = 'mov';
+    modal.id = 'modal-expected-jv';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `<div class="mbox" style="max-width:380px">
+    <div class="mhdr"><h2>📅 Add to Expected JV</h2><button class="mx" onclick="CM('modal-expected-jv')">✕</button></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Which month do you expect the JV for this project?</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-navy" onclick="setExpectedJV('${pid}','${thisKey}','${thisMonth}')" style="padding:14px;font-size:14px">
+        📅 ${thisMonth}<br><span style="font-size:11px;font-weight:400;opacity:.8">This month</span>
+      </button>
+      <button class="btn" onclick="setExpectedJV('${pid}','${nextKey}','${nextMonth}')" style="padding:14px;font-size:14px;background:var(--surface2);color:var(--navy)">
+        📅 ${nextMonth}<br><span style="font-size:11px;font-weight:400;opacity:.7">Next month</span>
+      </button>
+      ${GP(pid)&&GP(pid).expectedJVMonth?`<button class="btn" onclick="clearExpectedJV('${pid}')" style="padding:10px;font-size:12px;color:var(--red);border-color:var(--red)">
+        ✕ Remove from Expected JV
+      </button>`:''}
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function setExpectedJV(pid, monthKey, monthLabel){
+  const p = GP(pid); if(!p) return;
+  p.expectedJVMonth = monthKey;
+  p.expectedJVMonthLabel = monthLabel;
+  p.expectedJVSetAt = new Date().toISOString();
+  p.expectedJVSetBy = CU.name;
+  try{
+    await saveProjectDB(p);
+    CM('modal-expected-jv');
+    renderProjects();
+    renderDash();
+    toast(`✓ Added to Expected JV — ${monthLabel}`,'ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+async function clearExpectedJV(pid){
+  const p = GP(pid); if(!p) return;
+  delete p.expectedJVMonth;
+  delete p.expectedJVMonthLabel;
+  delete p.expectedJVSetAt;
+  try{
+    await saveProjectDB(p);
+    CM('modal-expected-jv');
+    renderProjects();
+    renderDash();
+    toast('✓ Removed from Expected JV','ok');
+  }catch(e){ toast('Save failed','error'); }
 }

@@ -155,14 +155,20 @@ function getAutoWarnings(p){
   const status = projStatus(p);
   if(status !== 'active') return warnings;
 
-  // 1. No contractor update in 7 days
+  // 1. No contractor update — only warn if project is 14+ days old
   const updDates = (p.contractorUpdates||[]).map(u=>u.date).filter(Boolean).sort().reverse();
   const daysSinceUpdate = updDates.length
     ? Math.round((Date.now()-new Date(updDates[0]).getTime())/86400000)
     : null;
-  if(daysSinceUpdate===null) warnings.push({type:'amber',code:'no_updates',msg:'📭 No contractor updates submitted yet'});
-  else if(daysSinceUpdate>14) warnings.push({type:'red',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days — follow up with contractor`});
-  else if(daysSinceUpdate>7) warnings.push({type:'amber',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days`});
+  const projAgeForUpdate = p.agreeDate
+    ? Math.round((Date.now()-new Date(p.agreeDate).getTime())/86400000)
+    : Math.round((Date.now()-new Date(p.createdAt||Date.now()).getTime())/86400000);
+  // Only alert about missing updates if project is active for 14+ days
+  if(projAgeForUpdate > 14){
+    if(daysSinceUpdate===null) warnings.push({type:'amber',code:'no_updates',msg:'📭 No contractor updates submitted yet'});
+    else if(daysSinceUpdate>14) warnings.push({type:'red',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days — follow up with contractor`});
+    else if(daysSinceUpdate>7) warnings.push({type:'amber',code:'stale_update',msg:`📭 No update for ${daysSinceUpdate} days`});
+  }
 
   // 2. No RSR verification in 14 days
   const verDates = (p.verifications||[]).map(v=>v.date).filter(Boolean).sort().reverse();
