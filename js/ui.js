@@ -170,10 +170,16 @@ function renderDash(){
     </div>
 
     <div id="dash-capital-section"></div>
+    <div id="dash-emi-section"></div>
     <div id="dash-jv-section"></div>`;
 
   renderCapitalSection(allProjects);
   renderExpectedJVSection(allProjects);
+  // EMI upcoming (if data loaded)
+  if(D.emiData){
+    const emiEl = document.getElementById('dash-emi-section');
+    if(emiEl) emiEl.innerHTML = getEMIDashboardAlerts();
+  }
 }
 
 function renderCapitalSection(allProjects){
@@ -506,12 +512,73 @@ function renderProjects(){
 }
 
 
+
+// ─── SIDEBAR ──────────────────────────────────────────
+const SIDEBAR_TABS = [
+  {i:0, icon:'📊', label:'Dashboard'},
+  {i:1, icon:'🏗️', label:'Projects'},
+  {i:2, icon:'👷', label:'Contractors'},
+  {i:3, icon:'📂', label:'Tally'},
+  {i:4, icon:'📈', label:'Interest'},
+  {i:5, icon:'💳', label:'EMI Calendar'},
+];
+
+function buildSidebar(isSuperAdmin){
+  const linksEl = document.getElementById('sidebar-links');
+  const footerEl = document.getElementById('sidebar-footer');
+  if(!linksEl) return;
+
+  const tabs = isSuperAdmin
+    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}]
+    : SIDEBAR_TABS;
+
+  linksEl.innerHTML = tabs.map(t=>`
+    <button class="sidebar-link${t.i===0?' active':''}" id="sbl-${t.i}" onclick="ownerTab(${t.i});closeSidebar()">
+      <span class="sidebar-link-icon">${t.icon}</span>${t.label}
+    </button>`).join('');
+
+  if(footerEl){
+    const name = CU?CU.name:'—';
+    const role = CU&&CU.isSuperAdmin?'Super Admin':'Staff';
+    footerEl.innerHTML=`
+      <div class="sidebar-user"><span class="nav-role" style="font-size:10px">${role}</span><br>${name}</div>
+      <button class="sidebar-logout" onclick="logout()">🚪 Logout</button>`;
+  }
+}
+
+function updateSidebarActive(i){
+  document.querySelectorAll('.sidebar-link').forEach(el=>el.classList.remove('active'));
+  const active = document.getElementById('sbl-'+i);
+  if(active) active.classList.add('active');
+}
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  if(!sb) return;
+  const isOpen = sb.classList.contains('open');
+  if(isOpen){ closeSidebar(); }
+  else{ sb.classList.add('open'); if(ov) ov.style.display='block'; }
+}
+
+function closeSidebar(){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  if(sb) sb.classList.remove('open');
+  if(ov) ov.style.display='none';
+}
+
+function showSidebar(){
+  const sb = document.getElementById('sidebar');
+  if(sb) sb.style.display='flex';
+}
+
 function ownerTab(i){
   atab=i; dpid=null;
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-settings'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -520,7 +587,10 @@ function ownerTab(i){
   if(i===2){ renderConts(); renderContractorPerformance(); }
   if(i===3) renderFunds();
   if(i===4) renderInterest();
-  if(i===5) renderSettings();
+  if(i===5) renderEMI();
+  if(i===6) renderSettings();
+  // Update sidebar active state
+  updateSidebarActive(i);
 }
 // ─── SEARCH POSITIONING ───────────────────────────────
 function positionSearchResults(){
@@ -700,7 +770,7 @@ function showFYReport(){
         ${jvByFY[fy].map(p=>`
           <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;gap:4px">
             <span>${p.name}</span>
-            <span style="color:var(--text3)">${p.jvDate||'—'}</span>
+            <span style="color:var(--text3)">${fmtDate(p.jvDate)}</span>
           </div>`).join('')}` : ''}
       ${settledByFY[fy]?.length ? `
         <div style="font-size:13px;font-weight:700;color:var(--navy);margin:12px 0 8px">💰 Cheques Received (${settledByFY[fy].length})</div>

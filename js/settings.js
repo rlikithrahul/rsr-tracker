@@ -208,7 +208,7 @@ async function refreshActivityLog(){
       <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
       <tbody>
         ${log.map(e=>`<tr>
-          <td style="white-space:nowrap;font-size:11px;color:var(--text3)">${new Date(e.ts).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+          <td style="white-space:nowrap;font-size:11px;color:var(--text3)">${fmtDateTime(e.ts)}</td>
           <td><span style="font-weight:600;font-size:12px;color:${e.isSuperAdmin?'var(--gold)':'var(--navy)'}">${e.user||'—'}</span>${e.isSuperAdmin?'<span style="font-size:9px;color:var(--gold);margin-left:4px">★</span>':''}</td>
           <td style="font-size:12px">${icons[e.type]||'📌'} ${e.type||'—'}</td>
           <td style="font-size:12px;color:var(--text2);max-width:250px">${e.description||'—'}</td>

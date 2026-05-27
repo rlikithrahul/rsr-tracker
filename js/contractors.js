@@ -10,7 +10,7 @@ function renderConts(){
   const el=document.getElementById('cont-list');
   if(!D.contractors.length){el.innerHTML='<div class="empty"><div class="empty-icon">👷</div><div class="empty-text">No contractors yet.</div></div>';return;}
   el.innerHTML=D.contractors.map(c=>{
-    const pp=D.projects.filter(p=>p.contractorId===c.id);
+    const pp=D.projects.filter(p=>p.contractorId===c.id&&!isArchived(p));
     const cap=pp.reduce((s,p)=>s+totRel(p),0);
     return `<div class="card">
       <div class="card-hdr">

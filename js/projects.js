@@ -447,7 +447,7 @@ function buildActionItems(p, id){
     ${showWEC ? `<div style="padding:12px;background:#fffbeb;border-radius:var(--rs);margin-bottom:10px;border:1px solid #f59e0b">
       <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:6px">📜 Work Experience Certificate</div>
       ${p.wecApplied
-        ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">✓ Applied on <strong>${p.wecAppliedDate||'—'}</strong> — awaiting receipt from government</div>
+        ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">✓ Applied on <strong>${fmtDate(p.wecAppliedDate)}</strong> — awaiting receipt from government</div>
            <button class="btn btn-sm btn-navy" onclick="markWECReceived('${id}')">✓ Mark as Received</button>`
         : `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">EA Number received — apply for Work Experience Certificate now</div>
            <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none" onclick="markWECApplied('${id}')">✓ Mark WEC as Applied</button>`

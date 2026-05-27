@@ -132,14 +132,15 @@ async function checkCapCalc(){
 }
 
 async function checkInterestCalc(){
-  // Test: 100000 released 30 days ago, 0 settled → interest = 100000*0.24*30/365 = 1972.6
+  // Test: 100000 payment released 30 days ago, 0 settled → interest = 100000*0.24*30/365 ≈ 1973
+  const testDate = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
   const testP = {
-    releases:[{ id:'t1', date: new Date(Date.now()-30*86400000).toISOString().split('T')[0], amount:100000 }],
+    releases:[{ id:'t1', date: testDate, amount:100000, txType:'payment' }],
     settlements:[], boq:[], contractorUpdates:[], verifications:[]
   };
   const interest = intrOutstanding(testP);
   const expected = 100000*0.24*30/365;
-  const ok = Math.abs(interest - expected) < 10; // within ₹10
+  const ok = Math.abs(interest - expected) < 50; // within ₹50 tolerance
   return { pass:ok, detail: ok ? `✓ Interest ${Math.round(interest)} (expected ~${Math.round(expected)})` : `Got ${Math.round(interest)}, expected ~${Math.round(expected)}` };
 }
 

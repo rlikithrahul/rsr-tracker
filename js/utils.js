@@ -306,3 +306,28 @@ function migrateAllProjects(){
   if(migrated > 0) console.log(`[Migration] Migrated ${migrated} projects to schema v${CURRENT_SCHEMA}`);
   return migrated;
 }
+
+// ─── INDIAN DATE FORMAT ───────────────────────────────
+// Converts YYYY-MM-DD or ISO string to "27 May 2026"
+function fmtDate(dateStr){
+  if(!dateStr) return '—';
+  try{
+    const d = new Date(dateStr);
+    if(isNaN(d.getTime())) return dateStr;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  }catch(e){ return dateStr; }
+}
+
+// Short date with time: "27 May 2026, 09:30"
+function fmtDateTime(dateStr){
+  if(!dateStr) return '—';
+  try{
+    const d = new Date(dateStr);
+    if(isNaN(d.getTime())) return dateStr;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const time = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}, ${time}`;
+  }catch(e){ return dateStr; }
+}
+

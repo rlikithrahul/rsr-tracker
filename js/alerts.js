@@ -114,7 +114,7 @@ function getProjectAlerts(p){
         type: 'info',
         priority: 5,
         project: p,
-        msg: `🔵 WEC Applied on ${p.wecAppliedDate||'—'} — awaiting receipt for "${p.name}"`,
+        msg: `🔵 WEC Applied on ${fmtDate(p.wecAppliedDate)} — awaiting receipt for "${p.name}"`,
         shortMsg: `WEC applied — awaiting`,
         action: `Upload WEC when received`,
         projectId: p.id

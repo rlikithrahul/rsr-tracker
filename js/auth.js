@@ -126,7 +126,13 @@ async function contLogin(){
 
 function logout(){
   if(CU) writeActivityLog('logout', `${CU.name} logged out`).catch(()=>{});
-  CU=null; clearSession(); stopAutoRefresh(); SP('page-login');
+  CU=null; clearSession(); stopAutoRefresh();
+  // Hide sidebar when logging out
+  const sb = document.getElementById('sidebar');
+  if(sb){ sb.style.display='none'; sb.classList.remove('open'); }
+  const ov = document.getElementById('sidebar-overlay');
+  if(ov) ov.style.display='none';
+  SP('page-login');
   document.getElementById('main-nav').style.display='none';
   document.getElementById('bnav').style.display='none';
   ['owner-pw','cl-name','cl-pw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -138,27 +144,15 @@ function enterOwner(){
   const rb=document.getElementById('nav-role');
   rb.textContent='Owner'; rb.style.background='rgba(201,168,76,.2)'; rb.style.color='var(--gold)';
   document.getElementById('nav-uname').textContent=(CU&&!CU.isSuperAdmin&&CU.name)?CU.name:'Likith';
-  document.getElementById('nav-links').innerHTML=
-    ['Dashboard','Projects','Contractors','Tally','Interest'].map((t,i)=>
-      `<div class="nav-link${i===0?' active':''}" id="nl${i}" onclick="ownerTab(${i})">${t}</div>`
-    ).join('')+'<div class="nav-link" onclick="OM(\'modal-pw\')">🔑 Password</div>'
-    +((CU&&CU.isSuperAdmin)?'<div class="nav-link" onclick="ownerTab(5)">⚙️ Settings</div>':'');
-  // Show owner-only nav elements
-  const gsw = document.getElementById('gsearch-wrap');
-  if(gsw) gsw.style.display='flex';
-  const backupBtn = document.getElementById('nav-backup-btn');
-  if(backupBtn) backupBtn.style.display='inline-block';
-  const offBadge = document.getElementById('offline-queue-badge');
-  if(offBadge) offBadge.parentElement.style.display='flex';
-  const bnav=document.getElementById('bnav');
-  bnav.style.display='flex';
-  bnav.innerHTML=`
-    <button class="bn active" id="obn-0" onclick="ownerTab(0)"><div class="bn-icon">📊</div><div>Dashboard</div></button>
-    <button class="bn" id="obn-1" onclick="ownerTab(1)"><div class="bn-icon">🏗️</div><div>Projects</div></button>
-    <button class="bn" id="obn-2" onclick="ownerTab(2)"><div class="bn-icon">👷</div><div>Contractors</div></button>
-    <button class="bn" id="obn-3" onclick="ownerTab(3)"><div class="bn-icon">📂</div><div>Tally</div></button>
-    <button class="bn" id="obn-4" onclick="ownerTab(4)"><div class="bn-icon">📈</div><div>Interest</div></button>
-    ${(CU&&CU.isSuperAdmin)?'<button class="bn" id="obn-5" onclick="ownerTab(5)"><div class="bn-icon">⚙️</div><div>Settings</div></button>':''}`;
+  document.getElementById('nav-links').innerHTML='';
+  const gsw=document.getElementById('gsearch-wrap'); if(gsw) gsw.style.display='flex';
+  const backupBtn=document.getElementById('nav-backup-btn'); if(backupBtn) backupBtn.style.display='inline-block';
+  const offBadge=document.getElementById('offline-queue-badge'); if(offBadge) offBadge.parentElement.style.display='flex';
+  const bnav=document.getElementById('bnav'); if(bnav) bnav.style.display='none';
+  showSidebar();
+  buildSidebar(CU&&CU.isSuperAdmin);
+  loadEMIData().catch(()=>{});
+  setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
   SP('page-owner'); ownerTab(0);
   startAutoRefresh();
 }
@@ -176,6 +170,9 @@ function enterCont(){
   if(backupBtn) backupBtn.style.display='none';
   const refreshBtn = document.getElementById('refresh-btn');
   if(refreshBtn) refreshBtn.style.display='none';
+  // Hide sidebar for contractors
+  const sb = document.getElementById('sidebar');
+  if(sb) sb.style.display='none';
   // Show install app banner for contractors
   setTimeout(showInstallBanner, 1500);
   // Show contractor-specific bottom nav

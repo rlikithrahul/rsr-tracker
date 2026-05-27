@@ -458,3 +458,90 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   padding-left:max(clamp(12px,4vw,20px), env(safe-area-inset-left));
   padding-right:max(clamp(12px,4vw,20px), env(safe-area-inset-right));
 }
+
+/* ─── LEFT SIDEBAR ───────────────────────────────────── */
+.sidebar{
+  position:fixed;left:0;top:0;bottom:0;
+  width:220px;
+  background:var(--navy);
+  z-index:200;
+  display:none; /* shown after login */
+  flex-direction:column;
+  overflow-y:auto;
+  box-shadow:2px 0 12px rgba(0,0,0,.2);
+  transition:transform .25s ease;
+}
+.sidebar-logo{
+  display:flex;align-items:center;
+  padding:16px 14px;
+  border-bottom:1px solid rgba(255,255,255,.1);
+  flex-shrink:0;
+}
+.sidebar-links{
+  flex:1;padding:10px 0;
+  overflow-y:auto;
+}
+.sidebar-link{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 16px;
+  color:rgba(255,255,255,.75);
+  font-size:13px;font-weight:500;
+  cursor:pointer;
+  border:none;background:none;
+  width:100%;text-align:left;
+  font-family:'Inter',sans-serif;
+  border-left:3px solid transparent;
+  transition:background .15s,color .15s;
+}
+.sidebar-link:hover{background:rgba(255,255,255,.08);color:#fff}
+.sidebar-link.active{
+  background:rgba(255,255,255,.12);
+  color:#fff;font-weight:700;
+  border-left-color:var(--gold);
+}
+.sidebar-link-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sidebar-footer{
+  padding:12px 14px;
+  border-top:1px solid rgba(255,255,255,.1);
+  flex-shrink:0;
+}
+.sidebar-footer .nav-role{display:inline-block;margin-bottom:6px}
+.sidebar-user{color:rgba(255,255,255,.7);font-size:12px;margin-bottom:10px}
+.sidebar-logout{
+  width:100%;padding:8px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:#fff;border-radius:var(--rs);cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+}
+
+/* Desktop: sidebar visible, push content right */
+@media(min-width:769px){
+  .sidebar{display:flex}
+  .page-owner{margin-left:220px}
+  /* Hamburger hidden on desktop */
+  .hamburger-btn{display:none}
+  /* Bottom nav hidden on desktop */
+  .bnav{display:none !important}
+  /* Top nav compact on desktop — just search + right elements */
+  .nav{padding-left:8px}
+}
+
+/* Mobile: sidebar hidden by default, hamburger shows it */
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);display:flex}
+  .page-owner{margin-left:0}
+  .hamburger-btn{
+    display:flex;align-items:center;justify-content:center;
+    width:36px;height:36px;
+    background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:var(--rs);cursor:pointer;
+    color:#fff;font-size:18px;flex-shrink:0;
+  }
+}
+
+/* Small mobile */
+@media(max-width:480px){
+  .sidebar{width:200px}
+}
