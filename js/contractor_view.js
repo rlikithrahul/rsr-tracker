@@ -79,6 +79,32 @@ function renderCHome(){
   }, 100);
 }
 
+
+
+function toggleCBOQ(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+
+// ─── SWITCH CONTRACTOR PROJECT TAB ───────────────────
+function switchContractorTab(pid, tab){
+  const labourBtn = document.getElementById('tab-btn-labour-'+pid);
+  const expenseBtn = document.getElementById('tab-btn-expense-'+pid);
+  const content = document.getElementById('contractor-tab-content-'+pid);
+  if(!content) return;
+
+  if(tab==='labour'){
+    labourBtn.style.background='var(--navy)'; labourBtn.style.color='#fff';
+    expenseBtn.style.background='var(--surface2)'; expenseBtn.style.color='var(--navy)';
+    content.innerHTML='<div id="labour-tab-wrap">'+renderLabourTab(pid)+'</div>';
+  } else {
+    expenseBtn.style.background='var(--navy)'; expenseBtn.style.color='#fff';
+    labourBtn.style.background='var(--surface2)'; labourBtn.style.color='var(--navy)';
+    content.innerHTML='<div id="expense-tab-wrap">'+renderExpenseTab(pid)+'</div>';
+  }
+}
+
 async function cOpenProj(id){
   // Lazy fetch full project data before opening
   if (dbOK) { try { await fetchProjectFull(id); } catch(e){} }
@@ -100,13 +126,33 @@ async function cOpenProj(id){
     </button>
     ${capAlert(p)}
     <div class="card" style="margin-bottom:12px">
-      <div class="st" style="margin-bottom:10px">📊 Bill of Quantities</div>
-      ${renderBOQContractorView(p)}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
+        <div class="st" style="margin:0;border:none;padding:0">📊 Bill of Quantities</div>
+        <button onclick="toggleCBOQ('cboq-${id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">View Full BOQ</button>
+      </div>
+      <div id="cboq-${id}" style="display:none;margin-top:12px">
+        ${renderBOQContractorView(p)}
+      </div>
     </div>
     <!-- Update History -->
     <div class="card" style="margin-bottom:12px">
       <div class="st" style="margin-bottom:10px">📋 My Update History</div>
       ${renderUpdateHistory(p.id)}
+    </div>
+
+    <!-- Labour & Expense Tabs -->
+    <div style="display:flex;gap:0;margin-bottom:0;border-radius:var(--rs) var(--rs) 0 0;overflow:hidden;border:1px solid var(--border)">
+      <button id="tab-btn-labour-${id}" onclick="switchContractorTab('${id}','labour')"
+        style="flex:1;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">
+        👷 Labour Register
+      </button>
+      <button id="tab-btn-expense-${id}" onclick="switchContractorTab('${id}','expense')"
+        style="flex:1;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--surface2);color:var(--navy)">
+        💸 Site Expenses
+      </button>
+    </div>
+    <div id="contractor-tab-content-${id}" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rs) var(--rs);margin-bottom:16px;background:#fff">
+      <div id="labour-tab-wrap">${(typeof renderLabourTab==='function')?renderLabourTab('${id}'):''}</div>
     </div>
     <!-- Notes Diary -->
     <div id="contractor-notes-${p.id}">

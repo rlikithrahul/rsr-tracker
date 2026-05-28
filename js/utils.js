@@ -19,8 +19,23 @@ function setBusy(v,msg){
   if(v) b.classList.add('show'); else b.classList.remove('show');
 }
 
-const fmt = n => '₹' + Math.round(n).toLocaleString('en-IN');
-const pct = n => (Math.round(n*10)/10) + '%';
+// ─── NUMBER FORMATTING — max 2 decimal places ─────────
+const fmt = n => {
+  if(!n || n===0) return '₹0';
+  const rounded = Math.round((n||0)*100)/100;
+  const parts = rounded.toFixed(2).split('.');
+  const intPart = parseInt(parts[0]).toLocaleString('en-IN');
+  const decPart = parts[1];
+  return '₹' + (decPart==='00' ? intPart : intPart+'.'+decPart);
+};
+const fmtNum = n => {
+  if(!n || n===0) return '0';
+  const rounded = Math.round((n||0)*100)/100;
+  const parts = rounded.toFixed(2).split('.');
+  const intPart = parseInt(parts[0]).toLocaleString('en-IN');
+  return parts[1]==='00' ? intPart : intPart+'.'+parts[1];
+};
+const pct = n => (Math.round((n||0)*100)/100).toFixed(2).replace(/\.?0+$/,'') + '%';
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 function GP(id){ return D.projects.find(p=>p.id===id)||null; }
 function GC(id){ return D.contractors.find(c=>c.id===id)||null; }

@@ -259,7 +259,7 @@ function renderExpectedJVSection(allProjects){
 
   el.innerHTML='<div class="card" style="padding:14px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">📅 Expected JVs</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'
+    +'<div class="jv-grid">'
     +'<div>'
     +'<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--gold)">'+thisLabel+'</div>'
     +buildTable(thisProjects,thisKey)
