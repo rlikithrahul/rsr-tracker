@@ -469,6 +469,14 @@ function parseRowsByType(rows, type){
   }
   if(headerIdx < 0) return transactions; // no header found
 
+  // Auto-detect column layout by inspecting header row
+  // Format A (8-col): Date, Ledger, '', '', VchType, VchNo, Debit, Credit
+  // Format B (6-col): Date, Particulars, VchType, VchNo, Debit, Credit
+  const headerRow = rows[headerIdx] || [];
+  const isFormat6Col = headerRow.length <= 6 ||
+    (String(headerRow[2]||'').toLowerCase().includes('vch') &&
+     !String(headerRow[4]||'').toLowerCase().includes('vch'));
+
   for(let i = headerIdx+1; i < rows.length; i++){
     const row = rows[i];
     const c0 = String(row[0]||'').trim();
@@ -480,11 +488,22 @@ function parseRowsByType(rows, type){
     const dateStr = parseTallyDate(row[0]);
     if(!dateStr) continue;
 
-    const ledger   = String(row[1]||'').trim();
-    const vchType  = String(row[4]||'').trim();
-    const vchNo    = String(row[5]||'').trim();
-    const debit    = parseFloat(String(row[6]||'').replace(/,/g,''))||0;
-    const credit   = parseFloat(String(row[7]||'').replace(/,/g,''))||0;
+    let ledger, vchType, vchNo, debit, credit;
+    if(isFormat6Col){
+      // 6-col format: Date, Particulars, VchType, VchNo, Debit, Credit
+      ledger  = String(row[1]||'').trim();
+      vchType = String(row[2]||'').trim();
+      vchNo   = String(row[3]||'').trim();
+      debit   = parseFloat(String(row[4]||'').replace(/,/g,''))||0;
+      credit  = parseFloat(String(row[5]||'').replace(/,/g,''))||0;
+    } else {
+      // 8-col format: Date, Ledger, '', '', VchType, VchNo, Debit, Credit
+      ledger  = String(row[1]||'').trim();
+      vchType = String(row[4]||'').trim();
+      vchNo   = String(row[5]||'').trim();
+      debit   = parseFloat(String(row[6]||'').replace(/,/g,''))||0;
+      credit  = parseFloat(String(row[7]||'').replace(/,/g,''))||0;
+    }
 
     // txType from VchType column — most reliable
     const txType = vchType.toLowerCase().includes('receipt') ? 'receipt' : 'payment';
