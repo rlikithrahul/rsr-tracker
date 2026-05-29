@@ -585,7 +585,10 @@ function ownerTab(i){
   if(i===0) renderDash();
   if(i===1) renderProjects();
   if(i===2){ renderConts(); renderContractorPerformance(); }
-  if(i===3) renderFunds();
+  if(i===3){
+    // Load persisted unmatched transactions from cloud before rendering
+    loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
+  }
   if(i===4) renderInterest();
   if(i===5) renderEMI();
   if(i===6) renderSettings();

@@ -175,10 +175,10 @@ async function appendLedgerEvent(ev){
       id: uid(),
       project_id: ev.projectId||null,
       contractor_id: ev.contractorId||null,
-      type: ev.type||'unknown',        // 'payment','receipt','settlement','edit','archive','status_change'
+      type: ev.type||'unknown',
       amount: ev.amount||0,
       ref: ev.ref||null,
-      user: ev.user||null,
+      user_name: ev.user||null,
       ts: ev.ts||new Date().toISOString(),
       meta: JSON.stringify(ev.meta||{})
     });

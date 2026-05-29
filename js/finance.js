@@ -595,6 +595,37 @@ function parseTallyDate(val){
 }
 
 
+
+// ─── PERSIST UNMATCHED TRANSACTIONS ──────────────────
+// Saves to Supabase settings so they survive refresh and mobile
+async function saveUnmatchedToCloud(){
+  const data = {
+    payments: tallyUnmatched,
+    receipts: tallyUnmatchedReceipts,
+    savedAt: new Date().toISOString()
+  };
+  await sbReq('settings','POST',{key: UNMATCHED_KEY, value: JSON.stringify(data)});
+}
+
+async function loadUnmatchedFromCloud(){
+  try{
+    const rows = await sbReq('settings','GET');
+    const row = (rows||[]).find(x=>x.key===UNMATCHED_KEY);
+    if(!row) return;
+    const data = JSON.parse(row.value||'{}');
+    if(data.payments && data.payments.length){
+      tallyUnmatched = data.payments;
+    }
+    if(data.receipts && data.receipts.length){
+      tallyUnmatchedReceipts = data.receipts;
+    }
+  }catch(e){ /* non-critical */ }
+}
+
+async function clearUnmatchedFromCloud(){
+  await sbReq('settings','POST',{key: UNMATCHED_KEY, value: JSON.stringify({payments:[],receipts:[],savedAt:new Date().toISOString()})}).catch(()=>{});
+}
+
 async function matchAndImport(transactions){
   let matchedPayments=0, matchedReceipts=0, skipped=0, unmatchedCount=0;
   const skippedDuplicates = []; // track for review
@@ -653,6 +684,8 @@ async function matchAndImport(transactions){
     const importedDates=new Set(transactions.map(t=>t.date).filter(Boolean));
     importedDates.forEach(d=>recordDaybookUpload(d));
   }
+  // Persist unmatched transactions to Supabase so they survive page refresh
+  await saveUnmatchedToCloud().catch(()=>{});
 
   const parts=[];
   if(matchedPayments) parts.push(`${matchedPayments} payments`);
@@ -777,6 +810,7 @@ async function quickAssignUnmatched(pid, i, isReceipt){
   try{
     await saveProjectDB(proj);
     queue.splice(i,1);
+    saveUnmatchedToCloud().catch(()=>{});
     renderFunds(); ownerTab(3);
     toast(`✓ Assigned to ${proj.name} (fuzzy match)`,'ok');
   }catch(e){ toast('Save failed','error'); }
@@ -799,6 +833,7 @@ async function assignUnmatched(i, isReceipt){
   try{
     await saveProjectDB(proj);
     queue.splice(i,1);
+    saveUnmatchedToCloud().catch(()=>{});
     renderFunds(); ownerTab(3);
     toast(`✓ ${isReceipt?'Receipt':'Payment'} assigned to project`,'ok');
   }catch(e){toast('Save failed','error');}
@@ -808,6 +843,7 @@ function deleteUnmatched(i, isReceipt){
   if(!confirm(`Delete this unmatched ${isReceipt?'receipt':'payment'}?`))return;
   const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
   queue.splice(i,1);
+  saveUnmatchedToCloud().catch(()=>{});
   renderFunds(); ownerTab(3);
   toast('Deleted','ok');
 }

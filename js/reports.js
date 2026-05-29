@@ -84,6 +84,10 @@ async function exportReport(){
       wb = buildCheckReceivedFY(fy);
       filename = `RSR_CheckReceived_${fy==='all'?'AllYears':fy}_${new Date().toISOString().split('T')[0]}.xlsx`;
       break;
+    case 'tobeagreement':
+      wb = buildToBeAgreement();
+      filename = `RSR_ToBeAgreement_${new Date().toISOString().split('T')[0]}.xlsx`;
+      break;
     default:
       toast('Select a report type','error');
       return;
@@ -385,107 +389,147 @@ function buildToBeAgreement(){
 }
 
 // ─── VIEW REPORT IN APP ───────────────────────────────
+function closeReportModal(){ CM('modal-report-view'); }
+
 function viewReport(){
   const type = document.getElementById('report-type-select').value;
   const fy = document.getElementById('report-fy-select').value;
 
-  const modal = document.getElementById('modal-report-view') || (() => {
-    const m = document.createElement('div');
-    m.className = 'mov'; m.id = 'modal-report-view';
-    document.body.appendChild(m); return m;
-  })();
+  let modal = document.getElementById('modal-report-view');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className = 'mov';
+    modal.id = 'modal-report-view';
+    document.body.appendChild(modal);
+  }
 
+  if(!type){ toast('Please select a report type first','error'); return; }
   const data = getReportData(type, fy);
   if(!data){ toast('No data for this report','error'); return; }
 
   const { title, headers, rows } = data;
 
-  // Identify amount columns (containing ₹)
+  // Identify amount columns
   const amtCols = new Set(headers.map((h,i)=>h.includes('₹')?i:-1).filter(i=>i>=0));
-  const numCols = new Set(headers.map((h,i)=>['Cap Used %','Bid %','Status'].includes(h)?-1:i).filter(i=>i>=0&&typeof (rows[0]||[])[i]==='number'));
 
+  // Project name lookup for clickable links
+  const projNameMap = {};
+  (D.projects||[]).forEach(p=>{ if(p.name) projNameMap[p.name]=p.id; });
+
+  // Format a single cell
   const fmtCell = (v,i) => {
     if(typeof v === 'number'){
-      if(amtCols.has(i)) return v===0?'₹0':('<strong>₹'+Number(v).toLocaleString('en-IN')+'</strong>');
+      if(amtCols.has(i)) return v===0?'₹0':'<strong>₹'+Number(v).toLocaleString('en-IN')+'</strong>';
       return String(v);
     }
-    return v||'—';
+    const str = String(v||'—');
+    if(i===2 && projNameMap[str]){
+      return '<span class="rpt-proj-link" data-pid="'+projNameMap[str]+'" style="color:var(--navy);font-weight:600;cursor:pointer;text-decoration:underline">'+str+'</span>';
+    }
+    return str;
   };
 
-  const fmt_row = (r,rowIdx) => r.map((v,i)=>{
-    const isAmt = typeof v==='number' && amtCols.has(i);
-    const isSlNo = i===0;
-    return `<td style="padding:10px 12px;font-size:12px;border-bottom:1px solid var(--surface2);
-      ${isAmt?'text-align:right;font-weight:700;color:var(--navy);':''}
-      ${isSlNo?'color:var(--text3);width:40px;':''}
-      white-space:${isAmt?'nowrap':'normal'}">${fmtCell(v,i)}</td>`;
-  }).join('');
+  // Format a row
+  const fmtRow = (r,idx) => {
+    return r.map((v,i)=>{
+      const isAmt = typeof v==='number' && amtCols.has(i);
+      const isSlNo = i===0;
+      let style = 'padding:10px 12px;font-size:12px;border-bottom:1px solid var(--surface2);';
+      if(isAmt) style += 'text-align:right;font-weight:700;color:var(--navy);white-space:nowrap;';
+      if(isSlNo) style += 'color:var(--text3);width:40px;';
+      return '<td style="'+style+'">'+fmtCell(v,i)+'</td>';
+    }).join('');
+  };
 
-  // Calculate totals for amount columns
+  // Calculate totals
   const totals = headers.map((_,i)=>{
     if(!amtCols.has(i)) return null;
     return rows.reduce((s,r)=>s+(typeof r[i]==='number'?r[i]:0),0);
   });
   const hasTotals = totals.some(t=>t!==null&&t>0);
 
-  const reportTypeLabels = {
-    running:'Running Works', checkpending:'Check Pending', checkreceived:'Check Received',
-    jvsheet:'Year-wise JV Sheet', checkreceivedfy:'Year-wise Check Received', tobeagreement:'To Be Agreement'
-  };
+  // Build HTML using string concatenation — no nested template literals
+  let html = '';
 
-  modal.innerHTML = `<div class="mbox" style="max-width:98vw;width:1100px;max-height:92vh;display:flex;flex-direction:column">
-    <!-- Header -->
-    <div style="background:var(--navy);padding:14px 18px;border-radius:var(--rs) var(--rs) 0 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;flex-shrink:0">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:#fff">${title}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">
-          ${rows.length} record${rows.length!==1?'s':''} · Generated ${fmtDate(new Date().toISOString())} · RSR Constructions
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="exportReport()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif">⬇ Export Excel</button>
-        <button class="mx" onclick="CM('modal-report-view')" style="color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2)">✕</button>
-      </div>
-    </div>
+  // Header bar
+  html += '<div class="mbox" style="max-width:98vw;width:1100px;max-height:92vh;display:flex;flex-direction:column">';
+  html += '<div style="background:var(--navy);padding:14px 18px;border-radius:var(--rs) var(--rs) 0 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;flex-shrink:0">';
+  html += '<div>';
+  html += '<div style="font-size:16px;font-weight:700;color:#fff">'+title+'</div>';
+  html += '<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">'+rows.length+' record'+(rows.length!==1?'s':'')+' · '+fmtDate(new Date().toISOString())+' · RSR Constructions</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<button onclick="exportReport()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">⬇ Export Excel</button>';
+  html += '<button class="mx" onclick="closeReportModal()" style="color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2)">✕</button>';
+  html += '</div></div>';
 
-    <!-- Summary bar for amount totals -->
-    ${hasTotals ? `<div style="background:var(--surface2);padding:10px 18px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--border);flex-shrink:0">
-      ${totals.map((t,i)=>t!==null&&t>0?`<div style="font-size:12px"><span style="color:var(--text3)">${headers[i].replace(' (₹)','')}: </span><strong style="color:var(--navy)">₹${Number(t).toLocaleString('en-IN')}</strong></div>`:'').join('')}
-    </div>` : ''}
+  // Summary bar
+  if(hasTotals){
+    html += '<div style="background:var(--surface2);padding:10px 18px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--border);flex-shrink:0">';
+    totals.forEach((t,i)=>{
+      if(t!==null&&t>0){
+        html += '<div style="font-size:12px"><span style="color:var(--text3)">'+headers[i].replace(' (₹)','')+': </span><strong style="color:var(--navy)">₹'+Number(t).toLocaleString('en-IN')+'</strong></div>';
+      }
+    });
+    html += '</div>';
+  }
 
-    <!-- Table -->
-    <div style="overflow:auto;flex:1;padding:0">
-      ${rows.length ? `
-      <table style="width:100%;border-collapse:collapse;min-width:500px">
-        <thead>
-          <tr style="background:var(--navy);position:sticky;top:0;z-index:1">
-            ${headers.map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)">${h}</th>`).join('')}
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((r,i)=>{const bg=i%2===0?'#fff':'#f8f9fc';return `<tr style="background:${bg};transition:background .1s" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='${bg}'">${fmt_row(r,i)}</tr>`;}).join('')}
-        </tbody>
-        ${hasTotals?`<tfoot>
-          <tr style="background:var(--navy);position:sticky;bottom:0">
-            ${totals.map((t,i)=>`<td style="padding:10px 12px;font-size:12px;font-weight:800;
-              ${t!==null?'color:var(--gold);text-align:right;':'color:rgba(255,255,255,.5);'}
-              border-top:2px solid var(--gold)">
-              ${i===0?'TOTAL':t!==null&&t>0?'₹'+Number(t).toLocaleString('en-IN'):''}
-            </td>`).join('')}
-          </tr>
-        </tfoot>`:''}
-      </table>` : `
-      <div style="padding:40px;text-align:center;color:var(--text3)">
-        <div style="font-size:32px;margin-bottom:12px">📋</div>
-        <div style="font-size:14px;font-weight:600">No records found</div>
-        <div style="font-size:12px;margin-top:6px">Try changing the filter or financial year</div>
-      </div>`}
-    </div>
-  </div>`;
+  // Table area
+  html += '<div style="overflow:auto;flex:1;padding:0">';
+
+  if(rows.length){
+    html += '<table style="width:100%;border-collapse:collapse;min-width:500px">';
+
+    // Header row
+    html += '<thead><tr style="background:var(--navy);position:sticky;top:0;z-index:1">';
+    headers.forEach(h=>{
+      html += '<th style="padding:10px 12px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1)">'+h+'</th>';
+    });
+    html += '</tr></thead>';
+
+    // Data rows
+    html += '<tbody>';
+    rows.forEach((r,i)=>{
+      const bg = i%2===0?'#fff':'#f8f9fc';
+      html += '<tr style="background:'+bg+'" onmouseover="this.style.background=\'#eef2ff\'" onmouseout="this.style.background=\''+bg+'\'">' + fmtRow(r,i) + '</tr>';
+    });
+    html += '</tbody>';
+
+    // Totals footer
+    if(hasTotals){
+      html += '<tfoot><tr style="background:var(--navy);position:sticky;bottom:0">';
+      totals.forEach((t,i)=>{
+        let style = 'padding:10px 12px;font-size:12px;font-weight:800;border-top:2px solid var(--gold);';
+        style += t!==null?'color:var(--gold);text-align:right;':'color:rgba(255,255,255,.5);';
+        const val = i===0?'TOTAL':(t!==null&&t>0?'₹'+Number(t).toLocaleString('en-IN'):'');
+        html += '<td style="'+style+'">'+val+'</td>';
+      });
+      html += '</tr></tfoot>';
+    }
+
+    html += '</table>';
+  } else {
+    html += '<div style="padding:40px;text-align:center;color:var(--text3)">';
+    html += '<div style="font-size:32px;margin-bottom:12px">📋</div>';
+    html += '<div style="font-size:14px;font-weight:600">No records found</div>';
+    html += '<div style="font-size:12px;margin-top:6px">Try changing the filter or financial year</div>';
+    html += '</div>';
+  }
+
+  html += '</div></div>';
+
+  modal.innerHTML = html;
   modal.classList.add('open');
+
+  // Wire clickable project links
+  modal.querySelectorAll('.rpt-proj-link').forEach(el=>{
+    el.addEventListener('click',()=>{
+      CM('modal-report-view');
+      openProjectFromAlert(el.dataset.pid);
+    });
+  });
 }
 
-function fmtNum(n){ return n===0?'₹0':'₹'+Number(n).toLocaleString('en-IN'); }
 
 // ─── GET REPORT DATA (shared between view and export) ─
 function getReportData(type, fy){

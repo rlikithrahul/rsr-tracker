@@ -36,6 +36,10 @@ let photos = [], gpsData = null;
 let dbOK = false, autoRefreshTimer = null, deferredInstallPrompt = null;
 let tallyUnmatched = [];
 let tallyUnmatchedReceipts = []; // NEW: unmatched receipts from Tally
+
+// ─── PERSIST UNMATCHED TO SUPABASE SETTINGS ──────────
+// So they survive page refresh and mobile opening
+const UNMATCHED_KEY = 'rsr_tally_unmatched_v1';
 let dashFilter = 'attn'; // NEW: dashboard filter state
 let dashContractorFilter = ''; // NEW: contractor filter
 let calViewYear = new Date().getFullYear();

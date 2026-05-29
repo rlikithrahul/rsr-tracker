@@ -58,9 +58,9 @@ async function loadActivityLog(){
       id: r.id,
       ts: r.ts,
       type: (r.type||'').replace('activity_',''),
-      description: r.meta ? JSON.parse(r.meta||'{}').description : r.ref,
-      user: r.user,
-      isSuperAdmin: r.meta ? JSON.parse(r.meta||'{}').isSuperAdmin : false,
+      description: (() => { try{ const m = typeof r.meta==='string'?JSON.parse(r.meta||'{}'):r.meta||{}; return m.description||r.ref||''; }catch(e){ return r.ref||'—'; } })(),
+      user: r.user_name||r.user||'—',
+      isSuperAdmin: (() => { try{ const m = typeof r.meta==='string'?JSON.parse(r.meta||'{}'):r.meta||{}; return !!m.isSuperAdmin; }catch(e){ return false; } })(),
       projectId: r.project_id
     }));
   }catch(e){ return []; }
