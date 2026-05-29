@@ -597,6 +597,7 @@ function parseTallyDate(val){
 
 async function matchAndImport(transactions){
   let matchedPayments=0, matchedReceipts=0, skipped=0, unmatchedCount=0;
+  const skippedDuplicates = []; // track for review
 
   for(const tx of transactions){
     // Exact cost centre match (case-insensitive)
@@ -620,7 +621,11 @@ async function matchAndImport(transactions){
     if(!proj.releases) proj.releases=[];
 
     // Dual duplicate check: voucher number match OR fingerprint match
-    if(isDuplicateTx(proj, tx)){ skipped++; continue; }
+    if(isDuplicateTx(proj, tx)){
+      skipped++;
+      skippedDuplicates.push({tx, proj});
+      continue;
+    }
 
     const fp = txFingerprint(tx);
     proj.releases.push({
@@ -657,6 +662,96 @@ async function matchAndImport(transactions){
   toast(`✅ Imported: ${parts.join(' · ')}`,'ok',5000);
   renderFunds();
   updateOfflineQueueBadge();
+  // Show duplicate review if any were skipped
+  if(skippedDuplicates.length > 0){
+    setTimeout(()=>showDuplicateReview(skippedDuplicates), 500);
+  }
+}
+
+// ─── DUPLICATE REVIEW MODAL ───────────────────────────
+function showDuplicateReviewModal(dupes){
+  let modal = document.getElementById('modal-dup-review');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className = 'mov';
+    modal.id = 'modal-dup-review';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `<div class="mbox" style="max-width:700px;max-height:90vh;display:flex;flex-direction:column">
+    <div style="background:var(--amber);padding:14px 18px;border-radius:var(--rs) var(--rs) 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#fff">⚠️ ${dupes.length} Duplicate Transaction${dupes.length>1?'s':''} Skipped</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px">Review and force-import if these are NOT duplicates</div>
+      </div>
+      <button class="mx" onclick="CM('modal-dup-review')" style="color:#fff;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3)">✕</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;padding:10px 12px;background:#fffbeb;border-radius:var(--rs);border:1px solid var(--amber)">
+        These transactions were skipped because they match an existing entry by voucher number or fingerprint. 
+        If you believe these are new transactions (not duplicates), click <strong>Force Import</strong>.
+      </div>
+      ${dupes.map((d,i)=>{
+        const existing = (d.proj.releases||[]).find(r=>r.ref===d.tx.vchNo||(r._fp&&r._fp===txFingerprint(d.tx)));
+        return `<div style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:10px;background:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <div>
+              <div style="font-weight:700;font-size:13px;color:var(--navy)">${d.proj.name}</div>
+              <div style="font-size:11px;color:var(--text3)">#${d.proj.tender}</div>
+            </div>
+            <span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700">SKIPPED AS DUPLICATE</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:10px">
+            <div style="background:var(--surface2);padding:8px;border-radius:var(--rs)">
+              <div style="font-weight:600;color:var(--text3);margin-bottom:4px">NEW TRANSACTION (skipped)</div>
+              <div>Date: <strong>${fmtDate(d.tx.date)}</strong></div>
+              <div>Voucher: <strong>#${d.tx.vchNo}</strong></div>
+              <div>Amount: <strong style="color:var(--navy)">${fmt(d.tx.amount)}</strong></div>
+              <div>Type: <strong>${d.tx.txType==='receipt'?'Receipt':'Payment'}</strong></div>
+              <div style="color:var(--text3);font-size:11px">${d.tx.narration||''}</div>
+            </div>
+            <div style="background:#e8f5e9;padding:8px;border-radius:var(--rs)">
+              <div style="font-weight:600;color:var(--text3);margin-bottom:4px">EXISTING ENTRY (kept)</div>
+              ${existing?`
+              <div>Date: <strong>${fmtDate(existing.date)}</strong></div>
+              <div>Voucher: <strong>#${existing.ref||'—'}</strong></div>
+              <div>Amount: <strong style="color:var(--green)">${fmt(existing.amount)}</strong></div>
+              <div>Type: <strong>${existing.txType==='receipt'?'Receipt':'Payment'}</strong></div>
+              <div style="color:var(--text3);font-size:11px">${existing.notes||''}</div>`:'<div style="color:var(--text3)">Matched by fingerprint</div>'}
+            </div>
+          </div>
+          <button onclick="forceImportDuplicate(${i},'${d.proj.id}',${JSON.stringify(d.tx).replace(/'/g,"\'")})" 
+            style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">
+            ⚡ Force Import This Transaction
+          </button>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+// Store dupes for force import
+window._pendingDupes = [];
+
+async function forceImportDuplicate(idx, projId, tx){
+  const proj = GP(projId);
+  if(!proj){ toast('Project not found','error'); return; }
+  if(!proj.releases) proj.releases=[];
+  const fp = txFingerprint(tx);
+  proj.releases.push({
+    id:uid(), date:tx.date, amount:tx.amount,
+    method:tx.vchType||'Payment', txType:tx.txType||'payment',
+    ref:tx.vchNo, notes:tx.narration||'', costCentre:tx.costCentre,
+    source:'tally-forced', _fp:fp
+  });
+  try{
+    await saveProjectDB(proj);
+    toast(`✓ Transaction force-imported — ₹${tx.amount} for ${proj.name}`,'ok');
+    // Remove from modal
+    const card = document.getElementById('modal-dup-review').querySelectorAll('[style*="border:1px solid var(--border)"]')[idx];
+    if(card){ card.style.opacity='.4'; card.querySelector('button').disabled=true; card.querySelector('button').textContent='✓ Imported'; }
+  }catch(e){ toast('Import failed','error'); }
 }
 
 // Override processTallyFile to use real parser

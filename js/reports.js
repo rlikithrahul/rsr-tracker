@@ -463,7 +463,7 @@ function viewReport(){
           </tr>
         </thead>
         <tbody>
-          ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f8f9fc'};transition:background .1s" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='${i%2===0?'#fff':'#f8f9fc'}'">${fmt_row(r,i)}</tr>`).join('')}
+          ${rows.map((r,i)=>{const bg=i%2===0?'#fff':'#f8f9fc';return `<tr style="background:${bg};transition:background .1s" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='${bg}'">${fmt_row(r,i)}</tr>`;}).join('')}
         </tbody>
         ${hasTotals?`<tfoot>
           <tr style="background:var(--navy);position:sticky;bottom:0">
