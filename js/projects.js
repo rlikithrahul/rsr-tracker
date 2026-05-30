@@ -10,9 +10,21 @@ async function openDetail(id){
   document.getElementById('sec-detail').classList.remove('hidden');
   // Show loading state immediately
   document.getElementById('detail-wrap').innerHTML='<div class="loading" style="padding:40px;text-align:center;color:var(--text3)"><div style="font-size:24px;margin-bottom:8px">⏳</div>Loading project…</div>';
-  // Lazy fetch full project data
-  await fetchProjectFull(id);
-  renderDetail(id);
+  // If project already in cache, render immediately
+  if(GP(id)){
+    renderDetail(id);
+    // Then fetch fresh in background silently
+    fetchProjectFull(id).then(()=>renderDetail(id)).catch(()=>{});
+  } else {
+    // Fetch with timeout — if it takes more than 5s, render from cache anyway
+    const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),5000));
+    try{
+      await Promise.race([fetchProjectFull(id), timeout]);
+    }catch(e){
+      console.warn('fetchProjectFull slow/failed, using cache:', e.message);
+    }
+    renderDetail(id);
+  }
 }
 
 function renderDetail(id){
@@ -206,6 +218,27 @@ function renderDetail(id){
         </tbody>
       </table></div>`:'<div style="color:var(--text3);font-size:13px">No BOQ items added yet.</div>'}
     </div>
+
+      <!-- Contractor Uploaded Documents (visible to RSR) -->
+      ${(p.contractorDocs&&Object.keys(p.contractorDocs).length)?`
+      <div class="card" style="margin-bottom:14px">
+        <div class="st" style="margin-bottom:10px">📁 Contractor Site Documents</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${[
+            {id:'drawing',label:'Site Drawing / Plan',icon:'📐'},
+            {id:'estimate',label:'Work Estimate',icon:'📋'},
+            {id:'other',label:'Other Document',icon:'📎'}
+          ].map(slot=>{
+            const doc = (p.contractorDocs||{})[slot.id];
+            if(!doc||!doc.url) return '';
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:var(--rs);flex-wrap:wrap;gap:8px">'
+              +'<div><div style="font-size:12px;font-weight:600">'+slot.icon+' '+slot.label+'</div>'
+              +'<div style="font-size:11px;color:var(--text3)">'+doc.name+' · Uploaded '+fmtDate(doc.uploadedAt)+(doc.uploadedBy?' by '+doc.uploadedBy:'')+'</div></div>'
+              +'<a href="'+doc.url+'" target="_blank" style="font-size:12px;padding:6px 12px;background:var(--navy);color:#fff;border-radius:var(--rs);font-weight:600;text-decoration:none">View →</a>'
+              +'</div>';
+          }).join('')}
+        </div>
+      </div>`:''}
 
       <div class="card">
         <div class="st">Fund Releases</div>${relLog}

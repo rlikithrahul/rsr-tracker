@@ -217,7 +217,7 @@ function renderCFunds(){
       const alert=capAlert(p);
       return `<div class="card">
         <div class="card-hdr">
-          <div><div class="card-title">${p.name}</div><div class="card-sub">${p.type} · #${p.tender}</div></div>
+          <div onclick="cOpenProj('${p.id}')" style="cursor:pointer"><div class="card-title" style="color:var(--navy);text-decoration:underline">${p.name}</div><div class="card-sub">${p.type} · #${p.tender}</div></div>
           ${sBadge(pStat(p),p)}
         </div>
         ${alert}

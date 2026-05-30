@@ -121,10 +121,38 @@ async function cOpenProj(id){
       <div style="flex:1;min-width:150px"><div style="font-size:16px;font-weight:700;color:var(--navy)">${p.name}</div>
       <div style="font-size:12px;color:var(--text3)">#${p.tender} · ${p.type}</div></div>
     </div>
-    <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:16px" onclick="cOpenUpd('${id}')">
+    <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:14px" onclick="cOpenUpd('${id}')">
       📸 Update Progress + Upload Photos
     </button>
     ${capAlert(p)}
+
+    <!-- Project Financials for Contractor -->
+    <div class="card" style="margin-bottom:12px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Project Financials</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Agreement Amount</div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy)">${fmt(agAmt(p))}</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Max Fundable (70%)</div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy)">${fmt(maxF(p))}</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Total Received</div>
+          <div style="font-size:14px;font-weight:700;color:var(--green)">${fmt(totRel(p))}</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Cap Used</div>
+          <div style="font-size:14px;font-weight:700;color:${maxF(p)>0&&totRel(p)/maxF(p)>=0.85?'var(--red)':maxF(p)>0&&totRel(p)/maxF(p)>=0.70?'var(--amber)':'var(--navy)'}">${maxF(p)>0?Math.round(totRel(p)/maxF(p)*100):0}%</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:var(--text2)">Estimated BOQ: <strong>${fmt(p.estimated||0)}</strong></span>
+        <span style="color:var(--text2)">Bid: <strong>${p.bidPct||0}%</strong></span>
+      </div>
+    </div>
+
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
         <div class="st" style="margin:0;border:none;padding:0">📊 Bill of Quantities</div>
@@ -139,6 +167,9 @@ async function cOpenProj(id){
       <div class="st" style="margin-bottom:10px">📋 My Update History</div>
       ${renderUpdateHistory(p.id)}
     </div>
+
+    <!-- Site Documents -->
+    <div id="cont-docs-wrap-${id}">${renderContractorDocs('${id}')}</div>
 
     <!-- Labour & Expense Tabs -->
     <div style="display:flex;gap:0;margin-bottom:0;border-radius:var(--rs) var(--rs) 0 0;overflow:hidden;border:1px solid var(--border)">
@@ -502,4 +533,73 @@ function renderUpdateHistory(pid){
       ${u.photos&&u.photos.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px">📷 ${u.photos.length} photo${u.photos.length>1?'s':''} submitted</div>`:''}
     </div>`;
   }).join('');
+}
+
+// ─── CONTRACTOR DOCUMENT UPLOADS ─────────────────────
+// 3 upload slots per project — RSR can view these
+const CONT_DOC_SLOTS = [
+  { id:'drawing',  label:'Site Drawing / Plan',   icon:'📐' },
+  { id:'estimate', label:'Work Estimate',          icon:'📋' },
+  { id:'other',    label:'Other Document',         icon:'📎' },
+];
+
+function renderContractorDocs(pid){
+  const p = GP(pid); if(!p) return '';
+  const docs = p.contractorDocs || {};
+
+  let html = '<div class="card" style="margin-bottom:14px">';
+  html += '<div class="st" style="margin-bottom:12px">📁 Site Documents</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:10px">';
+
+  CONT_DOC_SLOTS.forEach(slot=>{
+    const existing = docs[slot.id];
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;background:var(--surface2);border-radius:var(--rs);flex-wrap:wrap">';
+    html += '<div style="font-size:13px;font-weight:600">' + slot.icon + ' ' + slot.label + '</div>';
+    if(existing && existing.url){
+      html += '<div style="display:flex;gap:6px;align-items:center">';
+      html += '<a href="' + existing.url + '" target="_blank" style="font-size:12px;color:var(--navy);font-weight:600;text-decoration:underline">View File</a>';
+      html += '<button onclick="uploadContractorDoc(\'' + pid + '\',\'' + slot.id + '\')" style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">Replace</button>';
+      html += '</div>';
+    } else {
+      html += '<label style="cursor:pointer">';
+      html += '<input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onchange="handleContractorDocUpload(event,\'' + pid + '\',\'' + slot.id + '\')">';
+      html += '<span style="font-size:12px;padding:6px 12px;background:var(--navy);color:#fff;border-radius:var(--rs);font-weight:600">+ Upload</span>';
+      html += '</label>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div></div>';
+  return html;
+}
+
+async function handleContractorDocUpload(evt, pid, slotId){
+  const file = evt.target.files[0];
+  if(!file) return;
+  if(file.size > 10*1024*1024){ toast('File too large — max 10MB','error'); return; }
+  toast('Uploading...','info');
+  try{
+    const url = await uploadDocument(file, pid, 'contractor_'+slotId);
+    const p = GP(pid);
+    if(!p){ toast('Project not found','error'); return; }
+    if(!p.contractorDocs) p.contractorDocs = {};
+    p.contractorDocs[slotId] = {
+      url, name: file.name, size: file.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: CU ? CU.name : 'Contractor'
+    };
+    await saveProjectDB(p);
+    toast('✓ Document uploaded','ok');
+    // Re-render docs section
+    const wrap = document.getElementById('cont-docs-wrap-'+pid);
+    if(wrap) wrap.innerHTML = renderContractorDocs(pid);
+  }catch(e){ toast('Upload failed: '+e.message,'error'); }
+}
+
+function uploadContractorDoc(pid, slotId){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx';
+  input.onchange = (e) => handleContractorDocUpload(e, pid, slotId);
+  input.click();
 }

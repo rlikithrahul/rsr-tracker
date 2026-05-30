@@ -187,10 +187,18 @@ function getProjectAlerts(p){
 // ─── GET ALL ALERTS ACROSS ALL PROJECTS ──────────────
 function getAllAlerts(){
   const all = [];
-  D.projects.filter(p=>!isArchived(p)).forEach(p=>{
+  D.projects.filter(p=>!isArchived(p)&&(p.status||'active')==='active').forEach(p=>{
     getProjectAlerts(p).forEach(a=>all.push(a));
+    // getAutoWarnings returns warnings without projectId — add it here
+    getAutoWarnings(p).forEach(w=>all.push({
+      ...w,
+      project: p,
+      projectId: p.id,
+      priority: w.type==='red'?1:w.type==='amber'?2:3,
+      action: w.action || 'Open project'
+    }));
   });
-  return all.sort((a,b)=>a.priority-b.priority);
+  return all.sort((a,b)=>(a.priority||3)-(b.priority||3));
 }
 
 // ─── CONTRACTOR ALERTS (for their dashboard) ─────────
@@ -240,9 +248,10 @@ function renderAlertsPanel(){
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:800;color:${color};text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding:4px 10px;background:${bg};border-radius:4px;display:inline-block">${label} (${items.length})</div>
       ${items.map(a=>`
-        <div style="padding:10px 12px;border-left:3px solid ${color};background:${bg};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;cursor:pointer" onclick="openProjectFromAlert('${a.projectId}')">
+        <div style="padding:10px 12px;border-left:3px solid ${color};background:${bg};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;${a.projectId?'cursor:pointer':''}" ${a.projectId?`onclick="openProjectFromAlert('${a.projectId}')"`:''}>
           <div style="font-size:13px;color:var(--text1);margin-bottom:3px">${a.msg}</div>
-          <div style="font-size:11px;color:${color};font-weight:600">→ ${a.action}</div>
+          ${a.action?`<div style="font-size:11px;color:${color};font-weight:600">→ ${a.action}</div>`:''}
+          ${a.projectId?`<div style="font-size:10px;color:${color};opacity:.7;margin-top:2px">Tap to open project</div>`:''}
         </div>`).join('')}
     </div>` : '';
 

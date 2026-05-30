@@ -97,7 +97,7 @@ async function saveLabourEntryFromDate(pid){
 
 // ─── RENDER LABOUR TAB FOR A PROJECT ─────────────────
 function renderLabourTab(pid){
-  const p = GP(pid); if(!p) return '<div>Project not found</div>';
+  const p = GP(pid); if(!p) return '';
   const entries = (D.labourData||{})[pid] || {};
   const types = getLabourTypes();
   const today = new Date().toISOString().split('T')[0];
