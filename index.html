@@ -154,7 +154,10 @@
     <!-- Projects tab -->
     <div class="osec hidden" id="sec-proj">
       <div class="pg-hdr"><div class="pg-title">Projects</div>
-        <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
+          <button class="btn" onclick="openBulkImport()" style="background:var(--surface2);color:var(--navy);border:1px solid var(--border);font-size:13px">📥 Bulk Import</button>
+        </div>
       </div>
       <div class="fg" style="max-width:400px"><input type="text" id="psearch" placeholder="🔍 Search by name, tender ID, or contractor…" oninput="renderProjects()"></div>
       <!-- Status filter tabs -->

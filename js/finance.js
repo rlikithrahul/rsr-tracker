@@ -266,8 +266,11 @@ function renderFunds(){
     <!-- UNMATCHED PAYMENTS -->
     <div id="tally-unmatched-section" style="${tallyUnmatched.length?'':'display:none'}">
       <div class="card" style="border-top:4px solid var(--amber)">
-        <div class="st" style="color:var(--amber)">⚠️ Unmatched Payments (${tallyUnmatched.length}) — Needs Manual Assignment</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These payment transactions did not match any project's Cost Centre. Assign them to a project or delete them.</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <div class="st" style="color:var(--amber);margin:0;border:none;padding:0">⚠️ Unmatched Payments (${tallyUnmatched.length})</div>
+          <button onclick="dismissAllUnmatched(false)" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Payments</button>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These payment transactions did not match any project's Cost Centre. Assign what belongs to projects, then Dismiss All remaining.</div>
         ${tallyUnmatched.map((t,i)=>`
           <div style="background:var(--amber-bg);border:1px solid #f5d5a0;border-radius:var(--rs);padding:12px;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -297,8 +300,11 @@ function renderFunds(){
     <!-- UNMATCHED RECEIPTS -->
     <div id="tally-unmatched-receipts-section" style="${tallyUnmatchedReceipts.length?'':'display:none'}">
       <div class="card" style="border-top:4px solid var(--green)">
-        <div class="st" style="color:var(--green)">📥 Unmatched Receipts (${tallyUnmatchedReceipts.length}) — Needs Manual Assignment</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These receipt transactions (money received from contractor/govt) did not match any project. Assign to a project to reduce net deployed amount.</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <div class="st" style="color:var(--green);margin:0;border:none;padding:0">📥 Unmatched Receipts (${tallyUnmatchedReceipts.length})</div>
+          <button onclick="dismissAllUnmatched(true)" style="background:#d1fae5;color:#065f46;border:1px solid #34d399;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Receipts</button>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These receipt transactions did not match any project. Assign to a project or dismiss all remaining.</div>
         ${tallyUnmatchedReceipts.map((t,i)=>`
           <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -595,6 +601,20 @@ function parseTallyDate(val){
 }
 
 
+
+
+// ─── DISMISS ALL UNMATCHED ────────────────────────────
+async function dismissAllUnmatched(isReceipt){
+  const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
+  const type = isReceipt ? 'receipts' : 'payments';
+  if(!queue.length){ toast('Nothing to dismiss','ok'); return; }
+  if(!confirm(`Dismiss all ${queue.length} unmatched ${type}? This cannot be undone.`)) return;
+  if(isReceipt){ tallyUnmatchedReceipts = []; }
+  else { tallyUnmatched = []; }
+  await saveUnmatchedToCloud().catch(()=>{});
+  renderFunds();
+  toast(`✓ All ${queue.length} unmatched ${type} dismissed`,'ok');
+}
 
 // ─── PERSIST UNMATCHED TRANSACTIONS ──────────────────
 // Saves to Supabase settings so they survive refresh and mobile

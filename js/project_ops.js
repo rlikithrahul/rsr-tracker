@@ -668,3 +668,183 @@ async function clearExpectedJV(pid){
     toast('✓ Removed from Expected JV','ok');
   }catch(e){ toast('Save failed','error'); }
 }
+
+// ═══════════════════════════════════════════════════════
+// BULK PROJECT IMPORT FROM EXCEL
+// ═══════════════════════════════════════════════════════
+function openBulkImport(){
+  let modal = document.getElementById('modal-bulk-import');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className='mov'; modal.id='modal-bulk-import';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML=`<div class="mbox" style="max-width:600px">
+    <div class="mhdr"><h2>📥 Bulk Import Projects from Excel</h2><button class="mx" onclick="CM('modal-bulk-import')">✕</button></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Upload the filled Excel template. The app will create all projects automatically.<br>
+      <strong>Sheet 1</strong> = JV Projects (Check Pending) &nbsp;|&nbsp; <strong>Sheet 2</strong> = Cheque Received (Settled)
+    </div>
+    <div style="border:2px dashed var(--border);border-radius:var(--rs);padding:24px;text-align:center;margin-bottom:16px">
+      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Select Excel file (.xlsx)</div>
+      <input type="file" id="bulk-import-file" accept=".xlsx,.xls" style="display:none" onchange="processBulkImport()">
+      <button class="btn btn-navy" onclick="document.getElementById('bulk-import-file').click()">Choose File</button>
+    </div>
+    <div id="bulk-import-status"></div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function processBulkImport(){
+  const file = document.getElementById('bulk-import-file').files[0];
+  if(!file) return;
+  const status = document.getElementById('bulk-import-status');
+  status.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)">⏳ Reading file...</div>';
+
+  try{
+    // Load XLSX
+    if(!window.XLSX) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    const buf = await file.arrayBuffer();
+    const wb = window.XLSX.read(buf, {type:'array'});
+
+    let created=0, skipped=0, errors=[];
+
+    // Process Sheet 1 — JV Projects
+    if(wb.SheetNames[0]){
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      // Find data rows (skip title rows, find first row with a number in col A)
+      let dataStart = 0;
+      for(let i=0;i<rows.length;i++){
+        const v = String(rows[i][0]||'').trim();
+        if(v && !isNaN(parseFloat(v))){ dataStart=i; break; }
+      }
+      for(let i=dataStart; i<rows.length; i++){
+        const row = rows[i];
+        const slno = String(row[0]||'').trim();
+        if(!slno || isNaN(parseFloat(slno))) continue;
+        const r = await importProjectRow(row, 'check_pending');
+        if(r.ok) created++;
+        else if(r.skip) skipped++;
+        else errors.push(r.msg);
+      }
+    }
+
+    // Process Sheet 2 — Cheque Received
+    if(wb.SheetNames[1]){
+      const ws = wb.Sheets[wb.SheetNames[1]];
+      const rows = window.XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      let dataStart = 0;
+      for(let i=0;i<rows.length;i++){
+        const v = String(rows[i][0]||'').trim();
+        if(v && !isNaN(parseFloat(v))){ dataStart=i; break; }
+      }
+      for(let i=dataStart; i<rows.length; i++){
+        const row = rows[i];
+        const slno = String(row[0]||'').trim();
+        if(!slno || isNaN(parseFloat(slno))) continue;
+        const r = await importProjectRow(row, 'settled');
+        if(r.ok) created++;
+        else if(r.skip) skipped++;
+        else errors.push(r.msg);
+      }
+    }
+
+    // Result
+    let html = `<div style="padding:16px;background:var(--surface2);border-radius:var(--rs)">
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">✅ Import Complete</div>
+      <div style="font-size:13px;margin-bottom:4px">✓ <strong>${created}</strong> projects created</div>
+      ${skipped?`<div style="font-size:13px;margin-bottom:4px;color:var(--text3)">⏭ ${skipped} rows skipped (missing name or cost centre)</div>`:''}
+      ${errors.length?`<div style="font-size:12px;color:var(--red);margin-top:8px"><strong>Errors:</strong><br>${errors.slice(0,10).join('<br>')}</div>`:''}
+      <button class="btn btn-navy" style="margin-top:12px;width:100%" onclick="CM('modal-bulk-import');ownerTab(1)">View Projects →</button>
+    </div>`;
+    status.innerHTML = html;
+
+    // Refresh projects list
+    await fetchAllData();
+    renderProjects();
+
+  }catch(e){
+    status.innerHTML=`<div style="padding:16px;background:var(--surface2);border-radius:var(--rs);color:var(--red)">
+      Error reading file: ${e.message}</div>`;
+  }
+}
+
+async function importProjectRow(row, mode){
+  const c = i => String(row[i]||'').trim();
+  const n = i => { try{ return parseFloat(String(row[i]||'').replace(/[,₹%]/g,''))||0; }catch{ return 0; } };
+
+  // Sheet 1 columns: Sl, Firm, Contractor, ProjectName, TenderID, CostCentre, WorkType,
+  //   AgreeDate, EstBOQ, BidPct, GenCode, EA, JVDate, JVNo, JVAmt, EMD, ASD, FSD
+  // Sheet 2 columns: Sl, Firm, Contractor, ProjectName, TenderID, CostCentre, WorkType,
+  //   AgreeDate, EstBOQ, BidPct, GenCode, EA, JVDate, JVAmt, EMD, ASD, FSD, ChequeDate, ChequeAmt
+
+  const name = c(3);
+  const costCentre = c(5);
+  if(!name || !costCentre) return {skip:true, msg:`Row missing name or cost centre`};
+
+  const tender = c(4);
+  // Check duplicate tender ID
+  if(tender && D.projects.find(p=>!p._archived&&(p.tender||'').toLowerCase()===tender.toLowerCase()))
+    return {skip:true, msg:`Duplicate tender: ${tender}`};
+
+  // Find contractor by name
+  const contName = c(2);
+  let contractorId = '';
+  if(contName){
+    const cont = D.contractors.find(ct=>ct.name&&ct.name.toLowerCase().includes(contName.toLowerCase().slice(0,6)));
+    contractorId = cont ? cont.id : '';
+  }
+
+  const firm = c(1) || 'RSR Constructions';
+  const estimated = n(8);
+  const bidPct = n(9);
+  const genCode = c(10);
+  const eaNumber = c(11);
+
+  let jvDate='', jvNumber='', jvAmount=0, emd=0, asd=0, fsd=0;
+  let settleDate='', settleAmt=0;
+
+  if(mode==='check_pending'){
+    jvDate=c(12); jvNumber=c(13); jvAmount=n(14);
+    emd=n(15); asd=n(16); fsd=n(17);
+  } else {
+    jvDate=c(12); jvAmount=n(13);
+    emd=n(14); asd=n(15); fsd=n(16);
+    settleDate=c(17); settleAmt=n(18);
+  }
+
+  const p = {
+    id: uid(),
+    name, tender, firm,
+    contractorId,
+    costCentre,
+    type: c(6) || 'Other',
+    agreeDate: c(7) || '',
+    estimated: estimated || jvAmount,
+    bidPct: bidPct || 0,
+    genCode,
+    eaNumber,
+    jvDate,
+    jvNumber,
+    jvAmount,
+    emd, asd, fsd,
+    status: 'active',
+    releases: [],
+    boq: [],
+    contractorUpdates: [],
+    verifications: [],
+    settlements: settleAmt>0 ? [{id:uid(),date:settleDate,amount:settleAmt,notes:'Imported from cheque received list'}] : [],
+    createdAt: new Date().toISOString(),
+    _importedFrom: 'bulk_excel',
+  };
+
+  try{
+    await saveProjectDB(p);
+    D.projects.push(p);
+    return {ok:true};
+  }catch(e){
+    return {ok:false, msg:`${name}: ${e.message}`};
+  }
+}
