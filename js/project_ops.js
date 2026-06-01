@@ -755,7 +755,7 @@ async function processBulkImport(){
     let html = `<div style="padding:16px;background:var(--surface2);border-radius:var(--rs)">
       <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">✅ Import Complete</div>
       <div style="font-size:13px;margin-bottom:4px">✓ <strong>${created}</strong> projects created</div>
-      ${skipped?`<div style="font-size:13px;margin-bottom:4px;color:var(--text3)">⏭ ${skipped} rows skipped (missing name or cost centre)</div>`:''}
+      ${skipped?`<div style="font-size:13px;margin-bottom:4px;color:var(--text3)">⏭ ${skipped} rows skipped (missing project name or duplicate tender ID)</div>`:''}
       ${errors.length?`<div style="font-size:12px;color:var(--red);margin-top:8px"><strong>Errors:</strong><br>${errors.slice(0,10).join('<br>')}</div>`:''}
       <button class="btn btn-navy" style="margin-top:12px;width:100%" onclick="CM('modal-bulk-import');ownerTab(1)">View Projects →</button>
     </div>`;

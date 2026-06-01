@@ -288,6 +288,7 @@ function renderDashFilterBar(){
     active:all.filter(p=>projStatus(p)==='active').length,
     onhold:all.filter(p=>projStatus(p)==='onhold').length,
     completed:all.filter(p=>projStatus(p)==='completed').length,
+    incomplete:all.filter(p=>isIncomplete(p)).length,
     archived:D.projects.filter(p=>isArchived(p)).length
   };
   const contractors=[...new Set(all.map(p=>p.contractorId).filter(Boolean))];
@@ -296,7 +297,8 @@ function renderDashFilterBar(){
     {k:'attn',label:'⚠️ Needs Attention',count:counts.attn},
     {k:'active',label:'Active',count:counts.active},
     {k:'onhold',label:'On Hold',count:counts.onhold},
-    {k:'completed',label:'Completed',count:counts.completed}
+    {k:'completed',label:'Completed',count:counts.completed},
+    {k:'incomplete',label:'🔴 Incomplete',count:counts.incomplete},
   ];
   bar.innerHTML=`
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 12px">
@@ -445,7 +447,7 @@ function renderProjects(){
       (p.jvNumber||'').toLowerCase().includes(q)||
       (p.location||'').toLowerCase().includes(q);
     const status = p.status || 'active';
-    const matchStatus = activeFilter==='all' || status===activeFilter;
+    const matchStatus = activeFilter==='all' || (activeFilter==='incomplete' ? isIncomplete(p) : status===activeFilter);
     const matchFirm = firmFilter==='all' || (p.firm||'RSR Constructions')===firmFilter;
     return matchQ && matchStatus && matchFirm && !isArchived(p);
   // Sort: oldest agreement date first, no date goes to bottom
@@ -475,6 +477,7 @@ function renderProjects(){
         'completed':'<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">✅ Completed</span>',
         'settled':'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">💰 Settled</span>'
       }[status]||'';
+      const incompleteBadge = isIncomplete(p) ? `<span style="background:#ffc107;color:#333;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px">🔴 Incomplete (${getMissingFields(p).length})</span>` : '';
       const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
       const rel = (p.releases||[]).reduce((s,r)=>s+r.amount,0);
       const max70 = (p.agreeAmt||boqTotal)*0.7;
@@ -485,7 +488,7 @@ function renderProjects(){
         <td><span style="font-size:11px;font-weight:700;color:${firmColor};white-space:nowrap">${firmShort}</span></td>
         <td>${p.type||'—'}</td>
         <td>${c?c.name:'—'}</td>
-        <td>${statusBadge}</td>
+        <td>${statusBadge}${incompleteBadge}</td>
         <td style="white-space:nowrap">${p.agreeDate||'<span style="color:var(--text3)">Not set</span>'}</td>
         <td style="text-align:right">${fmt(boqTotal)}</td>
         <td style="text-align:right;color:${capPct>=70?'var(--red)':'var(--navy)'}">${capPct}%</td>

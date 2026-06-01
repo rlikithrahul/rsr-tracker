@@ -151,9 +151,9 @@ function enterOwner(){
   const bnav=document.getElementById('bnav'); if(bnav) bnav.style.display='none';
   showSidebar();
   buildSidebar(CU&&CU.isSuperAdmin);
-  loadEMIData().catch(()=>{});
   setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
-  SP('page-owner'); ownerTab(0);
+  SP('page-owner');
+  loadEMIData().then(()=>{ ownerTab(0); }).catch(()=>{ ownerTab(0); });
   startAutoRefresh();
 }
 

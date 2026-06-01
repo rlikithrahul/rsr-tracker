@@ -149,6 +149,16 @@ function renderDetail(id){
       </div>
     </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
   document.getElementById('detail-wrap').innerHTML=`
+    ${isIncomplete(p) ? `<div style="background:#fff3cd;border:1.5px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:18px;line-height:1">🔴</div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#856404;font-size:13px;margin-bottom:6px">Incomplete Project — Missing Fields</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${getMissingFields(p).map(f=>`<span style="background:#856404;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600">${f}</span>`).join('')}
+        </div>
+        <div style="font-size:11px;color:#856404;margin-top:8px">Click <strong>✏️ Edit</strong> to fill in missing details. This banner disappears once all fields are complete.</div>
+      </div>
+    </div>` : ''}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="ownerTab(0)">← Dashboard</button>
       <div style="flex:1;min-width:200px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:18px;font-weight:700;color:var(--navy)">${p.name}</div>${statusBadge(p)}</div>

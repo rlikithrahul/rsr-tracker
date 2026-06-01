@@ -220,6 +220,20 @@ function getAutoWarnings(p){
 // ─── SOFT DELETE / ARCHIVE ────────────────────────────
 function isArchived(item){ return item && item._archived === true; }
 
+// ─── INCOMPLETE PROJECT DETECTION ────────────────────
+function getMissingFields(p){
+  const missing = [];
+  if(!p.tender) missing.push('Tender ID');
+  if(!p.costCentre) missing.push('Tally Cost Centre');
+  if(!p.type || p.type==='Other') missing.push('Work Type');
+  if(!p.agreeDate) missing.push('Agreement Date');
+  if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
+  if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
+  if(!p.boq || p.boq.length===0) missing.push('BOQ Items');
+  return missing;
+}
+function isIncomplete(p){ return p._importedFrom==='bulk_excel' && getMissingFields(p).length>0; }
+
 // ─── DUPLICATE DETECTION ─────────────────────────────
 function checkDuplicateRelease(p, amount, date, excludeId){
   const releases = (p.releases||[]).filter(r=>!isArchived(r) && r.id!==excludeId && r.txType!=='receipt');
