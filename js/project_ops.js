@@ -782,7 +782,7 @@ async function importProjectRow(row, mode){
 
   const name = c(3);
   const costCentre = c(5);
-  if(!name || !costCentre) return {skip:true, msg:`Row missing name or cost centre`};
+  if(!name) return {skip:true, msg:`Row missing project name`};
 
   const tender = c(4);
   // Check duplicate tender ID
