@@ -153,7 +153,10 @@ function enterOwner(){
   buildSidebar(CU&&CU.isSuperAdmin);
   setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
   SP('page-owner');
-  loadEMIData().then(()=>{ ownerTab(0); }).catch(()=>{ ownerTab(0); });
+  Promise.all([
+    loadEMIData().catch(()=>{}),
+    loadGSTData().catch(()=>{})
+  ]).then(()=>{ ownerTab(0); }).catch(()=>{ ownerTab(0); });
   startAutoRefresh();
 }
 

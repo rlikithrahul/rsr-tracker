@@ -174,10 +174,9 @@ function renderDash(){
   // Right sidebar column — capital + EMI
   const sidebarCol = document.getElementById('dash-sidebar-col');
   if(sidebarCol){
-    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div>`;
+    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div>`;
   } else {
-    // fallback for mobile (no sidebar col)
-    document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div>');
+    document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div>');
   }
 
   renderCapitalSection(allProjects);
@@ -186,6 +185,11 @@ function renderDash(){
   if(D.emiData){
     const emiEl = document.getElementById('dash-emi-section');
     if(emiEl) emiEl.innerHTML = getEMIDashboardAlerts();
+  }
+  // GST alerts (if data loaded)
+  if(D.gstData){
+    const gstEl = document.getElementById('dash-gst-section');
+    if(gstEl) gstEl.innerHTML = getGSTDashboardAlerts();
   }
 }
 
@@ -531,6 +535,7 @@ const SIDEBAR_TABS = [
   {i:3, icon:'📂', label:'Tally'},
   {i:4, icon:'📈', label:'Interest'},
   {i:5, icon:'💳', label:'EMI Calendar'},
+  {i:7, icon:'🧾', label:'GST'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -588,7 +593,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -596,12 +601,12 @@ function ownerTab(i){
   if(i===1) renderProjects();
   if(i===2){ renderConts(); renderContractorPerformance(); }
   if(i===3){
-    // Load persisted unmatched transactions from cloud before rendering
     loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
   }
   if(i===4) renderInterest();
   if(i===5) renderEMI();
   if(i===6) renderSettings();
+  if(i===7) renderGST();
   // Update sidebar active state
   updateSidebarActive(i);
 }

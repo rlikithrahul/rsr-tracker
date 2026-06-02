@@ -53,12 +53,12 @@ async function renderEMI(){
         <div class="st" style="margin:0;border:none;padding:0">💳 Credit Cards</div>
         <button class="btn btn-sm btn-navy" onclick="openAddCard()">+ Add Card</button>
       </div>
-      <div id="emi-cards-wrap">${renderCardList()}</div>
+      <div id="emi-cards-wrap">${renderCardListNew()}</div>
     </div>
   </div>`;
 
   renderUpcomingPayments();
-  checkBillPrompts();
+  checkBillPromptsNew();
 }
 
 // ─── RENDER EMI LIST ──────────────────────────────────
@@ -402,4 +402,170 @@ async function saveBillAmount(cardId, monthKey){
     renderEMI();
     toast('✓ Bill amount saved','ok');
   }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── CREDIT CARD CYCLE HELPERS ───────────────────────
+function getCardCycleKey(card, refDate){
+  const d = refDate || new Date();
+  const today = d.getDate();
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  let cycleYear, cycleMonth;
+  if(today >= card.billDay){ cycleYear = year; cycleMonth = month; }
+  else { const prev = new Date(year, month-1, 1); cycleYear = prev.getFullYear(); cycleMonth = prev.getMonth(); }
+  return cycleYear+'-'+String(cycleMonth+1).padStart(2,'0')+'-'+String(card.billDay).padStart(2,'0');
+}
+
+function getCardPhase(card){
+  const today = new Date();
+  const todayDay = today.getDate();
+  const cycleKey = getCardCycleKey(card);
+  const billEntered = D.emiData.billAmounts[card.id+'_'+cycleKey] !== undefined;
+  const billDay = card.billDay;
+  const dueDay = card.dueDay;
+  let inWaiting;
+  if(dueDay < billDay){ inWaiting = todayDay > dueDay && todayDay < billDay; }
+  else { inWaiting = todayDay > dueDay || todayDay < billDay; }
+  if(inWaiting) return 'waiting';
+  if(todayDay >= billDay && !billEntered) return 'enter-bill';
+  if(billEntered){
+    const daysUntilDue = dueDay >= todayDay ? dueDay - todayDay : dueDay + 30 - todayDay;
+    if(daysUntilDue <= 3) return 'reminder';
+    return 'silent';
+  }
+  const daysUntilDue = dueDay >= todayDay ? dueDay - todayDay : dueDay + 30 - todayDay;
+  if(daysUntilDue <= 3) return 'reminder';
+  return 'waiting';
+}
+
+// ─── DASHBOARD UPCOMING ───────────────────────────────
+function getEMIDashboardAlerts(){
+  if(!D.emiData) return '';
+  const today = new Date();
+  const todayDay = today.getDate();
+  const items = [];
+  (D.emiData.emis||[]).filter(e=>e.active!==false).forEach(e=>{
+    const daysUntil = e.dueDay >= todayDay ? e.dueDay - todayDay : e.dueDay + 30 - todayDay;
+    if(daysUntil <= 3) items.push({icon:'📅', name:e.name, amount:e.amount, daysUntil, urgent:daysUntil<=1, type:'emi'});
+  });
+  (D.emiData.cards||[]).forEach(card=>{
+    const phase = getCardPhase(card);
+    const cycleKey = getCardCycleKey(card);
+    const amt = D.emiData.billAmounts[card.id+'_'+cycleKey];
+    if(phase==='enter-bill'){
+      items.push({icon:'📨', name:card.name+' (CC)', amount:null, daysUntil:999, urgent:false, type:'bill-prompt', cardId:card.id, cardName:card.name});
+    } else if(phase==='reminder'){
+      const daysUntil = card.dueDay >= todayDay ? card.dueDay - todayDay : card.dueDay + 30 - todayDay;
+      items.push({icon:'💳', name:card.name+' (CC)', amount:amt||0, daysUntil, urgent:daysUntil<=1, type:'card'});
+    }
+  });
+  if(!items.length) return '';
+  items.sort((a,b)=>{ if(a.type==='bill-prompt'&&b.type!=='bill-prompt') return 1; if(b.type==='bill-prompt'&&a.type!=='bill-prompt') return -1; return a.daysUntil-b.daysUntil; });
+  const borderColor = items.some(u=>u.urgent)?'var(--red)':'var(--amber)';
+  const rows = items.slice(0,5).map(u=>{
+    const isPrompt = u.type==='bill-prompt';
+    const color = u.urgent?'var(--red)':isPrompt?'var(--amber)':'#92400e';
+    const valHtml = isPrompt
+      ? '<button onclick="enterBillAmount(\''+u.cardId+'\',\''+u.cardName+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">Enter Amount</button>'
+      : (u.amount?fmt(u.amount):'—')+' · '+(u.daysUntil===0?'Today':u.daysUntil===1?'Tomorrow':u.daysUntil+'d');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--surface2)">'
+      +'<div style="font-size:12px;font-weight:600">'+u.icon+' '+u.name+'</div>'
+      +'<div style="font-size:12px;color:'+color+'">'+valHtml+'</div>'
+      +'</div>';
+  }).join('');
+  return '<div class="card" style="border-top:3px solid '+borderColor+';padding:12px;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Payments & Bills</div>'
+    +rows
+    +'<button onclick="ownerTab(5)" style="margin-top:8px;background:none;border:none;font-size:11px;color:var(--navy);font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">View EMI Calendar →</button>'
+    +'</div>';
+}
+
+// ─── CREDIT CARD PHASE-AWARE RENDER ──────────────────
+function renderCardListNew(){
+  const cards = D.emiData.cards||[];
+  if(!cards.length) return '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No credit cards added yet.</div>';
+  return cards.map(card=>{
+    const cycleKey = getCardCycleKey(card);
+    const billAmt = D.emiData.billAmounts[card.id+'_'+cycleKey];
+    const phase = getCardPhase(card);
+    const today = new Date(); const todayDay = today.getDate();
+    let statusHtml;
+    if(phase==='waiting'){
+      const d = card.billDay >= todayDay ? card.billDay - todayDay : card.billDay + 30 - todayDay;
+      statusHtml = '<span style="color:var(--text3);font-size:12px">⏳ Bill generates in '+d+' day'+(d===1?'':'s')+' ('+card.billDay+'th)</span>';
+    } else if(phase==='enter-bill'){
+      statusHtml = '<span style="color:var(--amber);font-size:12px;font-weight:600">📨 Bill generated — enter amount</span>';
+    } else if(phase==='silent'){
+      statusHtml = '<span style="color:var(--green);font-size:12px">✅ Bill entered: <strong>₹'+(billAmt||0).toLocaleString('en-IN')+'</strong> · Due '+card.dueDay+'th</span>';
+    } else if(phase==='reminder'){
+      const d = card.dueDay >= todayDay ? card.dueDay - todayDay : card.dueDay + 30 - todayDay;
+      statusHtml = '<span style="color:var(--red);font-size:12px;font-weight:700">🔴 ₹'+(billAmt||0).toLocaleString('en-IN')+' due in '+d+' day'+(d===1?'':'s')+' ('+card.dueDay+'th)</span>';
+    }
+    return '<div style="padding:12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'
+      +'<div>'
+      +'<div style="font-weight:700;font-size:14px">'+card.name+'</div>'
+      +'<div style="font-size:12px;color:var(--text2);margin-top:2px">Bill generates: '+card.billDay+'th · Due: '+card.dueDay+'th</div>'
+      +'<div style="margin-top:6px">'+statusHtml+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+      +'<button class="btn btn-sm" onclick="enterBillAmount(\''+card.id+'\',\''+card.name+'\')" title="Enter or update bill amount">💰 Enter Bill</button>'
+      +'<div class="amenu-wrap">'
+      +'<button class="amenu-btn" onclick="event.stopPropagation();toggleMenu(\'cd-'+card.id+'\')">⋮</button>'
+      +'<div class="amenu" id="cd-'+card.id+'">'
+      +'<button class="amenu-item" onclick="editCard(\''+card.id+'\')">✏️ Edit</button>'
+      +'<button class="amenu-item danger" onclick="deleteCard(\''+card.id+'\')">🗑️ Delete</button>'
+      +'</div></div></div></div>';
+  }).join('');
+}
+
+// ─── ENTER BILL AMOUNT (PHASE-AWARE) ─────────────────
+function enterBillAmountNew(cardId, cardName, isAutoPrompt){
+  const card = (D.emiData.cards||[]).find(c=>c.id===cardId);
+  const d = new Date();
+  const cycleKey = card ? getCardCycleKey(card) : (d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const parts = cycleKey.split('-');
+  const cycleLabel = months[parseInt(parts[1])-1]+' '+parts[0]+' cycle';
+  const existing = D.emiData.billAmounts[cardId+'_'+cycleKey];
+  let modal = document.getElementById('modal-bill-amount');
+  if(!modal){ modal = document.createElement('div'); modal.className='mov'; modal.id='modal-bill-amount'; document.body.appendChild(modal); }
+  modal.innerHTML = '<div class="mbox" style="max-width:380px">'
+    +'<div class="mhdr"><h2>💳 '+cardName+'</h2><button class="mx" onclick="CM(\'modal-bill-amount\')">✕</button></div>'
+    +(isAutoPrompt?'<div style="font-size:13px;color:var(--amber);margin-bottom:12px;font-weight:600">📨 Bill generated — please enter the bill amount.</div>':'')
+    +'<div class="fg"><label>Bill Amount (₹) — '+cycleLabel+'</label><input type="number" id="bill-amount-input" placeholder="Enter bill amount" value="'+(existing||'')+'"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+    +'<button class="btn" onclick="CM(\'modal-bill-amount\')">Later</button>'
+    +'<button class="btn btn-navy" onclick="saveBillAmountNew(\''+cardId+'\',\''+cycleKey+'\')">✓ Save Amount</button>'
+    +'</div></div>';
+  modal.classList.add('open');
+  setTimeout(()=>document.getElementById('bill-amount-input')?.focus(),200);
+}
+
+async function saveBillAmountNew(cardId, cycleKey){
+  const amt = parseFloat(document.getElementById('bill-amount-input').value)||0;
+  D.emiData.billAmounts[cardId+'_'+cycleKey] = amt;
+  try{
+    await saveEMIData();
+    CM('modal-bill-amount');
+    renderEMI();
+    const banner = document.getElementById('dash-banner');
+    if(banner) banner.innerHTML = renderDashAlertStrip();
+    const emiEl = document.getElementById('dash-emi-section');
+    if(emiEl) emiEl.innerHTML = getEMIDashboardAlerts();
+    toast('✓ Bill amount saved','ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── CHECK BILL PROMPTS (PHASE-AWARE) ────────────────
+function checkBillPromptsNew(){
+  if(!D.emiData) return;
+  const todayDay = new Date().getDate();
+  (D.emiData.cards||[]).forEach(card=>{
+    if(todayDay===card.billDay || todayDay===card.billDay+1){
+      const cycleKey = getCardCycleKey(card);
+      if(D.emiData.billAmounts[card.id+'_'+cycleKey]===undefined){
+        setTimeout(()=>enterBillAmountNew(card.id, card.name, true), 500);
+      }
+    }
+  });
 }
