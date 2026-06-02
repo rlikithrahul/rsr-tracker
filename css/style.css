@@ -193,6 +193,25 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 /* TABLE */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
+@media(min-width:769px){
+  /* Projects table — full width, comfortable padding */
+  #sec-proj .tbl-wrap table th,
+  #sec-proj .tbl-wrap table td{
+    padding:10px 14px;
+    white-space:nowrap;
+  }
+  #sec-proj .tbl-wrap table th:first-child,
+  #sec-proj .tbl-wrap table td:first-child{
+    white-space:normal;
+    min-width:220px;
+    max-width:340px;
+  }
+  /* Tally table full width */
+  #tally-wrap .tbl-wrap table th,
+  #tally-wrap .tbl-wrap table td{
+    padding:9px 12px;
+  }
+}
 th{text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:2px solid var(--border);background:var(--surface2);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
 tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
@@ -274,6 +293,39 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 .ppill:hover{border-color:var(--gold);box-shadow:0 4px 12px rgba(0,0,0,.08)}
 .int-val{color:var(--amber);font-weight:700}
 .wrap{max-width:960px;margin:0 auto;padding:clamp(14px,3vw,24px) clamp(12px,4vw,20px)}
+
+/* ─── DESKTOP FULL-WIDTH LAYOUT ─────────────────────── */
+@media(min-width:769px){
+  /* Full width — no more narrow column */
+  .page-owner .wrap{
+    max-width:none;
+    margin:0;
+    padding:24px 28px;
+  }
+}
+@media(min-width:1200px){
+  .page-owner .wrap{ padding:28px 36px; }
+  /* Wider sidebar on large screens */
+  .sidebar{ width:240px; }
+  .page-owner{ margin-left:240px; }
+  /* Dashboard stat cards — 4 across */
+  .stats{ grid-template-columns:repeat(4,1fr); }
+  /* Dashboard main layout — 2 column grid */
+  #dash-main-grid{
+    display:grid;
+    grid-template-columns:1fr 380px;
+    gap:20px;
+    align-items:start;
+  }
+}
+@media(min-width:1600px){
+  .page-owner .wrap{ padding:32px 48px; }
+  .sidebar{ width:260px; }
+  .page-owner{ margin-left:260px; }
+  #dash-main-grid{
+    grid-template-columns:1fr 420px;
+  }
+}
 .pg-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
 .pg-title{font-size:20px;font-weight:700;color:var(--navy)}
 
@@ -516,7 +568,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
 
 /* Desktop: sidebar visible, push content right */
 @media(min-width:769px){
-  .sidebar{display:flex}
+  .sidebar{display:flex;width:220px}
   .page-owner{margin-left:220px}
   /* Hamburger hidden on desktop */
   .hamburger-btn{display:none}
@@ -620,5 +672,31 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   .jv-grid{
     grid-template-columns:1fr;
     gap:16px;
+  }
+}
+
+/* ─── DESKTOP PROJECT FILTER BAR ────────────────────── */
+@media(min-width:769px){
+  #psearch{
+    width:360px;
+    font-size:14px;
+    padding:9px 14px;
+  }
+  /* Project filter row — spread full width */
+  #sec-proj .pg-hdr{
+    margin-bottom:16px;
+  }
+  #sec-proj > div[style*="display:flex"][style*="gap"]:first-of-type{
+    flex-wrap:nowrap;
+  }
+}
+
+/* ─── DASHBOARD SIDEBAR COL STICKY ──────────────────── */
+@media(min-width:1200px){
+  #dash-sidebar-col{
+    position:sticky;
+    top:72px;
+    max-height:calc(100vh - 90px);
+    overflow-y:auto;
   }
 }

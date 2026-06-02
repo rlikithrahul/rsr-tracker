@@ -139,7 +139,7 @@ function renderDash(){
   // Alert strip
   document.getElementById('dash-banner').innerHTML = renderDashAlertStrip();
 
-  // Main dashboard body
+  // Main dashboard body — left column
   document.getElementById('dash-cards').innerHTML=`
     <!-- Last Tally Import -->
     <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:14px;font-size:12px">
@@ -169,9 +169,16 @@ function renderDash(){
       </button>
     </div>
 
-    <div id="dash-capital-section"></div>
-    <div id="dash-emi-section"></div>
     <div id="dash-jv-section"></div>`;
+
+  // Right sidebar column — capital + EMI
+  const sidebarCol = document.getElementById('dash-sidebar-col');
+  if(sidebarCol){
+    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div>`;
+  } else {
+    // fallback for mobile (no sidebar col)
+    document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div>');
+  }
 
   renderCapitalSection(allProjects);
   renderExpectedJVSection(allProjects);
