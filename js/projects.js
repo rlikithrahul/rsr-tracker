@@ -251,8 +251,14 @@ function renderDetail(id){
       </div>`:''}
 
       <div class="card">
-        <div class="st">Fund Releases</div>${relLog}
-        ${settleLog?`<div class="st" style="margin-top:14px">Government Payments Received</div>${settleLog}`:''}
+        <details>
+          <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
+            <div class="st" style="margin:0;border:none;padding:0">Fund Releases</div>
+            <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
+          </summary>
+          <div style="margin-top:12px">${relLog}</div>
+          ${settleLog?'<div style="margin-top:14px"><div class="st">Government Payments Received</div>'+settleLog+'</div>':''} 
+        </details>
       </div>
     </div>
     <div class="card">

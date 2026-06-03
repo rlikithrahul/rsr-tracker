@@ -156,34 +156,84 @@
 
     <!-- Projects tab -->
     <div class="osec hidden" id="sec-proj">
-      <div class="pg-hdr"><div class="pg-title">Projects</div>
+      <div class="pg-hdr">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="pg-title">Projects</div>
+          <div class="view-toggle">
+            <button id="vt-grid" class="active" onclick="setProjectView('grid')">⊞ Cards</button>
+            <button id="vt-table" onclick="setProjectView('table')">☰ Table</button>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-gold" onclick="OM('modal-np')">+ New Project</button>
           <button class="btn" onclick="openBulkImport()" style="background:var(--surface2);color:var(--navy);border:1px solid var(--border);font-size:13px">📥 Bulk Import</button>
         </div>
       </div>
-      <div class="fg" style="max-width:400px"><input type="text" id="psearch" placeholder="🔍 Search by name, tender ID, or contractor…" oninput="renderProjects()"></div>
-      <!-- Status filter tabs -->
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-        <select id="proj-status-filter" onchange="renderProjects()" style="padding:7px 12px;border:1px solid var(--border);border-radius:20px;font-family:'Inter',sans-serif;font-size:13px;background:var(--surface);cursor:pointer">
-          <option value="all">All Projects</option>
-          <option value="active">🟢 Active</option>
-          <option value="onhold">⏸ On Hold</option>
-          <option value="completed">✅ Completed</option>
-          <option value="settled">💰 Settled</option>
-          <option value="incomplete">🔴 Incomplete</option>
-        </select>
-        <select id="proj-firm-filter" onchange="renderProjects()" style="padding:7px 12px;border:1px solid var(--border);border-radius:20px;font-family:'Inter',sans-serif;font-size:13px;background:var(--surface);cursor:pointer">
-          <option value="all">All Firms</option>
-          <option value="RSR Constructions">RSR Constructions</option>
-          <option value="R Sadhu Rao">R Sadhu Rao</option>
-          <option value="R Likith Rahul">R Likith Rahul</option>
-        </select>
-        <button class="btn btn-sm" onclick="showFYReport()" style="font-size:12px">📊 Financial Year Report</button>
-      </div>
-      <div id="fy-report-section" style="display:none;margin-bottom:16px"></div>
 
-      <!-- REPORTS BOX -->
+      <!-- Search bar -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;max-width:480px">
+          <input type="text" id="psearch" placeholder="🔍 Search by name, tender ID, contractor…" oninput="renderProjects()" style="width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:20px;font-family:'Inter',sans-serif;font-size:13px;background:#fff">
+        </div>
+        <button onclick="toggleAdvFilters()" id="adv-filter-btn" style="padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-weight:600;background:#fff;cursor:pointer;font-family:'Inter',sans-serif;color:var(--text2);white-space:nowrap">⚙️ Filters <span id="adv-filter-count"></span></button>
+        <div id="proj-result-count" style="font-size:12px;color:var(--text3);white-space:nowrap"></div>
+      </div>
+
+      <!-- Advanced filters panel (hidden by default) -->
+      <div id="adv-filters-panel" style="display:none;background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:12px;display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Status</div>
+            <select id="proj-status-filter" onchange="renderProjects()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;background:#fff">
+              <option value="all">All Statuses</option>
+              <option value="active">🟢 Active</option>
+              <option value="onhold">⏸ On Hold</option>
+              <option value="completed">✅ Completed</option>
+              <option value="settled">💰 Settled</option>
+              <option value="incomplete">🔴 Incomplete</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Firm</div>
+            <select id="proj-firm-filter" onchange="renderProjects()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;background:#fff">
+              <option value="all">All Firms</option>
+              <option value="RSR Constructions">RSR Constructions</option>
+              <option value="R Sadhu Rao">R Sadhu Rao</option>
+              <option value="R Likith Rahul">R Likith Rahul</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Work Type</div>
+            <select id="proj-type-filter" onchange="renderProjects()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;background:#fff">
+              <option value="all">All Types</option>
+              <option value="Road">Road</option>
+              <option value="Building">Building</option>
+              <option value="Culvert">Culvert</option>
+              <option value="SW DRAIN">SW Drain</option>
+              <option value="Retaining Wall">Retaining Wall</option>
+              <option value="Central Median">Central Median</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Sort By</div>
+            <select id="proj-sort-filter" onchange="renderProjects()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;background:#fff">
+              <option value="agree-asc">Agreement Date ↑</option>
+              <option value="agree-desc">Agreement Date ↓</option>
+              <option value="cap-desc">Cap Used (High first)</option>
+              <option value="cap-asc">Cap Used (Low first)</option>
+              <option value="name-asc">Name A→Z</option>
+              <option value="boq-desc">BOQ Value (High first)</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="clearAllFilters()" style="margin-top:10px;font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600">✕ Clear all filters</button>
+      </div>
+
+      <!-- Quick filter pills -->
+      <div id="proj-quick-pills" class="qfilter-wrap"></div>
+
+      <!-- Reports box -->
       <div style="padding:10px 14px;background:var(--navy);border-radius:var(--rs);margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="color:var(--gold);font-size:12px;font-weight:700;white-space:nowrap">📊 Reports:</span>
@@ -206,6 +256,7 @@
           <button onclick="exportReport()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Export</button>
         </div>
       </div>
+      <div id="fy-report-section" style="display:none;margin-bottom:16px"></div>
 
       <div id="proj-tbl"></div>
     </div>

@@ -437,14 +437,92 @@ function dashCardHTML(p){
 }
 
 // ═══════════════════════════════════════════════════════
+// PROJECTS VIEW STATE
+// ═══════════════════════════════════════════════════════
+let projViewMode = 'grid'; // 'grid' | 'table'
+let projQuickFilter = 'all'; // contractor id, firm name, or 'all'
+let projQuickFilterType = 'none'; // 'contractor' | 'firm' | 'none'
+
+function setProjectView(mode){
+  projViewMode = mode;
+  document.getElementById('vt-grid')?.classList.toggle('active', mode==='grid');
+  document.getElementById('vt-table')?.classList.toggle('active', mode==='table');
+  renderProjects();
+}
+
+function toggleAdvFilters(){
+  const panel = document.getElementById('adv-filters-panel');
+  if(!panel) return;
+  const isHidden = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = isHidden ? 'block' : 'none';
+  document.getElementById('adv-filter-btn').style.borderColor = isHidden ? 'var(--navy)' : 'var(--border)';
+  document.getElementById('adv-filter-btn').style.color = isHidden ? 'var(--navy)' : 'var(--text2)';
+}
+
+function clearAllFilters(){
+  document.getElementById('proj-status-filter').value = 'all';
+  document.getElementById('proj-firm-filter').value = 'all';
+  document.getElementById('proj-type-filter').value = 'all';
+  document.getElementById('proj-sort-filter').value = 'agree-asc';
+  projQuickFilter = 'all'; projQuickFilterType = 'none';
+  renderProjects();
+}
+
+function setQuickFilter(val, type){
+  if(projQuickFilter === val){ projQuickFilter='all'; projQuickFilterType='none'; }
+  else { projQuickFilter=val; projQuickFilterType=type; }
+  renderProjects();
+}
+
+function buildQuickPills(list){
+  const pillsEl = document.getElementById('proj-quick-pills');
+  if(!pillsEl) return;
+
+  // Contractor pills
+  const contractorIds = [...new Set(list.map(p=>p.contractorId).filter(Boolean))];
+  const firmNames = [...new Set(list.map(p=>p.firm||'RSR Constructions'))];
+
+  let html = '';
+
+  // Status pills
+  const statuses = [
+    {k:'active',label:'🟢 Active'},
+    {k:'onhold',label:'⏸ On Hold'},
+    {k:'completed',label:'✅ Completed'},
+    {k:'incomplete',label:'🔴 Incomplete'},
+  ];
+  statuses.forEach(s=>{
+    const count = D.projects.filter(p=>!isArchived(p)&&(s.k==='incomplete'?isIncomplete(p):(p.status||'active')===s.k)).length;
+    if(count>0) html += `<button class="qfilter-pill${projQuickFilter===s.k?' active':''}" onclick="setQuickFilter('${s.k}','status')">${s.label} <span style="opacity:.7">${count}</span></button>`;
+  });
+
+  // Firm pills
+  firmNames.forEach(f=>{
+    const short = f==='RSR Constructions'?'RSR':f==='R Sadhu Rao'?'RS Rao':'RLR';
+    html += `<button class="qfilter-pill${projQuickFilter===f?' active':''}" onclick="setQuickFilter('${f}','firm')">🏢 ${short}</button>`;
+  });
+
+  // Contractor pills (top 6 by project count)
+  contractorIds.slice(0,6).forEach(cid=>{
+    const c = GC(cid); if(!c) return;
+    const name = c.name.split(' ').slice(0,2).join(' ');
+    html += `<button class="qfilter-pill${projQuickFilter===cid?' active':''}" onclick="setQuickFilter('${cid}','contractor')">👷 ${name}</button>`;
+  });
+
+  pillsEl.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
 // PROJECTS TABLE
 // ═══════════════════════════════════════════════════════
 function renderProjects(){
   const q=(document.getElementById('psearch')?.value||'').toLowerCase();
-  const activeFilter = document.getElementById('proj-status-filter')?.value || 'all';
+  const statusFilter = document.getElementById('proj-status-filter')?.value || 'all';
   const firmFilter = document.getElementById('proj-firm-filter')?.value || 'all';
+  const typeFilter = document.getElementById('proj-type-filter')?.value || 'all';
+  const sortBy = document.getElementById('proj-sort-filter')?.value || 'agree-asc';
 
-  const list=D.projects.filter(p=>{
+  let list=D.projects.filter(p=>{
     const c=GC(p.contractorId);
     const genCode = p.genCode||(p.docVault&&p.docVault.gencode)||'';
     const eaNum = p.eaNumber||(p.docVault&&p.docVault.ea)||'';
@@ -458,19 +536,135 @@ function renderProjects(){
       (p.jvNumber||'').toLowerCase().includes(q)||
       (p.location||'').toLowerCase().includes(q);
     const status = p.status || 'active';
-    const matchStatus = activeFilter==='all' || (activeFilter==='incomplete' ? isIncomplete(p) : status===activeFilter);
+    const matchStatus = statusFilter==='all' || (statusFilter==='incomplete' ? isIncomplete(p) : status===statusFilter);
     const matchFirm = firmFilter==='all' || (p.firm||'RSR Constructions')===firmFilter;
-    return matchQ && matchStatus && matchFirm && !isArchived(p);
-  // Sort: oldest agreement date first, no date goes to bottom
-  }).sort((a,b)=>{
-    if(!a.agreeDate && !b.agreeDate) return 0;
-    if(!a.agreeDate) return 1;
-    if(!b.agreeDate) return -1;
-    return a.agreeDate.localeCompare(b.agreeDate);
+    const matchType = typeFilter==='all' || (p.type||'')=== typeFilter;
+
+    // Quick pill filter
+    let matchPill = true;
+    if(projQuickFilter !== 'all'){
+      if(projQuickFilterType==='contractor') matchPill = p.contractorId===projQuickFilter;
+      else if(projQuickFilterType==='firm') matchPill = (p.firm||'RSR Constructions')===projQuickFilter;
+      else if(projQuickFilterType==='status') matchPill = projQuickFilter==='incomplete' ? isIncomplete(p) : (p.status||'active')===projQuickFilter;
+    }
+
+    return matchQ && matchStatus && matchFirm && matchType && matchPill && !isArchived(p);
   });
 
+  // Sort
+  list.sort((a,b)=>{
+    const boqA=(a.boq||[]).reduce((s,x)=>s+x.amount,0);
+    const boqB=(b.boq||[]).reduce((s,x)=>s+x.amount,0);
+    const relA=(a.releases||[]).reduce((s,r)=>s+r.amount,0);
+    const relB=(b.releases||[]).reduce((s,r)=>s+r.amount,0);
+    const maxA=((a.agreeAmt||boqA)*0.7)||1;
+    const maxB=((b.agreeAmt||boqB)*0.7)||1;
+    const capA=relA/maxA; const capB=relB/maxB;
+    if(sortBy==='agree-asc'){ if(!a.agreeDate&&!b.agreeDate) return 0; if(!a.agreeDate) return 1; if(!b.agreeDate) return -1; return a.agreeDate.localeCompare(b.agreeDate); }
+    if(sortBy==='agree-desc'){ if(!a.agreeDate&&!b.agreeDate) return 0; if(!a.agreeDate) return 1; if(!b.agreeDate) return -1; return b.agreeDate.localeCompare(a.agreeDate); }
+    if(sortBy==='cap-desc') return capB-capA;
+    if(sortBy==='cap-asc') return capA-capB;
+    if(sortBy==='name-asc') return a.name.localeCompare(b.name);
+    if(sortBy==='boq-desc') return boqB-boqA;
+    return 0;
+  });
+
+  // Update result count
+  const countEl = document.getElementById('proj-result-count');
+  if(countEl) countEl.textContent = list.length+' project'+(list.length===1?'':'s');
+
+  // Update advanced filter active count
+  const activeFilters = [statusFilter!=='all', firmFilter!=='all', typeFilter!=='all'].filter(Boolean).length;
+  const countBadge = document.getElementById('adv-filter-count');
+  if(countBadge) countBadge.textContent = activeFilters>0 ? `(${activeFilters})` : '';
+
+  // Build quick pills
+  buildQuickPills(list);
+
   const el=document.getElementById('proj-tbl');
-  // Find duplicate tender IDs
+  if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects found.</div></div>';return;}
+
+  if(projViewMode==='grid'){
+    renderProjectCards(list, el);
+  } else {
+    renderProjectTable(list, el);
+  }
+}
+
+// ─── CARD GRID VIEW ──────────────────────────────────
+function renderProjectCards(list, el){
+  const tenderCounts = {};
+  list.forEach(p=>{ if(p.tender) tenderCounts[p.tender.toLowerCase()] = (tenderCounts[p.tender.toLowerCase()]||0)+1; });
+  const dupTenders = new Set(Object.keys(tenderCounts).filter(t=>tenderCounts[t]>1));
+
+  el.innerHTML = '<div class="proj-grid">' + list.map(p=>{
+    const c = GC(p.contractorId);
+    const firmName = p.firm||'RSR Constructions';
+    const firmShort = firmName==='RSR Constructions'?'RSR':firmName==='R Sadhu Rao'?'RS Rao':'RLR';
+    const firmBg = firmName==='RSR Constructions'?'var(--navy)':firmName==='R Sadhu Rao'?'#7b3f00':'#1b5e20';
+    const status = p.status||'active';
+    const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
+    const deployed = (p.releases||[]).filter(r=>!isArchived(r)&&r.txType!=='receipt').reduce((s,r)=>s+r.amount,0);
+    const agAmt = p.agreeAmt||boqTotal;
+    const max70 = agAmt*0.7;
+    const capPct = max70>0?Math.round(deployed/max70*100):0;
+    const capColor = capPct>=100?'var(--red)':capPct>=70?'var(--amber)':'var(--green)';
+    const cardClass = capPct>=100?'card-overdue':capPct>=70?'card-warning':isIncomplete(p)?'card-incomplete':'card-ok';
+    const jvDate = p.jvDate ? fmtDate(p.jvDate) : '—';
+    const statusColors = {active:'#d4edda|#155724',onhold:'#fff3cd|#856404',completed:'#d1ecf1|#0c5460',settled:'#e8f5e9|#1b5e20'};
+    const [sbg,sclr] = (statusColors[status]||'#f5f5f5|#666').split('|');
+    const statusLabel = {active:'🟢 Active',onhold:'⏸ Hold',completed:'✅ Done',settled:'💰 Settled'}[status]||status;
+    const incBadge = isIncomplete(p) ? '<span style="font-size:9px;background:#ffc107;color:#333;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">INCOMPLETE</span>' : '';
+    const dupBadge = p.tender&&dupTenders.has((p.tender||'').toLowerCase()) ? '<span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">DUP</span>' : '';
+
+    return '<div class="proj-card '+cardClass+'" onclick="openDetail(\''+p.id+'\')">'+
+      '<div class="proj-card-header">'+
+        '<div class="proj-card-name">'+p.name+dupBadge+incBadge+'</div>'+
+        '<span class="proj-card-firm" style="background:'+firmBg+';color:#fff">'+firmShort+'</span>'+
+      '</div>'+
+      '<div class="proj-card-meta">'+
+        '<span style="background:'+sbg+';color:'+sclr+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">'+statusLabel+'</span>'+
+        (p.type?'<span style="color:var(--text3)">·</span><span>'+p.type+'</span>':'')+ 
+      '</div>'+
+      '<div class="proj-card-contractor">'+
+        '👷 '+(c?c.name:'No contractor')+ 
+      '</div>'+
+      '<div class="proj-card-amounts">'+
+        '<div><div class="lbl">Agreement</div><div class="val">'+fmt(agAmt)+'</div></div>'+
+        '<div><div class="lbl">Deployed</div><div class="val">'+fmt(deployed)+'</div></div>'+
+      '</div>'+
+      '<div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
+          '<span style="font-size:10px;color:var(--text3)">Cap used</span>'+
+          '<span style="font-size:11px;font-weight:800;color:'+capColor+'">'+capPct+'%</span>'+
+        '</div>'+
+        '<div class="proj-cap-bar"><div class="proj-cap-fill" style="width:'+Math.min(capPct,100)+'%;background:'+capColor+'"></div></div>'+
+      '</div>'+
+      '<div class="proj-card-footer">'+
+        '<div style="font-size:11px;color:var(--text3)">JV: <span style="font-weight:600;color:var(--text1)">'+jvDate+'</span></div>'+
+        '<div style="display:flex;gap:6px" onclick="event.stopPropagation()">'+
+          '<button class="btn btn-sm" style="padding:4px 10px;font-size:11px" onclick="openDetail(\''+p.id+'\')">View →</button>'+
+          '<div class="amenu-wrap">'+
+            '<button class="amenu-btn" onclick="event.stopPropagation();toggleMenu(\'pgm-'+p.id+'\')">⋮</button>'+
+            '<div class="amenu" id="pgm-'+p.id+'">'+
+              '<button class="amenu-item" onclick="openDetail(\''+p.id+'\')">📋 View Detail</button>'+
+              '<button class="amenu-item" onclick="openOwnerNotes(\''+p.id+'\')">📝 Owner Notes'+(p.ownerNotes?' ●':'')+'</button>'+
+              '<button class="amenu-item" onclick="openSettle(\''+p.id+'\')">🏦 Record Settlement</button>'+
+              '<button class="amenu-item" onclick="openExpectedJVMenu(\''+p.id+'\')" >📅 Expected JV'+(p.expectedJVMonth?' ✓':'')+'</button>'+
+              (status==='active'?'<button class="amenu-item" onclick="changeProjectStatus(\''+p.id+'\',\'onhold\')">⏸ Mark On Hold</button>':'')+
+              (status==='onhold'?'<button class="amenu-item" style="color:var(--green)" onclick="changeProjectStatus(\''+p.id+'\',\'active\')">▶ Mark Active</button>':'')+
+              (status!=='completed'?'<button class="amenu-item" onclick="changeProjectStatus(\''+p.id+'\',\'completed\')">✓ Mark Completed</button>':'')+
+              '<button class="amenu-item danger" onclick="deleteProject(\''+p.id+'\')">📦 Archive</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('') + '</div>';
+}
+
+// ─── TABLE VIEW ───────────────────────────────────────
+function renderProjectTable(list, el){
   const tenderCounts = {};
   list.forEach(p=>{ if(p.tender) tenderCounts[p.tender.toLowerCase()] = (tenderCounts[p.tender.toLowerCase()]||0)+1; });
   const dupTenders = new Set(Object.keys(tenderCounts).filter(t=>tenderCounts[t]>1));

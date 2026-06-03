@@ -700,3 +700,167 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
     overflow-y:auto;
   }
 }
+
+/* ─── PROJECT CARD GRID ──────────────────────────────── */
+.proj-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:14px;
+  margin-top:4px;
+}
+@media(min-width:1200px){
+  .proj-grid{ grid-template-columns:repeat(3,1fr); gap:16px; }
+}
+@media(min-width:1600px){
+  .proj-grid{ grid-template-columns:repeat(4,1fr); gap:18px; }
+}
+@media(max-width:600px){
+  .proj-grid{ grid-template-columns:1fr; gap:10px; }
+}
+
+.proj-card{
+  background:#fff;
+  border:1.5px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  cursor:pointer;
+  transition:box-shadow .15s, border-color .15s, transform .1s;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  position:relative;
+  overflow:hidden;
+}
+.proj-card:hover{
+  box-shadow:0 4px 18px rgba(0,0,0,.1);
+  border-color:var(--navy);
+  transform:translateY(-1px);
+}
+.proj-card.card-overdue{ border-left:4px solid var(--red); }
+.proj-card.card-warning{ border-left:4px solid var(--amber); }
+.proj-card.card-ok{ border-left:4px solid var(--green); }
+.proj-card.card-incomplete{ border-left:4px solid #ffc107; }
+
+.proj-card-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:8px;
+}
+.proj-card-name{
+  font-size:13px;
+  font-weight:700;
+  color:var(--navy);
+  line-height:1.4;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  flex:1;
+}
+.proj-card-firm{
+  font-size:10px;
+  font-weight:800;
+  padding:2px 7px;
+  border-radius:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.proj-card-meta{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  font-size:11px;
+  color:var(--text2);
+}
+.proj-card-contractor{
+  font-size:12px;
+  font-weight:600;
+  color:var(--text1);
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.proj-card-amounts{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:4px 12px;
+  font-size:11px;
+  margin-top:2px;
+}
+.proj-card-amounts .lbl{ color:var(--text3); }
+.proj-card-amounts .val{ font-weight:700; color:var(--text1); }
+.proj-cap-bar{
+  height:5px;
+  background:var(--surface2);
+  border-radius:4px;
+  overflow:hidden;
+  margin-top:2px;
+}
+.proj-cap-fill{
+  height:100%;
+  border-radius:4px;
+  transition:width .3s;
+}
+.proj-card-footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:2px;
+  padding-top:8px;
+  border-top:1px solid var(--surface2);
+}
+
+/* ─── QUICK FILTER PILLS ─────────────────────────────── */
+.qfilter-wrap{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+}
+.qfilter-pill{
+  padding:4px 12px;
+  border-radius:16px;
+  border:1.5px solid var(--border);
+  background:#fff;
+  font-size:11px;
+  font-weight:600;
+  color:var(--text2);
+  cursor:pointer;
+  font-family:'Inter',sans-serif;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.qfilter-pill:hover{ border-color:var(--navy); color:var(--navy); }
+.qfilter-pill.active{
+  background:var(--navy);
+  color:#fff;
+  border-color:var(--navy);
+}
+
+/* ─── VIEW TOGGLE ────────────────────────────────────── */
+.view-toggle{
+  display:flex;
+  gap:4px;
+  background:var(--surface2);
+  border-radius:8px;
+  padding:3px;
+}
+.view-toggle button{
+  padding:5px 10px;
+  border:none;
+  border-radius:6px;
+  font-size:12px;
+  cursor:pointer;
+  font-family:'Inter',sans-serif;
+  font-weight:600;
+  background:transparent;
+  color:var(--text2);
+  transition:all .15s;
+}
+.view-toggle button.active{
+  background:#fff;
+  color:var(--navy);
+  box-shadow:0 1px 4px rgba(0,0,0,.1);
+}
