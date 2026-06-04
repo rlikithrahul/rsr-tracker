@@ -30,7 +30,13 @@ function renderDocVault(p, isOwner) {
     const customLabel = p.documents[slot.id + '_label'] || slot.label;
 
     if (slot.type === 'text') {
-      // EA Number — text input only
+      const isEA = slot.id === 'ea';
+      const savedVal = doc || '';
+      const inputId = isEA ? `ea-input-${p.id}` : `gencode-input-${p.id}`;
+      const editWrapperId = isEA ? `ea-wrap-${p.id}` : `gencode-wrap-${p.id}`;
+      const saveFn = isEA ? `saveEANumber('${p.id}')` : `saveGenCode('${p.id}')`;
+      const toggleFn = isEA ? `toggleEAEdit('${p.id}')` : `toggleGenCodeEdit('${p.id}')`;
+
       return `<div class="doc-slot">
         <div class="doc-slot-header">
           <span class="doc-slot-icon">${slot.icon}</span>
@@ -40,14 +46,31 @@ function renderDocVault(p, isOwner) {
           </div>
         </div>
         ${isOwner ? `
-          <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
-            <input type="text" id="ea-input-${p.id}" value="${doc || ''}"
-              placeholder="${slot.id === 'ea' ? 'Enter EA number / Accounts number' : 'Enter Gen Code'}"
-              style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px"
-              onkeydown="if(event.key==='Enter')saveEANumber('${p.id}')">
-            <button class="btn btn-sm btn-navy" onclick="saveEANumber('${p.id}')">Save</button>
+          <div id="${editWrapperId}" style="margin-top:10px">
+            ${savedVal
+              ? `<div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14px;font-weight:700;color:var(--navy);letter-spacing:.03em">${savedVal}</span>
+                  <button onclick="${toggleFn}" style="background:none;border:1px solid var(--border);border-radius:var(--rs);padding:3px 8px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--text2)">✏️ Edit</button>
+                </div>
+                <div id="${inputId}-edit" style="display:none;margin-top:8px">
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <input type="text" id="${inputId}" value="${savedVal}"
+                      style="flex:1;padding:8px 12px;border:1.5px solid var(--navy);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px"
+                      onkeydown="if(event.key==='Enter')${saveFn};if(event.key==='Escape')${toggleFn}">
+                    <button class="btn btn-sm btn-navy" onclick="${saveFn}">Save</button>
+                    <button class="btn btn-sm" onclick="${toggleFn}">Cancel</button>
+                  </div>
+                </div>`
+              : `<div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="${inputId}" value=""
+                    placeholder="${slot.id === 'ea' ? 'Enter EA / Accounts number' : 'Enter Gen Code'}"
+                    style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px"
+                    onkeydown="if(event.key==='Enter')${saveFn}">
+                  <button class="btn btn-sm btn-navy" onclick="${saveFn}">Save</button>
+                </div>`
+            }
           </div>` :
-          `<div style="margin-top:8px;font-size:14px;font-weight:600;color:var(--navy)">${doc || '<span style="color:var(--text3);font-weight:400">Not entered yet</span>'}</div>`
+          `<div style="margin-top:8px;font-size:14px;font-weight:600;color:var(--navy)">${savedVal || '<span style="color:var(--text3);font-weight:400">Not entered yet</span>'}</div>`
         }
       </div>`;
     }
@@ -165,14 +188,31 @@ async function _doDocUpload(file, pid, slotId, jvDate){
     console.error('Doc upload error:', e);
   }
 }
+function toggleEAEdit(pid){
+  const editDiv = document.getElementById(`ea-input-${pid}-edit`);
+  const isHidden = editDiv?.style.display === 'none';
+  if(editDiv) editDiv.style.display = isHidden ? 'flex' : 'none';
+  if(isHidden) document.getElementById(`ea-input-${pid}`)?.focus();
+}
+function toggleGenCodeEdit(pid){
+  const editDiv = document.getElementById(`gencode-input-${pid}-edit`);
+  const isHidden = editDiv?.style.display === 'none';
+  if(editDiv) editDiv.style.display = isHidden ? 'flex' : 'none';
+  if(isHidden) document.getElementById(`gencode-input-${pid}`)?.focus();
+}
+
 async function saveEANumber(pid) {
   const p = GP(pid); if (!p) return;
   const val = document.getElementById(`ea-input-${pid}`)?.value?.trim() || '';
   if (!p.documents) p.documents = {};
   p.documents['ea'] = val;
+  p.eaNumber = val;
   try {
     await saveProjectDB(p);
     toast('✓ EA Number saved', 'ok');
+    const vaultEl = document.getElementById(`doc-vault-${pid}`);
+    if(vaultEl) vaultEl.outerHTML = renderDocVault(p, true);
+    else renderDetail(pid);
   } catch(e) { toast('Save failed', 'error'); }
 }
 
@@ -185,7 +225,9 @@ async function saveGenCode(pid) {
   try {
     await saveProjectDB(p);
     toast('✓ Gen Code saved', 'ok');
-    renderDocVault(pid);
+    const vaultEl = document.getElementById(`doc-vault-${pid}`);
+    if(vaultEl) vaultEl.outerHTML = renderDocVault(p, true);
+    else renderDetail(pid);
   } catch(e) { toast('Save failed', 'error'); }
 }
 

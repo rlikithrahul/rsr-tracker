@@ -555,10 +555,10 @@ function renderProjects(){
   list.sort((a,b)=>{
     const boqA=(a.boq||[]).reduce((s,x)=>s+x.amount,0);
     const boqB=(b.boq||[]).reduce((s,x)=>s+x.amount,0);
-    const relA=(a.releases||[]).reduce((s,r)=>s+r.amount,0);
-    const relB=(b.releases||[]).reduce((s,r)=>s+r.amount,0);
-    const maxA=((a.agreeAmt||boqA)*0.7)||1;
-    const maxB=((b.agreeAmt||boqB)*0.7)||1;
+    const relA=totRel(a);
+    const relB=totRel(b);
+    const maxA=maxF(a)||1;
+    const maxB=maxF(b)||1;
     const capA=relA/maxA; const capB=relB/maxB;
     if(sortBy==='agree-asc'){ if(!a.agreeDate&&!b.agreeDate) return 0; if(!a.agreeDate) return 1; if(!b.agreeDate) return -1; return a.agreeDate.localeCompare(b.agreeDate); }
     if(sortBy==='agree-desc'){ if(!a.agreeDate&&!b.agreeDate) return 0; if(!a.agreeDate) return 1; if(!b.agreeDate) return -1; return b.agreeDate.localeCompare(a.agreeDate); }
@@ -604,9 +604,9 @@ function renderProjectCards(list, el){
     const firmBg = firmName==='RSR Constructions'?'var(--navy)':firmName==='R Sadhu Rao'?'#7b3f00':'#1b5e20';
     const status = p.status||'active';
     const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
-    const deployed = (p.releases||[]).filter(r=>!isArchived(r)&&r.txType!=='receipt').reduce((s,r)=>s+r.amount,0);
+    const deployed = totRel(p);
     const agAmt = p.agreeAmt||boqTotal;
-    const max70 = agAmt*0.7;
+    const max70 = maxF(p);
     const capPct = max70>0?Math.round(deployed/max70*100):0;
     const capColor = capPct>=100?'var(--red)':capPct>=70?'var(--amber)':'var(--green)';
     const cardClass = capPct>=100?'card-overdue':capPct>=70?'card-warning':isIncomplete(p)?'card-incomplete':'card-ok';
@@ -684,8 +684,8 @@ function renderProjectTable(list, el){
       }[status]||'';
       const incompleteBadge = isIncomplete(p) ? `<span style="background:#ffc107;color:#333;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px">🔴 Incomplete (${getMissingFields(p).length})</span>` : '';
       const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
-      const rel = (p.releases||[]).reduce((s,r)=>s+r.amount,0);
-      const max70 = (p.agreeAmt||boqTotal)*0.7;
+      const rel = totRel(p);
+      const max70 = maxF(p);
       const capPct = max70>0?Math.round(rel/max70*100):0;
       const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
       return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
@@ -803,6 +803,76 @@ function ownerTab(i){
   if(i===7) renderGST();
   // Update sidebar active state
   updateSidebarActive(i);
+}
+// ─── NAVIGATION STATE ────────────────────────────────
+// Remembers where user was before opening a project detail
+let navHistory = {
+  tab: 1,
+  statusFilter: 'all',
+  firmFilter: 'all',
+  typeFilter: 'all',
+  sortFilter: 'agree-asc',
+  quickFilter: 'all',
+  quickFilterType: 'none',
+  viewMode: 'grid',
+  scrollY: 0
+};
+
+function saveNavState(){
+  navHistory = {
+    tab: atab,
+    statusFilter: document.getElementById('proj-status-filter')?.value || 'all',
+    firmFilter: document.getElementById('proj-firm-filter')?.value || 'all',
+    typeFilter: document.getElementById('proj-type-filter')?.value || 'all',
+    sortFilter: document.getElementById('proj-sort-filter')?.value || 'agree-asc',
+    quickFilter: projQuickFilter,
+    quickFilterType: projQuickFilterType,
+    viewMode: projViewMode,
+    scrollY: window.scrollY
+  };
+}
+
+function goBack(){
+  // Restore to previous tab and filter state
+  projViewMode = navHistory.viewMode;
+  projQuickFilter = navHistory.quickFilter;
+  projQuickFilterType = navHistory.quickFilterType;
+
+  // Switch to tab (ownerTab resets filters, so restore after)
+  const targetTab = navHistory.tab;
+  atab = targetTab; dpid = null;
+  document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===targetTab));
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst'];
+  document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
+  const targetId = mainSecs[targetTab];
+  if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
+  updateSidebarActive(targetTab);
+
+  if(targetTab === 1){
+    // Restore project tab state
+    renderProjects();
+    // Restore filter values after render
+    requestAnimationFrame(()=>{
+      const sf = document.getElementById('proj-status-filter');
+      const ff = document.getElementById('proj-firm-filter');
+      const tf = document.getElementById('proj-type-filter');
+      const sof = document.getElementById('proj-sort-filter');
+      const vtg = document.getElementById('vt-grid');
+      const vtt = document.getElementById('vt-table');
+      if(sf) sf.value = navHistory.statusFilter;
+      if(ff) ff.value = navHistory.firmFilter;
+      if(tf) tf.value = navHistory.typeFilter;
+      if(sof) sof.value = navHistory.sortFilter;
+      if(vtg) vtg.classList.toggle('active', navHistory.viewMode==='grid');
+      if(vtt) vtt.classList.toggle('active', navHistory.viewMode==='table');
+      renderProjects(); // re-render with restored filters
+      window.scrollTo(0, navHistory.scrollY);
+    });
+  } else if(targetTab === 0){ renderDash(); }
+  else if(targetTab === 2){ renderConts(); renderContractorPerformance(); }
+  else if(targetTab === 4){ renderInterest(); }
+  else if(targetTab === 5){ renderEMI(); }
+  else if(targetTab === 7){ renderGST(); }
 }
 // ─── SEARCH POSITIONING ───────────────────────────────
 function positionSearchResults(){
