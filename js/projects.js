@@ -200,8 +200,10 @@ function renderDetail(id){
         ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
       </div>
 
-      <!-- ACTION ITEMS: WEC + Refund -->
-      ${buildActionItems(p,id)}
+      <!-- LIFECYCLE TIMELINE -->
+      ${buildLifecycleTimeline(p,id)}
+
+      <!-- ACTION ITEMS: WEC + Refund (legacy fallback) -->
 
     <!-- Full BOQ (collapsible) -->
     <div class="card" id="boq-full-${id}" style="display:none">
@@ -509,4 +511,324 @@ function buildActionItems(p, id){
       ${daysUntilRefund<=0?`<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="markRefundApplied('${id}')">✓ Mark Refund as Applied</button>`:''}
     </div>` : ''}
   </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// PROJECT LIFECYCLE TIMELINE
+// ═══════════════════════════════════════════════════════
+function buildLifecycleTimeline(p, id){
+  const today = new Date();
+
+  // ── Determine each stage ──────────────────────────
+  const hasJV = !!p.jvDate;
+  const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+  const wecApplied = !!p.wecApplied;
+  const wecReceived = !!p.wecReceived;
+  const checkCount = (p.settlements||[]).filter(s=>!isArchived(s)).length;
+  const hasPayment = checkCount > 0;
+  const gstFiled = !!(p.gstFiled);
+  const refundApplied = !!p.refundApplied;
+  const refundReceived = !!p.refundReceived;
+
+  // EMD/ASD/FSD refund eligibility (2 years from JV)
+  let refundDaysLeft = null;
+  let refundEligible = false;
+  if(p.jvDate){
+    const twoYears = new Date(p.jvDate);
+    twoYears.setFullYear(twoYears.getFullYear()+2);
+    refundDaysLeft = Math.round((twoYears-today)/86400000);
+    refundEligible = refundDaysLeft <= 0;
+  }
+
+  // WEC deadline (3 months from EA)
+  let wecDaysLeft = null;
+  if(hasEA && !wecReceived && p.eaDate){
+    const wecDeadline = new Date(p.eaDate);
+    wecDeadline.setMonth(wecDeadline.getMonth()+3);
+    wecDaysLeft = Math.round((wecDeadline-today)/86400000);
+  }
+
+  // GST quarter from first settlement
+  let gstQuarterLabel = '';
+  if(hasPayment){
+    const firstCheck = (p.settlements||[]).filter(s=>!isArchived(s))[0];
+    if(firstCheck && firstCheck.date){
+      const d = new Date(firstCheck.date);
+      const m = d.getMonth()+1;
+      const y = d.getFullYear();
+      if(m>=4&&m<=6) gstQuarterLabel = 'Q1 Apr-Jun '+y;
+      else if(m>=7&&m<=9) gstQuarterLabel = 'Q2 Jul-Sep '+y;
+      else if(m>=10&&m<=12) gstQuarterLabel = 'Q3 Oct-Dec '+y;
+      else gstQuarterLabel = 'Q4 Jan-Mar '+y;
+    }
+  }
+
+  // ── Build stages ──────────────────────────────────
+  const stages = [
+    {
+      icon:'🏗️', label:'Running / Active',
+      done: true, // always done if we're viewing this project
+      date: p.agreeDate ? 'From '+fmtDate(p.agreeDate) : '',
+      action: null
+    },
+    {
+      icon:'📄', label:'JV Received',
+      done: hasJV,
+      date: hasJV ? fmtDate(p.jvDate)+' · JV #'+(p.jvNumber||'—') : '',
+      pending: !hasJV ? 'Waiting for JV from GVMC' : '',
+      action: null
+    },
+    {
+      icon:'🔢', label:'EA Number',
+      done: hasEA,
+      date: hasEA ? (p.eaNumber||(p.docVault&&p.docVault.ea)||'') : '',
+      pending: hasJV && !hasEA ? 'Awaiting EA number (usually 2-2.5 months after JV)' : '',
+      locked: !hasJV,
+      action: null
+    },
+    {
+      icon:'📜', label:'Work Experience Certificate',
+      done: wecReceived,
+      date: wecReceived ? 'Received '+(p.wecReceivedDate?fmtDate(p.wecReceivedDate):'') : wecApplied ? '⏳ Applied '+fmtDate(p.wecAppliedDate)+' — awaiting receipt' : '',
+      pending: hasEA && !wecReceived && !wecApplied ? (wecDaysLeft!==null&&wecDaysLeft<30?'⚠️ Apply NOW — deadline in '+wecDaysLeft+' days':'Apply for WEC — EA number received') : '',
+      warning: wecDaysLeft!==null&&wecDaysLeft<30&&!wecReceived,
+      locked: !hasEA,
+      actions: hasEA && !wecReceived ? (wecApplied
+        ? '<button class="btn btn-sm btn-navy" onclick="markWECReceived(\''+id+'\')">✓ Mark WEC Received</button>'
+        : '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markWECApplied(\''+id+'\')">✓ Mark WEC Applied</button>') : ''
+    },
+    {
+      icon:'💰', label:'Payment Received from GVMC',
+      done: hasPayment,
+      date: hasPayment ? checkCount+' payment'+(checkCount>1?'s':'')+' received · View in Fund Releases' : '',
+      pending: !hasPayment ? 'Waiting for GVMC payment' : '',
+      locked: false,
+      action: null
+    },
+    {
+      icon:'🧾', label:'GST Filing',
+      done: gstFiled,
+      date: gstFiled ? 'Filed — Q: '+(p.gstFiledQuarter||'') : hasPayment ? 'Quarter: '+gstQuarterLabel : '',
+      pending: hasPayment && !gstFiled ? '⚠️ File GST for this quarter — '+gstQuarterLabel : '',
+      warning: hasPayment && !gstFiled,
+      locked: !hasPayment,
+      actions: hasPayment ? '<button class="btn btn-sm" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="openGSTProjectPanel(\''+id+'\')">🧾 Open GST Details</button>' : ''
+    },
+    {
+      icon:'🏦', label:'EMD / ASD / FSD Refund',
+      done: refundReceived,
+      date: refundReceived ? 'Refund received' : refundApplied ? '⏳ Applied '+fmtDate(p.refundAppliedDate)+' — awaiting refund' :
+        refundDaysLeft!==null ? (refundEligible ? '🔴 Eligible NOW — apply immediately' : 'Eligible in '+Math.max(0,refundDaysLeft)+' days ('+fmtDate(new Date(new Date(p.jvDate).setFullYear(new Date(p.jvDate).getFullYear()+2)))+')') : '',
+      pending: refundEligible && !refundApplied ? '⚠️ 2 years since JV — apply for EMD/ASD/FSD refund NOW' : '',
+      warning: refundEligible && !refundReceived,
+      locked: !hasJV,
+      detail: (p.emd||p.asd||p.fsd) ? 'EMD: '+fmt(p.emd||0)+' · ASD: '+fmt(p.asd||0)+' · FSD: '+fmt(p.fsd||0) : '',
+      actions: hasJV && refundEligible && !refundApplied ? '<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markRefundApplied(\''+id+'\')">✓ Mark Applied</button>' :
+        refundApplied && !refundReceived ? '<button class="btn btn-sm btn-navy" onclick="markRefundReceived(\''+id+'\')">✓ Mark Received</button>' : ''
+    },
+    {
+      icon:'✅', label:'Project Fully Closed',
+      done: refundReceived && gstFiled && wecReceived,
+      date: refundReceived && gstFiled && wecReceived ? 'All stages complete — data retained for 10 years' : '',
+      pending: '',
+      locked: !(refundReceived && gstFiled && wecReceived)
+    }
+  ];
+
+  // ── Render timeline ───────────────────────────────
+  const stagesHtml = stages.map((s,i)=>{
+    const isDone = s.done;
+    const isLocked = s.locked && !isDone;
+    const isWarning = s.warning;
+    const dotColor = isDone?'var(--green)':isWarning?'var(--red)':isLocked?'var(--border)':'var(--amber)';
+    const dotBg = isDone?'#e8f5e9':isWarning?'#fef2f2':isLocked?'var(--surface2)':'#fffbeb';
+
+    return '<div style="display:flex;gap:12px;margin-bottom:'+(i===stages.length-1?'0':'16px')+'">'
+      // Dot + line
+      +'<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">'
+      +'<div style="width:28px;height:28px;border-radius:50%;background:'+dotBg+';border:2px solid '+dotColor+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">'
+      +(isDone?'✓':isLocked?'○':s.icon)
+      +'</div>'
+      +(i<stages.length-1?'<div style="width:2px;flex:1;background:'+(isDone?'var(--green)':'var(--border)')+';min-height:16px;margin-top:2px"></div>':'')
+      +'</div>'
+      // Content
+      +'<div style="flex:1;padding-bottom:4px">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<div style="font-size:13px;font-weight:700;color:'+(isLocked?'var(--text3)':isDone?'var(--text1)':'var(--navy)')+'">'+s.label+'</div>'
+      +(isDone?'<span style="font-size:10px;font-weight:700;color:var(--green);background:#e8f5e9;padding:1px 6px;border-radius:8px">✓ DONE</span>':'')
+      +(isWarning?'<span style="font-size:10px;font-weight:700;color:var(--red);background:#fef2f2;padding:1px 6px;border-radius:8px">⚠️ ACTION NEEDED</span>':'')
+      +'</div>'
+      +(s.date?'<div style="font-size:11px;color:var(--text2);margin-top:2px">'+s.date+'</div>':'')
+      +(s.detail?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+s.detail+'</div>':'')
+      +(s.pending?'<div style="font-size:11px;color:'+(isWarning?'var(--red)':'#92400e')+';margin-top:3px;font-weight:600">'+s.pending+'</div>':'')
+      +(s.actions?'<div style="margin-top:8px">'+s.actions+'</div>':'')
+      +'</div>'
+      +'</div>';
+  }).join('');
+
+  return '<div class="card" style="margin-bottom:14px">'
+    +'<details open>'
+    +'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:0">'
+    +'<div class="st" style="margin:0;border:none;padding:0">📋 Project Lifecycle</div>'
+    +'<span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>'
+    +'</summary>'
+    +'<div style="margin-top:16px">'+stagesHtml+'</div>'
+    +'</details>'
+    +'</div>';
+}
+
+// ═══════════════════════════════════════════════════════
+// GST PROJECT PANEL
+// ═══════════════════════════════════════════════════════
+function openGSTProjectPanel(pid){
+  const p = GP(pid); if(!p) return;
+
+  // Calculate from settlements
+  const settlements = (p.settlements||[]).filter(s=>!isArchived(s));
+  const totalReceived = settlements.reduce((s,x)=>s+x.amount,0);
+
+  // Base value = amount ÷ 1.16 (since 2% TDS already deducted)
+  const baseValue = p.gstBaseOverride || Math.round(totalReceived/1.16);
+  const gst18 = p.gstOutputOverride || Math.round(baseValue*0.18);
+  const tdsCredit = p.gstTDSOverride || Math.round(baseValue*0.02);
+  const cashGST = gst18 - tdsCredit;
+
+  // Split
+  const rsrPct = p.gstRSRPct !== undefined ? p.gstRSRPct : 35;
+  const subPct = 100 - rsrPct;
+  const rsrOutput = p.gstRSROutputOverride || Math.round(gst18*(rsrPct/100));
+  const subOutput = p.gstSubOutputOverride || Math.round(gst18*(subPct/100));
+
+  // ITC
+  const rsrITC = p.gstRSRITC || 0;
+  const subITC = p.gstSubITC || 0;
+  const rsrITCFiled = !!p.gstRSRITCFiled;
+  const subITCFiled = !!p.gstSubITCFiled;
+
+  // Quarter
+  let quarter = p.gstQuarter || '';
+  if(!quarter && settlements.length){
+    const d = new Date(settlements[0].date);
+    const m = d.getMonth()+1; const y = d.getFullYear();
+    if(m>=4&&m<=6) quarter='Q1 Apr-Jun '+y;
+    else if(m>=7&&m<=9) quarter='Q2 Jul-Sep '+y;
+    else if(m>=10&&m<=12) quarter='Q3 Oct-Dec '+y;
+    else quarter='Q4 Jan-Mar '+y;
+  }
+
+  let modal = document.getElementById('modal-gst-proj');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-gst-proj'; document.body.appendChild(modal); }
+
+  modal.innerHTML = '<div class="mbox" style="max-width:560px">'
+    +'<div class="mhdr"><h2>🧾 GST — '+p.name.substring(0,40)+(p.name.length>40?'...':'')+'</h2><button class="mx" onclick="CM(\'modal-gst-proj\')">✕</button></div>'
+
+    // Quarter info
+    +'<div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">'
+    +'📅 Filing Quarter: <strong style="color:var(--navy)">'+quarter+'</strong>'
+    +' &nbsp;·&nbsp; Total Received: <strong>'+fmt(totalReceived)+'</strong>'
+    +'</div>'
+
+    // Output tax section
+    +'<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Output Tax (from GVMC payment)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">'
+    +'<div class="fg"><label style="font-size:11px">Base Value (÷1.16)</label><input type="number" id="gp-base" value="'+baseValue+'" oninput="recalcGSTPanel()"></div>'
+    +'<div class="fg"><label style="font-size:11px">GST 18% (₹)</label><input type="number" id="gp-gst18" value="'+gst18+'" oninput="recalcGSTPanel()"></div>'
+    +'<div class="fg"><label style="font-size:11px">TDS Credit 2% (₹)</label><input type="number" id="gp-tds" value="'+tdsCredit+'" oninput="recalcGSTPanel()"></div>'
+    +'</div>'
+    +'<div style="background:#e8f5e9;border-radius:var(--rs);padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:12px;color:var(--text2)">Net Cash GST to pay (18% - 2% TDS)</span>'
+    +'<strong id="gp-net-cash" style="color:var(--red);font-size:14px">'+fmt(cashGST)+'</strong>'
+    +'</div>'
+
+    // Split section
+    +'<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Filing Split</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'
+
+    // RSR portion
+    +'<div style="border:1.5px solid var(--border);border-radius:var(--rs);padding:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">🏢 RSR Files</div>'
+    +'<div class="fg" style="margin-bottom:6px"><label style="font-size:11px">RSR % of work</label><input type="number" id="gp-rsr-pct" value="'+rsrPct+'" min="0" max="100" oninput="recalcGSTPanel()"></div>'
+    +'<div class="fg" style="margin-bottom:6px"><label style="font-size:11px">RSR Output GST (₹)</label><input type="number" id="gp-rsr-output" value="'+rsrOutput+'"></div>'
+    +'<div class="fg" style="margin-bottom:6px"><label style="font-size:11px">RSR ITC Claimed (₹)</label><input type="number" id="gp-rsr-itc" value="'+rsrITC+'"></div>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:4px">'
+    +'<input type="checkbox" id="gp-rsr-filed" '+(rsrITCFiled?'checked':'')+'>RSR portion filed in GSTR-1</label>'
+    +'</div>'
+
+    // Subcontractor portion
+    +'<div style="border:1.5px solid var(--border);border-radius:var(--rs);padding:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:#7b3f00;margin-bottom:8px">👷 Contractor Files</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Auto = 100% - RSR%</div>'
+    +'<div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Contractor Output GST (₹)</label><input type="number" id="gp-sub-output" value="'+subOutput+'"></div>'
+    +'<div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Contractor ITC (₹) — if RSR pays</label><input type="number" id="gp-sub-itc" value="'+subITC+'"></div>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:4px">'
+    +'<input type="checkbox" id="gp-sub-filed" '+(subITCFiled?'checked':'')+'>Contractor filed in GSTR-1</label>'
+    +'</div>'
+    +'</div>'
+
+    // Mark as fully filed
+    +'<div style="background:'+(p.gstFiled?'#e8f5e9':'#fff3cd')+';border-radius:var(--rs);padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+    +'<div>'
+    +'<div style="font-size:12px;font-weight:700">GST Status: '+(p.gstFiled?'<span style="color:var(--green)">✅ Filed</span>':'<span style="color:var(--amber)">⏳ Pending</span>')+'</div>'
+    +(p.gstFiledDate?'<div style="font-size:11px;color:var(--text3)">Filed on '+fmtDate(p.gstFiledDate)+'</div>':'')
+    +'</div>'
+    +(p.gstFiled
+      ? '<button class="btn btn-sm" onclick="saveGSTProject(\''+pid+'\',false)">↩ Mark Unfiled</button>'
+      : '<button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;font-weight:700;border-radius:var(--rs);padding:6px 14px;font-size:12px;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="saveGSTProject(\''+pid+'\',true)">✅ Mark GST as Filed</button>')
+    +'</div>'
+
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn" onclick="CM(\'modal-gst-proj\')">Cancel</button>'
+    +'<button class="btn btn-navy" onclick="saveGSTProject(\''+pid+'\',null)">💾 Save GST Details</button>'
+    +'</div>'
+    +'</div>';
+
+  modal.classList.add('open');
+}
+
+function recalcGSTPanel(){
+  const base = parseFloat(document.getElementById('gp-base')?.value)||0;
+  const gst18 = parseFloat(document.getElementById('gp-gst18')?.value)||(base*0.18);
+  const tds = parseFloat(document.getElementById('gp-tds')?.value)||(base*0.02);
+  const net = gst18-tds;
+  const netEl = document.getElementById('gp-net-cash');
+  if(netEl) netEl.textContent = '₹'+Math.round(net).toLocaleString('en-IN');
+  // Auto-calc RSR output from %
+  const rsrPct = parseFloat(document.getElementById('gp-rsr-pct')?.value)||35;
+  const rsrOut = document.getElementById('gp-rsr-output');
+  if(rsrOut) rsrOut.value = Math.round(gst18*(rsrPct/100));
+  const subOut = document.getElementById('gp-sub-output');
+  if(subOut) subOut.value = Math.round(gst18*((100-rsrPct)/100));
+}
+
+async function saveGSTProject(pid, markFiled){
+  const p = GP(pid); if(!p) return;
+  p.gstBaseOverride = parseFloat(document.getElementById('gp-base')?.value)||0;
+  p.gstOutputOverride = parseFloat(document.getElementById('gp-gst18')?.value)||0;
+  p.gstTDSOverride = parseFloat(document.getElementById('gp-tds')?.value)||0;
+  p.gstRSRPct = parseFloat(document.getElementById('gp-rsr-pct')?.value)||35;
+  p.gstRSROutputOverride = parseFloat(document.getElementById('gp-rsr-output')?.value)||0;
+  p.gstRSRITC = parseFloat(document.getElementById('gp-rsr-itc')?.value)||0;
+  p.gstRSRITCFiled = document.getElementById('gp-rsr-filed')?.checked||false;
+  p.gstSubOutputOverride = parseFloat(document.getElementById('gp-sub-output')?.value)||0;
+  p.gstSubITC = parseFloat(document.getElementById('gp-sub-itc')?.value)||0;
+  p.gstSubITCFiled = document.getElementById('gp-sub-filed')?.checked||false;
+  if(markFiled===true){ p.gstFiled=true; p.gstFiledDate=new Date().toISOString().split('T')[0]; }
+  if(markFiled===false){ p.gstFiled=false; p.gstFiledDate=null; }
+  try{
+    await saveProjectDB(p,{type:'gst_update',amount:0,ref:null,meta:{filed:p.gstFiled}});
+    CM('modal-gst-proj');
+    renderDetail(pid);
+    toast('✓ GST details saved','ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+async function markRefundReceived(pid){
+  const p = GP(pid); if(!p) return;
+  p.refundReceived = true;
+  p.refundReceivedDate = new Date().toISOString().split('T')[0];
+  try{
+    await saveProjectDB(p,{type:'refund_received',amount:0,ref:null,meta:{}});
+    renderDetail(pid);
+    toast('✓ Refund marked as received','ok');
+  }catch(e){ toast('Save failed','error'); }
 }

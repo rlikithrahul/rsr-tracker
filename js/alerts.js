@@ -187,9 +187,8 @@ function getProjectAlerts(p){
 // ─── GET ALL ALERTS ACROSS ALL PROJECTS ──────────────
 function getAllAlerts(){
   const all = [];
-  D.projects.filter(p=>!isArchived(p)&&(p.status||'active')==='active').forEach(p=>{
+  D.projects.filter(p=>!isArchived(p)&&(p.status||'active')!=='archived').forEach(p=>{
     getProjectAlerts(p).forEach(a=>all.push(a));
-    // getAutoWarnings returns warnings without projectId — add it here
     getAutoWarnings(p).forEach(w=>all.push({
       ...w,
       project: p,
@@ -197,6 +196,45 @@ function getAllAlerts(){
       priority: w.type==='red'?1:w.type==='amber'?2:3,
       action: w.action || 'Open project'
     }));
+
+    // ── GST PENDING ALERT ──────────────────────────
+    const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length>0;
+    if(hasPayment && !p.gstFiled){
+      const firstCheck = (p.settlements||[]).filter(s=>!isArchived(s))[0];
+      let qLabel = '';
+      if(firstCheck&&firstCheck.date){
+        const d=new Date(firstCheck.date); const m=d.getMonth()+1; const y=d.getFullYear();
+        if(m>=4&&m<=6) qLabel='Q1 '+y;
+        else if(m>=7&&m<=9) qLabel='Q2 '+y;
+        else if(m>=10&&m<=12) qLabel='Q3 '+y;
+        else qLabel='Q4 '+y;
+      }
+      all.push({
+        type:'amber', priority:2,
+        msg:'🧾 GST pending for "'+p.name.substring(0,40)+'" — '+qLabel,
+        shortMsg:'GST pending — '+qLabel,
+        project:p, projectId:p.id,
+        action:'Open GST details',
+        code:'gst_pending'
+      });
+    }
+
+    // ── EMD REFUND OVERDUE ALERT ───────────────────
+    if(p.jvDate && !p.refundReceived){
+      const twoYears = new Date(p.jvDate);
+      twoYears.setFullYear(twoYears.getFullYear()+2);
+      const daysOver = Math.round((new Date()-twoYears)/86400000);
+      if(daysOver > 0 && !p.refundApplied){
+        all.push({
+          type:'red', priority:1,
+          msg:'💰 EMD/ASD/FSD refund OVERDUE — '+p.name.substring(0,35)+' ('+daysOver+'d past 2yr)',
+          shortMsg:'Refund overdue',
+          project:p, projectId:p.id,
+          action:'Apply for refund',
+          code:'refund_overdue'
+        });
+      }
+    }
   });
   return all.sort((a,b)=>(a.priority||3)-(b.priority||3));
 }
