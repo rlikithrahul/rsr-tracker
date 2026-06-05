@@ -616,10 +616,11 @@ function renderProjectCards(list, el){
     const statusLabel = {active:'🟢 Active',onhold:'⏸ Hold',completed:'✅ Done',settled:'💰 Settled'}[status]||status;
     const incBadge = isIncomplete(p) ? '<span style="font-size:9px;background:#ffc107;color:#333;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">INCOMPLETE</span>' : '';
     const dupBadge = p.tender&&dupTenders.has((p.tender||'').toLowerCase()) ? '<span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">DUP</span>' : '';
+    const settleBadge = hasPossibleSettlement(p) ? '<span style="font-size:9px;background:#16a34a;color:#fff;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">💰 SETTLE?</span>' : '';
 
     return '<div class="proj-card '+cardClass+'" onclick="openDetail(\''+p.id+'\')">'+
       '<div class="proj-card-header">'+
-        '<div class="proj-card-name">'+p.name+dupBadge+incBadge+'</div>'+
+        '<div class="proj-card-name">'+p.name+dupBadge+incBadge+settleBadge+'</div>'+
         '<span class="proj-card-firm" style="background:'+firmBg+';color:#fff">'+firmShort+'</span>'+
       '</div>'+
       '<div class="proj-card-meta">'+

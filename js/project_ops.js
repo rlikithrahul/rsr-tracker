@@ -848,3 +848,145 @@ async function importProjectRow(row, mode){
     return {ok:false, msg:`${name}: ${e.message}`};
   }
 }
+
+// ═══════════════════════════════════════════════════════
+// SETTLEMENT DETECTION
+// Detects receipt transactions that likely = GVMC settlement
+// Criteria:
+//  1. Within ±5% of JV amount
+//  2. Within ±5% of agreement amount
+//  3. Greater than 70% cap amount
+//  4. Single largest transaction in project
+// ═══════════════════════════════════════════════════════
+
+function detectSettlementCandidates(p){
+  if(!p || isArchived(p)) return [];
+  // Only for completed/settled projects
+  const status = p.status||'active';
+  if(status==='active'||status==='onhold') return [];
+
+  // Already fully settled? Skip
+  const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0);
+  const usedRefs = new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>s.tallyRef));
+  const ignoredRefs = new Set((p.ignoredSettlementRefs||[]));
+
+  // Get unmatched receipt transactions
+  const receipts = (p.releases||[]).filter(r=>
+    r.txType==='receipt' &&
+    !isArchived(r) &&
+    !usedRefs.has(r.ref) &&
+    !ignoredRefs.has(r.id||r.ref)
+  );
+
+  if(!receipts.length) return [];
+
+  const jvAmt = p.jvAmount||0;
+  const agAmt = p.agreeAmt || (p.estimated*(1+(p.bidPct||0)/100)) || 0;
+  const cap70 = agAmt*0.7;
+
+  const candidates = [];
+
+  receipts.forEach(r=>{
+    const reasons = [];
+    const amt = r.amount;
+
+    // Criteria 1: within ±5% of JV amount
+    if(jvAmt>0 && Math.abs(amt-jvAmt)/jvAmt <= 0.05){
+      reasons.push('within ±5% of JV amount ('+fmt(jvAmt)+')');
+    }
+    // Criteria 2: within ±5% of agreement amount
+    if(agAmt>0 && Math.abs(amt-agAmt)/agAmt <= 0.05){
+      reasons.push('within ±5% of agreement amount ('+fmt(agAmt)+')');
+    }
+    // Criteria 3: greater than 70% cap
+    if(cap70>0 && amt > cap70){
+      reasons.push('exceeds 70% cap ('+fmt(cap70)+')');
+    }
+
+    if(reasons.length>0){
+      candidates.push({...r, reasons});
+    }
+  });
+
+  // Sort by amount desc — most likely candidate first
+  return candidates.sort((a,b)=>b.amount-a.amount);
+}
+
+function hasPossibleSettlement(p){
+  return detectSettlementCandidates(p).length > 0;
+}
+
+function renderSettlementDetectionBanner(p){
+  const candidates = detectSettlementCandidates(p);
+  if(!candidates.length) return '';
+
+  // Show top candidate
+  const c = candidates[0];
+  const extra = candidates.length>1 ? ` (+${candidates.length-1} more)` : '';
+
+  return '<div id="settle-detect-banner-'+p.id+'" style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+    +'<div style="font-size:20px;line-height:1">💰</div>'
+    +'<div style="flex:1">'
+    +'<div style="font-weight:800;font-size:13px;color:#92400e;margin-bottom:4px">Possible Settlement Detected'+extra+'</div>'
+    +'<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px">'+fmt(c.amount)+'</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:4px">'
+    +c.date+' · '+(c.ref?'Vch #'+c.ref+' · ':'')+(c.notes||'Receipt')
+    +'</div>'
+    +'<div style="font-size:11px;color:#92400e;margin-bottom:10px">Matches: '+c.reasons.join(' · ')+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button onclick="quickSettleFromDetection(\''+p.id+'\',\''+c.id+'\','+c.amount+',\''+c.date+'\',\''+c.ref+'\')" '
+    +'style="background:#16a34a;color:#fff;border:none;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✅ Yes, Record Settlement</button>'
+    +'<button onclick="editSettleFromDetection(\''+p.id+'\',\''+c.id+'\','+c.amount+',\''+c.date+'\',\''+c.ref+'\')" '
+    +'style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✏️ Edit First</button>'
+    +'<button onclick="ignoreSettlementDetection(\''+p.id+'\',\''+c.id+'\',\''+c.ref+'\')" '
+    +'style="background:none;border:1.5px solid #d1d5db;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;color:var(--text2)">❌ Not a Settlement</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+async function quickSettleFromDetection(pid, rid, amount, date, ref){
+  const p = GP(pid); if(!p) return;
+  if(!p.settlements) p.settlements = [];
+  p.settlements.push({
+    id: uid(), date, amount,
+    mode: 'Bank Transfer', ref: ref||'',
+    notes: 'Auto-detected from Tally receipt',
+    tallyRef: ref||'',
+    settledAt: new Date().toISOString()
+  });
+  try{
+    await saveProjectDB(p, {type:'settlement', amount, ref, meta:{autoDetected:true}});
+    renderDetail(pid);
+    toast('✅ Settlement recorded — ₹'+amount.toLocaleString('en-IN'), 'ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+function editSettleFromDetection(pid, rid, amount, date, ref){
+  // Open settle modal with amount pre-filled
+  openSettle(pid);
+  setTimeout(()=>{
+    const amtEl = document.getElementById('settle-amt');
+    const dateEl = document.getElementById('settle-date');
+    const refEl = document.getElementById('settle-ref');
+    if(amtEl) amtEl.value = amount;
+    if(dateEl) dateEl.value = date;
+    if(refEl) refEl.value = ref||'';
+  }, 200);
+}
+
+async function ignoreSettlementDetection(pid, rid, ref){
+  const p = GP(pid); if(!p) return;
+  if(!p.ignoredSettlementRefs) p.ignoredSettlementRefs = [];
+  if(rid && !p.ignoredSettlementRefs.includes(rid)) p.ignoredSettlementRefs.push(rid);
+  if(ref && !p.ignoredSettlementRefs.includes(ref)) p.ignoredSettlementRefs.push(ref);
+  try{
+    await saveProjectDB(p, {type:'ignore_settlement_detection', amount:0, ref, meta:{}});
+    // Remove banner without full re-render
+    const banner = document.getElementById('settle-detect-banner-'+pid);
+    if(banner) banner.remove();
+    toast('Dismissed — transaction marked as not a settlement', 'ok');
+  }catch(e){ toast('Save failed','error'); }
+}

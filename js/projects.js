@@ -150,6 +150,7 @@ function renderDetail(id){
       </div>
     </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
   document.getElementById('detail-wrap').innerHTML=`
+    ${renderSettlementDetectionBanner(p)}
     ${isIncomplete(p) ? `<div style="background:#fff3cd;border:1.5px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px">
       <div style="font-size:18px;line-height:1">🔴</div>
       <div style="flex:1">
