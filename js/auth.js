@@ -61,6 +61,7 @@ async function ownerLogin(){
   if(pw === D.ownerPw){
     CU={role:'owner', name:'Likith', isSuperAdmin:true};
     saveSession(CU);
+    logLogin('Likith', 'super_admin', null);
     await writeActivityLog('login', 'Likith logged in (Super Admin)');
     enterOwner();
     return;
@@ -71,6 +72,7 @@ async function ownerLogin(){
   if(staff){
     CU={role:'owner', name:staff.name, isSuperAdmin:false, staffId:staff.id};
     saveSession(CU);
+    logLogin(staff.name, 'staff', null);
     await writeActivityLog('login', `${staff.name} logged in`);
     enterOwner();
     return;
@@ -118,7 +120,9 @@ async function contLogin(){
 
   if(authenticated){
     CU={role:'contractor',id:contractor.id,name:contractor.name};
-    saveSession(CU); enterCont();
+    saveSession(CU);
+    logLogin(contractor.name, 'contractor', contractor.name);
+    enterCont();
   } else {
     showErr('Name or password incorrect. Contact RSR office.');
   }

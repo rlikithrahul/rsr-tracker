@@ -697,6 +697,7 @@ async function matchAndImport(transactions){
       ref: tx.vchNo,
       meta: { costCentre: tx.costCentre, narration: tx.narration, vchType: tx.vchType, source:'tally' }
     });
+    logFundRelease(proj, tx.amount, tx.vchNo, tx.txType||'payment');
     if(tx.txType==='receipt') matchedReceipts++; else matchedPayments++;
   }
 

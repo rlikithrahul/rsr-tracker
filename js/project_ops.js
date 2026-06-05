@@ -507,6 +507,7 @@ async function confirmSettle(){
       ref: document.getElementById('settle-ref').value,
       meta:{ mode: document.getElementById('settle-mode').value, notes: document.getElementById('settle-notes').value }
     });
+    logSettlement(p, amt, ref, date);
     CM('modal-settle');
     renderDetail(settlePid);
     toast(`✓ Settlement of ${fmt(amt)} recorded`,'ok');
@@ -989,4 +990,19 @@ async function ignoreSettlementDetection(pid, rid, ref){
     if(banner) banner.remove();
     toast('Dismissed — transaction marked as not a settlement', 'ok');
   }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── DELETE SETTLEMENT ────────────────────────────────
+async function deleteSettlement(pid, sid){
+  if(!confirm('Remove this settlement record? This cannot be undone.')) return;
+  const p = GP(pid); if(!p) return;
+  const s = (p.settlements||[]).find(x=>x.id===sid);
+  if(!s) return;
+  // Soft delete
+  s._archived = true;
+  try{
+    await saveProjectDB(p, {type:'settlement_deleted', amount:s.amount, ref:s.ref, meta:{deletedSettlementId:sid, date:s.date}});
+    renderDetail(pid);
+    toast('Settlement removed','ok');
+  }catch(e){ toast('Failed to remove','error'); }
 }

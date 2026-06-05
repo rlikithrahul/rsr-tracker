@@ -106,17 +106,17 @@ async function renderSettings(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">📋 Activity Log</div>
-          <div style="font-size:12px;color:var(--text2)">Every action recorded — logins, project changes, Tally imports, verifications.</div>
+          <div style="font-size:12px;color:var(--text2)">Complete audit trail — every login, project view, edit, fund release, settlement, and import.</div>
         </div>
-        <button class="btn btn-sm btn-navy" onclick="refreshActivityLog()">🔄 Refresh</button>
       </div>
-      <div id="activity-log-wrap">
-        <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Loading activity log…</div>
+      <div id="activity-filter-bar" style="margin-bottom:12px"></div>
+      <div id="activity-log-full" style="max-height:600px;overflow-y:auto">
+        <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Loading…</div>
       </div>
     </div>`;
 
-  // Load activity log
-  refreshActivityLog();
+  // Load full activity log
+  renderFullActivityLog();
 }
 
 function renderStaffList(){

@@ -6,6 +6,8 @@
 async function openDetail(id){
   saveNavState(); // remember where we came from
   dpid=id;
+  const p = GP(id);
+  if(p) logProjectView(p);
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   document.querySelectorAll('.nav-link').forEach(e=>e.classList.remove('active'));
   document.getElementById('sec-detail').classList.remove('hidden');
@@ -134,7 +136,7 @@ function renderDetail(id){
     </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No transactions yet. Import from Tally to populate.</div>';
 
   const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
-  const settleLog=(p.settlements||[]).slice().reverse().map(s=>`<div class="settle-row"><span>🏦 ${s.date} · ${s.mode} ${s.ref?'· '+s.ref:''} · ${s.notes||''}</span><strong style="color:var(--green)">${fmt(s.amount)}</strong></div>`).join('');
+  const settleLog=(p.settlements||[]).filter(s=>!isArchived(s)).slice().reverse().map(s=>`<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} · ${s.notes||''}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`).join('');
 
   const verLog=(p.verifications||[]).slice().reverse().map(v=>`
     <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
