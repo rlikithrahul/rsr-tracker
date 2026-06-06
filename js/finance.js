@@ -286,10 +286,16 @@ function renderFunds(){
               <div style="font-size:18px;font-weight:800;color:var(--navy)">₹${t.amount.toLocaleString('en-IN')}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <select id="um-assign-p-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
-                <option value="">— Assign to project —</option>
-                ${D.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
-              </select>
+              <div style="flex:1;min-width:200px;position:relative">
+                <input type="text" id="um-search-p-${i}" placeholder="🔍 Type to search project…"
+                  oninput="filterUnmatchedDropdown('um-search-p-${i}','um-assign-p-${i}-list')"
+                  onfocus="document.getElementById('um-assign-p-${i}-list').style.display='block'"
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;box-sizing:border-box">
+                <div id="um-assign-p-${i}-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--rs);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)">
+                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-p-${i}','um-assign-p-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name.substring(0,55)}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}</div></div>`).join('')}
+                </div>
+                <input type="hidden" id="um-assign-p-${i}" value="">
+              </div>
               <button class="btn btn-sm btn-navy" onclick="assignUnmatched(${i},false)">✓ Assign</button>
               <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},false)">🗑️ Delete</button>
             </div>
@@ -320,10 +326,16 @@ function renderFunds(){
               <div style="font-size:18px;font-weight:800;color:var(--green)">₹${t.amount.toLocaleString('en-IN')}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <select id="um-assign-r-${i}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
-                <option value="">— Assign to project —</option>
-                ${D.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
-              </select>
+              <div style="flex:1;min-width:200px;position:relative">
+                <input type="text" id="um-search-r-${i}" placeholder="🔍 Type to search project…"
+                  oninput="filterUnmatchedDropdown('um-search-r-${i}','um-assign-r-${i}-list')"
+                  onfocus="document.getElementById('um-assign-r-${i}-list').style.display='block'"
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;box-sizing:border-box">
+                <div id="um-assign-r-${i}-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--rs);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)">
+                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-r-${i}','um-assign-r-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name.substring(0,55)}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}</div></div>`).join('')}
+                </div>
+                <input type="hidden" id="um-assign-r-${i}" value="">
+              </div>
               <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="assignUnmatched(${i},true)">✓ Assign</button>
               <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},true)">🗑️ Delete</button>
             </div>
@@ -1139,3 +1151,34 @@ async function importAllMissing(){
   toast(`✅ ${missing.length} transactions imported`,'ok');
   renderFunds();
 }
+
+// ─── SEARCHABLE PROJECT DROPDOWN FOR UNMATCHED ───────
+function filterUnmatchedDropdown(inputId, listId){
+  const q = (document.getElementById(inputId)?.value||'').toLowerCase();
+  const list = document.getElementById(listId);
+  if(!list) return;
+  list.style.display = 'block';
+  Array.from(list.children).forEach(item=>{
+    const text = item.textContent.toLowerCase();
+    item.style.display = text.includes(q) ? 'block' : 'none';
+  });
+}
+
+function selectUnmatchedProject(inputId, listId, pid, pname){
+  const inp = document.getElementById(inputId);
+  const hidden = document.getElementById(inputId.replace('um-search-','um-assign-').replace('-list','').replace('search-',''));
+  const list = document.getElementById(listId);
+  // Find the hidden input by deriving its ID
+  const hiddenId = listId.replace('-list','');
+  const hiddenEl = document.getElementById(hiddenId);
+  if(inp) inp.value = pname;
+  if(hiddenEl) hiddenEl.value = pid;
+  if(list) list.style.display = 'none';
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e=>{
+  if(!e.target.closest('[id^="um-search-"]') && !e.target.closest('[id$="-list"]')){
+    document.querySelectorAll('[id$="-list"][style*="display: block"]').forEach(el=>el.style.display='none');
+  }
+});

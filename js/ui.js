@@ -174,9 +174,9 @@ function renderDash(){
   // Right sidebar column — capital + EMI
   const sidebarCol = document.getElementById('dash-sidebar-col');
   if(sidebarCol){
-    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div>`;
+    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div><div id="dash-matcredit-section"></div>`;
   } else {
-    document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div>');
+    document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div><div id="dash-matcredit-section"></div>');
   }
 
   renderCapitalSection(allProjects);
@@ -190,6 +190,11 @@ function renderDash(){
   if(D.gstData){
     const gstEl = document.getElementById('dash-gst-section');
     if(gstEl) gstEl.innerHTML = getGSTDashboardAlerts();
+  }
+  // Material credit alerts
+  const matEl = document.getElementById('dash-matcredit-section');
+  if(matEl && typeof getMatCreditDashboardAlerts === 'function'){
+    matEl.innerHTML = getMatCreditDashboardAlerts();
   }
 }
 
@@ -731,6 +736,7 @@ const SIDEBAR_TABS = [
   {i:4, icon:'📈', label:'Interest'},
   {i:5, icon:'💳', label:'EMI Calendar'},
   {i:7, icon:'🧾', label:'GST'},
+  {i:8, icon:'🧱', label:'Material Credit'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -788,7 +794,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -802,6 +808,10 @@ function ownerTab(i){
   if(i===5) renderEMI();
   if(i===6) renderSettings();
   if(i===7) renderGST();
+  if(i===8) renderMatCredit();
+  // Push to browser history + save session
+  if(typeof pushTabHistory === 'function') pushTabHistory(i);
+  if(typeof saveSessionState === 'function') saveSessionState();
   // Update sidebar active state
   updateSidebarActive(i);
 }

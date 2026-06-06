@@ -389,3 +389,25 @@ async function markRefundApplied(pid){
     toast('✓ Refund marked as applied','ok');
   }catch(e){ toast('Save failed','error'); }
 }
+
+async function markASDApplied(pid){
+  const p = GP(pid); if(!p) return;
+  p.asdRefundApplied = true;
+  p.asdRefundAppliedDate = new Date().toISOString().split('T')[0];
+  try{
+    await saveProjectDB(p, {type:'asd_refund_applied', amount:p.asd||0, ref:null, meta:{}});
+    renderDetail(pid);
+    toast('✓ ASD refund marked as applied','ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+async function markASDReceived(pid){
+  const p = GP(pid); if(!p) return;
+  p.asdRefundReceived = true;
+  p.asdRefundReceivedDate = new Date().toISOString().split('T')[0];
+  try{
+    await saveProjectDB(p, {type:'asd_refund_received', amount:p.asd||0, ref:null, meta:{}});
+    renderDetail(pid);
+    toast('✓ ASD refund marked as received','ok');
+  }catch(e){ toast('Save failed','error'); }
+}

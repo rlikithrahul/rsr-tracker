@@ -299,6 +299,11 @@
       <div class="wrap" id="gst-wrap"></div>
     </div>
 
+    <!-- Material Credit tab -->
+    <div class="osec hidden" id="sec-matcredit">
+      <div class="wrap" id="matcredit-wrap"></div>
+    </div>
+
     <!-- Project detail (full-page) -->
     <div class="osec hidden" id="sec-detail">
       <div id="detail-wrap"></div>
@@ -356,22 +361,8 @@
   </div>
   <div class="frow">
     <div class="fg"><label>Type *</label>
-      <select id="np-type" onchange="handleCustomType('np-type','np-type-custom')">
-        <option value="Road">Road</option>
-<option value="Building">Building</option>
-<option value="Drain">Drain</option>
-<option value="Culvert">Culvert</option>
-<option value="Bridge">Bridge</option>
-<option value="Retaining Wall">Retaining Wall</option>
-<option value="False Ceiling">False Ceiling</option>
-<option value="Compound Wall">Compound Wall</option>
-<option value="Community Hall">Community Hall</option>
-<option value="Electrical">Electrical</option>
-<option value="Plumbing">Plumbing</option>
-<option value="Other">Other</option>
-<option value="__custom__">+ Add custom type...</option>
-      </select>
-      <input type="text" id="np-type-custom" placeholder="Enter custom work type" style="display:none;margin-top:6px;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+      <div id="np-type-chips"></div>
+      <script>document.addEventListener('DOMContentLoaded',()=>renderTypeChips('np-type-chips',[]));</script>
     </div>
     <div class="fg"><label>Contractor *</label><select id="np-cont"></select></div>
   </div>
@@ -512,23 +503,8 @@
   </div>
   <div class="fg"><label>Project Name *</label><input type="text" id="ep-name" placeholder="Full project name"></div>
   <div class="fg"><label>Tender ID</label><input type="text" id="ep-tender" placeholder="Tender number"></div>
-  <div class="fg"><label>Work Type</label>
-    <select id="ep-type" onchange="handleCustomType('ep-type','ep-type-custom')">
-      <option value="Road">Road</option>
-<option value="Building">Building</option>
-<option value="Drain">Drain</option>
-<option value="Culvert">Culvert</option>
-<option value="Bridge">Bridge</option>
-<option value="Retaining Wall">Retaining Wall</option>
-<option value="False Ceiling">False Ceiling</option>
-<option value="Compound Wall">Compound Wall</option>
-<option value="Community Hall">Community Hall</option>
-<option value="Electrical">Electrical</option>
-<option value="Plumbing">Plumbing</option>
-<option value="Other">Other</option>
-<option value="__custom__">+ Add custom type...</option>
-    </select>
-    <input type="text" id="ep-type-custom" placeholder="Enter custom work type" style="display:none;margin-top:6px;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+  <div class="fg"><label>Work Type <span style="color:var(--text3);font-weight:400;font-size:11px">Select one or more</span></label>
+    <div id="ep-type-chips"></div>
   </div>
   <div class="frow">
     <div class="fg"><label>Agreement Date <span style="color:var(--text3);font-weight:400;font-size:11px">(optional)</span></label><input type="date" id="ep-date"></div>
@@ -636,6 +612,8 @@
   <script src="js/settings.js"></script>
   <script src="js/emi.js"></script>
   <script src="js/gst.js"></script>
+  <script src="js/matcredit.js"></script>
+  <script src="js/premium.js"></script>
   <script src="js/labour.js"></script>
   <script src="js/utils.js"></script>
 <script src="js/db.js"></script>

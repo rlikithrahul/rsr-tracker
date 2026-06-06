@@ -864,3 +864,61 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   color:var(--navy);
   box-shadow:0 1px 4px rgba(0,0,0,.1);
 }
+
+/* ─── REPORT TABLE HEADER FIX ───────────────────────── */
+#modal-report-view table thead th,
+#modal-report-view table tfoot th,
+#modal-report-view table tfoot td {
+  color: rgba(255,255,255,.9) !important;
+  background: var(--navy) !important;
+  text-transform: none;
+}
+
+/* ─── PREMIUM UX ─────────────────────────────────────── */
+@keyframes spin {
+  to { transform: translateX(-50%) rotate(360deg); }
+}
+/* Smooth transitions for all interactive elements */
+.btn, button { transition: transform .1s, opacity .1s, background .15s; }
+.proj-card { transition: box-shadow .15s, border-color .15s, transform .1s; }
+.qfilter-pill { transition: all .15s; }
+/* Better focus rings */
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+/* Smooth modal open/close */
+.mov { transition: background .2s; }
+.mbox { animation: slideUp .2s ease-out; }
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+/* Keyboard shortcut hints */
+.kbd-hint {
+  display: inline-block;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  font-family: monospace;
+}
+/* Bottom sheet modals on mobile */
+@media(max-width:600px){
+  .mov { align-items: flex-end; padding: 0; }
+  .mbox {
+    border-radius: 16px 16px 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh;
+    overflow-y: auto;
+    animation: slideUpSheet .25s ease-out;
+  }
+  @keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+}

@@ -11,74 +11,99 @@ function renderCHome(){
   document.getElementById('cp-proj').classList.add('hidden');
   document.getElementById('cp-upd').classList.add('hidden');
   document.getElementById('cp-funds').classList.add('hidden');
-  const mine=D.projects.filter(p=>p.contractorId===CU.id);
-  const activeFilter = document.getElementById('cont-proj-filter')?.value || 'active';
-  const el=document.getElementById('cp-home');
 
-  // Check offline queue count asynchronously and update UI
+  // Supervisor check — hide funds tab if supervisor
+  const isSupervisor = CU.isSupervisor === true;
+  const cbnFunds = document.getElementById('cbn-1');
+  if(cbnFunds) cbnFunds.style.display = isSupervisor ? 'none' : 'flex';
+
+  const mine = D.projects.filter(p=>p.contractorId===CU.id);
+  const el = document.getElementById('cp-home');
+
+  // Get filters
+  const statusFilter = document.getElementById('cont-status-filter')?.value || 'active';
+  const firmFilter = document.getElementById('cont-firm-filter')?.value || 'all';
+
+  // Filter projects
+  let filtered = mine.filter(p=>{
+    const status = p.status||'active';
+    const matchStatus = statusFilter==='all' || status===statusFilter;
+    const matchFirm = firmFilter==='all' || (p.firm||'RSR Constructions')===firmFilter;
+    return matchStatus && matchFirm && !isArchived(p);
+  });
+
+  // Counts for tabs
+  const activeCount = mine.filter(p=>!isArchived(p)&&(p.status||'active')==='active').length;
+  const completedCount = mine.filter(p=>!isArchived(p)&&p.status==='completed').length;
+
+  // Build alerts
+  const cAlerts = (typeof getContractorAlerts === 'function') ? getContractorAlerts(CU.id) : [];
+  const alertsHtml = cAlerts.length ? '<div style="margin-bottom:14px">'
+    +cAlerts.map(a=>'<div style="padding:10px 12px;border-left:3px solid '+(a.type==='red'?'var(--red)':'var(--amber)')+';background:'+(a.type==='red'?'#fef2f2':'#fffbeb')+';border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;font-size:13px">'+a.msg+'</div>').join('')
+    +'</div>' : '';
+
+  if(!mine.length){
+    el.innerHTML='<div id="offline-pending-banner"></div><div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>';
+    return;
+  }
+
+  el.innerHTML = '<div id="offline-pending-banner"></div>'
+    +alertsHtml
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    +'<h2 style="font-size:18px;font-weight:700;color:var(--navy)">My Projects</h2>'
+    +'<button onclick="triggerInstall()" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">📲 Install App</button>'
+    +'</div>'
+    // Status quick tabs
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<button onclick="setCContFilter(\'active\')" style="padding:5px 14px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '+(statusFilter==='active'?'var(--navy)':'var(--border)')+';background:'+(statusFilter==='active'?'var(--navy)':'#fff')+';color:'+(statusFilter==='active'?'#fff':'var(--text2)')+'">🟢 Active ('+activeCount+')</button>'
+    +'<button onclick="setCContFilter(\'completed\')" style="padding:5px 14px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '+(statusFilter==='completed'?'var(--navy)':'var(--border)')+';background:'+(statusFilter==='completed'?'var(--navy)':'#fff')+';color:'+(statusFilter==='completed'?'#fff':'var(--text2)')+'">✅ Completed ('+completedCount+')</button>'
+    +'<button onclick="setCContFilter(\'all\')" style="padding:5px 14px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '+(statusFilter==='all'?'var(--navy)':'var(--border)')+';background:'+(statusFilter==='all'?'var(--navy)':'#fff')+';color:'+(statusFilter==='all'?'#fff':'var(--text2)')+'">All ('+mine.filter(p=>!isArchived(p)).length+')</button>'
+    // Firm filter
+    +'<select id="cont-firm-filter" onchange="renderCHome()" style="padding:5px 10px;border-radius:16px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:#fff;font-family:\'Inter\',sans-serif;cursor:pointer">'
+    +'<option value="all">All Firms</option>'
+    +'<option value="RSR Constructions" '+(firmFilter==='RSR Constructions'?'selected':'')+'>RSR</option>'
+    +'<option value="R Sadhu Rao" '+(firmFilter==='R Sadhu Rao'?'selected':'')+'>RS Rao</option>'
+    +'<option value="R Likith Rahul" '+(firmFilter==='R Likith Rahul'?'selected':'')+'>RLR</option>'
+    +'</select>'
+    +'<input type="hidden" id="cont-status-filter" value="'+statusFilter+'">'
+    +'</div>'
+    // Project list
+    +(filtered.length===0 ? '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No projects in this filter.</div></div>' :
+      filtered.map(p=>{
+        const status = p.status||'active';
+        const statusColor = status==='active'?'var(--green)':status==='completed'?'#0c5460':'var(--text3)';
+        const statusLabel = status==='active'?'🟢 Active':status==='completed'?'✅ Completed':'⏸ On Hold';
+        const vp = verPct(p);
+        const types = (p.types&&p.types.length) ? p.types.join(', ') : (p.type||'');
+        return '<div class="ppill" onclick="cOpenProj(\'' + p.id + '\')">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;flex-wrap:wrap">'
+          +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:3px">'+p.name+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'+types+(p.location?' · '+p.location:'')+(p.tender?' · #'+p.tender:'')+'</div></div>'
+          +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+statusColor+'22;color:'+statusColor+'">'+statusLabel+'</span>'
+          +'</div>'
+          +'<div class="prog" style="margin:0"><div class="prog-lbl"><span>RSR verified</span><span>'+pct(vp)+'</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:'+Math.min(vp,100)+'%"></div></div></div>'
+          +'</div>';
+      }).join(''));
+
+  // Offline banner
   getOfflineQueue().then(q=>{
     const pendingEl = document.getElementById('offline-pending-banner');
     if(pendingEl && q.length>0){
-      pendingEl.style.display='block';
-      pendingEl.innerHTML=`<div class="alert al-amber" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <span>📥 ${q.length} update${q.length>1?'s':''} saved offline — not yet synced</span>
-        ${navigator.onLine&&dbOK?`<button class="btn btn-sm btn-navy" onclick="syncOfflineQueue().then(renderCHome)">Sync Now</button>`:'<span style="font-size:12px;color:var(--amber)">Connect internet to sync</span>'}
-      </div>`;
+      pendingEl.innerHTML='<div class="alert al-amber" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>📥 '+q.length+' update'+(q.length>1?'s':'')+' saved offline — not yet synced</span>'+(navigator.onLine&&dbOK?'<button class="btn btn-sm btn-navy" onclick="syncOfflineQueue().then(renderCHome)">Sync Now</button>':'<span style="font-size:12px;color:var(--amber)">Connect internet to sync</span>')+'</div>';
     }
   }).catch(()=>{});
-
-  // Build contractor alerts
-  const cAlerts = (typeof getContractorAlerts === 'function') ? getContractorAlerts(CU.id) : [];
-  const alertsHtml = cAlerts.length ? `<div style="margin-bottom:14px">
-    ${cAlerts.map(a=>`<div style="padding:10px 12px;border-left:3px solid ${a.type==='red'?'var(--red)':'var(--amber)'};
-      background:${a.type==='red'?'#fef2f2':'#fffbeb'};border-radius:0 var(--rs) var(--rs) 0;margin-bottom:6px;font-size:13px">
-      ${a.msg}</div>`).join('')}
-  </div>` : '';
-
-  if(!mine.length){
-    el.innerHTML=`<div id="offline-pending-banner"></div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-      <button onclick="triggerInstall()" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">📲 Install App</button>
-    </div>
-    ${alertsHtml}
-    <div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No projects assigned yet.<br>Contact RSR office.</div></div>`;
-    return;
-  }
-  el.innerHTML=`
-    <div id="offline-pending-banner"></div>
-    ${alertsHtml}
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
-      <h2 style="font-size:20px;font-weight:700;color:var(--navy)">My Projects</h2>
-      <button onclick="triggerInstall()" id="install-app-btn" style="background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:'Inter',sans-serif">📲 Install App</button>
-    </div>
-    <p style="font-size:13px;color:var(--text3);margin-bottom:20px">Tap a project to update progress or upload photos.</p>`+
-  mine.map(p=>`<div class="ppill" onclick="cOpenProj('${p.id}')">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;flex-wrap:wrap">
-      <div><div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:3px">${p.name}</div>
-      <div style="font-size:12px;color:var(--text3)">${p.type} · ${p.location||''} · #${p.tender}</div></div>
-      ${sBadge(pStat(p),p)}
-    </div>
-    <div class="prog" style="margin:0"><div class="prog-lbl"><span>Work verified by RSR</span><span>${pct(verPct(p))}</span></div><div class="prog-track"><div class="prog-fill pf-navy" style="width:${Math.min(verPct(p),100)}%"></div></div></div>
-  </div>`).join('');
-
-  // Async: update offline banner after render
-  setTimeout(()=>{
-    getOfflineQueue().then(q=>{
-      const pendingEl = document.getElementById('offline-pending-banner');
-      if(pendingEl){
-        if(q.length>0){
-          pendingEl.innerHTML=`<div class="alert al-amber" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-            <span>📥 ${q.length} update${q.length>1?'s':''} saved offline — not yet synced</span>
-            ${navigator.onLine&&dbOK?`<button class="btn btn-sm btn-navy" onclick="syncOfflineQueue().then(()=>renderCHome())">Sync Now</button>`:'<span style="font-size:12px">Connect internet to sync</span>'}
-          </div>`;
-        } else {
-          pendingEl.innerHTML='';
-        }
-      }
-    }).catch(()=>{});
-  }, 100);
 }
 
+function setCContFilter(status){
+  const el = document.getElementById('cont-status-filter');
+  if(el) el.value = status; else {
+    // Create hidden field if not exists
+    const h = document.createElement('input');
+    h.type='hidden'; h.id='cont-status-filter'; h.value=status;
+    document.getElementById('cp-home').appendChild(h);
+  }
+  renderCHome();
+}
 
 
 function toggleCBOQ(id){
@@ -166,6 +191,27 @@ async function cOpenProj(id){
     <div class="card" style="margin-bottom:12px">
       <div class="st" style="margin-bottom:10px">📋 My Update History</div>
       ${renderUpdateHistory(p.id)}
+    </div>
+
+    <!-- RSR Project Documents (JV, EA, Gen Code, WEC) -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="st" style="margin-bottom:10px">📋 Project Documents (RSR)</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${[
+          {label:'JV Date', value: p.jvDate ? fmtDate(p.jvDate) : null, icon:'📄'},
+          {label:'JV Number', value: p.jvNumber||null, icon:'🔢'},
+          {label:'JV Amount', value: p.jvAmount ? fmt(p.jvAmount) : null, icon:'💰'},
+          {label:'EA / Accounts Number', value: p.eaNumber||(p.docVault&&p.docVault.ea)||null, icon:'🔑'},
+          {label:'Gen Code', value: p.genCode||(p.docVault&&p.docVault.gencode)||null, icon:'🏷️'},
+          {label:'Tender ID', value: p.tender||null, icon:'📑'},
+          {label:'Agreement Date', value: p.agreeDate ? fmtDate(p.agreeDate) : null, icon:'📅'},
+        ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:var(--rs)">'
+          +'<span style="font-size:12px;color:var(--text2)">'+d.icon+' '+d.label+'</span>'
+          +'<span style="font-size:13px;font-weight:700;color:'+(d.value?'var(--navy)':'var(--text3)')+'">'+  (d.value||'—')+'</span>'
+          +'</div>').join('')}
+        ${(p.docVault&&p.docVault.wec&&p.docVault.wec.url)?'<a href="'+p.docVault.wec.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e8f5e9;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--green);text-decoration:none">📜 View Work Experience Certificate →</a>':''}
+        ${(p.documents&&p.documents.ea&&p.docVault&&p.docVault.ea_doc&&p.docVault.ea_doc.url)?'<a href="'+p.docVault.ea_doc.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e3f2fd;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--navy);text-decoration:none">🔑 View EA Document →</a>':''}
+      </div>
     </div>
 
     <!-- Site Documents -->
@@ -602,4 +648,83 @@ function uploadContractorDoc(pid, slotId){
   input.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx';
   input.onchange = (e) => handleContractorDocUpload(e, pid, slotId);
   input.click();
+}
+
+// ═══════════════════════════════════════════════════════
+// SUPERVISOR LOGIN SYSTEM
+// Contractors can create sub-logins for their supervisors
+// Supervisors: everything except Funds/Finance tab
+// ═══════════════════════════════════════════════════════
+
+function renderSupervisorPanel(){
+  const c = D.contractors.find(x=>x.id===CU.id);
+  if(!c) return '';
+  const supervisors = c.supervisors||[];
+
+  return '<div class="card" style="margin-bottom:14px">'
+    +'<div class="st" style="margin-bottom:12px">👥 My Supervisors</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:12px">Supervisors can view all project details and submit updates. They cannot see funds or interest.</div>'
+    +(supervisors.length
+      ? supervisors.map((s,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px;gap:8px;flex-wrap:wrap">'
+          +'<div><div style="font-size:13px;font-weight:700">'+s.name+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">Login: '+s.username+' · Password: ••••••</div></div>'
+          +'<button onclick="deleteSupervisor(\''+s.id+'\')" style="background:none;border:1px solid var(--border);border-radius:var(--rs);padding:4px 10px;font-size:11px;color:var(--red);cursor:pointer;font-family:\'Inter\',sans-serif">Remove</button>'
+          +'</div>').join('')
+      : '<div style="font-size:13px;color:var(--text3);padding:12px 0">No supervisors added yet.</div>')
+    +'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">Add New Supervisor</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<input type="text" id="sv-name" placeholder="Full name" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px">'
+    +'<input type="text" id="sv-user" placeholder="Username (to login)" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px">'
+    +'<input type="password" id="sv-pw" placeholder="Password" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px">'
+    +'<button onclick="addSupervisor()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">+ Add</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+async function addSupervisor(){
+  const name = document.getElementById('sv-name')?.value?.trim();
+  const username = document.getElementById('sv-user')?.value?.trim();
+  const pw = document.getElementById('sv-pw')?.value?.trim();
+  if(!name||!username||!pw){ toast('Fill in name, username and password','error'); return; }
+
+  const c = D.contractors.find(x=>x.id===CU.id);
+  if(!c) return;
+  if(!c.supervisors) c.supervisors=[];
+
+  // Check username unique
+  if(c.supervisors.find(s=>s.username===username)){ toast('Username already exists','error'); return; }
+
+  c.supervisors.push({ id:uid(), name, username, password:pw, createdAt:new Date().toISOString() });
+  try{
+    await saveContractorDB(c);
+    toast('✓ Supervisor '+name+' added','ok');
+    // Re-render supervisor panel
+    const svEl = document.getElementById('sv-panel');
+    if(svEl) svEl.innerHTML = renderSupervisorPanel();
+  }catch(e){ toast('Save failed','error'); }
+}
+
+async function deleteSupervisor(svId){
+  if(!confirm('Remove this supervisor?')) return;
+  const c = D.contractors.find(x=>x.id===CU.id);
+  if(!c) return;
+  c.supervisors = (c.supervisors||[]).filter(s=>s.id!==svId);
+  try{
+    await saveContractorDB(c);
+    const svEl = document.getElementById('sv-panel');
+    if(svEl) svEl.innerHTML = renderSupervisorPanel();
+    toast('Supervisor removed','ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+// Supervisor login — called from contLogin in auth.js
+function checkSupervisorLogin(name, pw){
+  for(const c of D.contractors){
+    const sups = c.supervisors||[];
+    const sv = sups.find(s=>s.username===name && s.password===pw);
+    if(sv) return { supervisor:sv, contractor:c };
+  }
+  return null;
 }

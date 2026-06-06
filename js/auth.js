@@ -88,7 +88,19 @@ async function contLogin(){
   if(!name||!pw){ showErr('Enter name and password.'); return; }
   try { await loadDB(); } catch(e){}
 
-  // Match by full name, username, or phone number
+  // Check supervisor login first
+  if(typeof checkSupervisorLogin === 'function'){
+    const svMatch = checkSupervisorLogin(name, pw);
+    if(svMatch){
+      CU={role:'contractor', id:svMatch.contractor.id, name:svMatch.supervisor.name, isSupervisor:true, supervisorId:svMatch.supervisor.id};
+      saveSession(CU);
+      logLogin(svMatch.supervisor.name, 'supervisor', svMatch.contractor.name);
+      enterCont();
+      return;
+    }
+  }
+
+  // Match contractor by full name, username, or phone number
   const contractor = D.contractors.find(c=>{
     const nameMatch = c.name.trim().toLowerCase()===name.toLowerCase();
     const usernameMatch = c.username && c.username.trim().toLowerCase()===name.toLowerCase();
@@ -145,6 +157,8 @@ function logout(){
 
 function enterOwner(){
   document.getElementById('main-nav').style.display='flex';
+  // Premium UX init
+  if(typeof initPremium === 'function') initPremium();
   const rb=document.getElementById('nav-role');
   rb.textContent='Owner'; rb.style.background='rgba(201,168,76,.2)'; rb.style.color='var(--gold)';
   document.getElementById('nav-uname').textContent=(CU&&!CU.isSuperAdmin&&CU.name)?CU.name:'Likith';
@@ -159,8 +173,13 @@ function enterOwner(){
   SP('page-owner');
   Promise.all([
     loadEMIData().catch(()=>{}),
-    loadGSTData().catch(()=>{})
-  ]).then(()=>{ ownerTab(0); }).catch(()=>{ ownerTab(0); });
+    loadGSTData().catch(()=>{}),
+    loadCustomWorkTypes().catch(()=>{})
+  ]).then(()=>{
+    // Try restoring previous session position
+    if(typeof restoreSessionState === 'function' && restoreSessionState()) return;
+    ownerTab(0);
+  }).catch(()=>{ ownerTab(0); });
   startAutoRefresh();
 }
 
@@ -187,7 +206,8 @@ function enterCont(){
   bnav.style.display='flex';
   bnav.innerHTML=`
     <button class="bn active" id="cbn-0" onclick="cTab(0)"><div class="bn-icon">🏗️</div><div>My Sites</div></button>
-    <button class="bn" id="cbn-1" onclick="cTab(1)"><div class="bn-icon">💰</div><div>My Funds</div></button>`;
+    <button class="bn" id="cbn-1" onclick="cTab(1)" style="${CU.isSupervisor?'display:none':''}"><div class="bn-icon">💰</div><div>My Funds</div></button>
+    <button class="bn" id="cbn-2" onclick="cTab(2)" style="${CU.isSupervisor?'display:none':''}"><div class="bn-icon">👥</div><div>Team</div></button>`;
   SP('page-cont'); cTab(0);
   startAutoRefresh();
 }
@@ -195,7 +215,14 @@ function enterCont(){
 function cTab(i){
   document.querySelectorAll('[id^="cbn-"]').forEach((b,j)=>b.classList.toggle('active',j===i));
   if(i===0){ renderCHome(); document.getElementById('cp-funds').classList.add('hidden'); }
-  if(i===1){ renderCFunds(); ['cp-home','cp-proj','cp-upd'].forEach(id=>document.getElementById(id).classList.add('hidden')); }
+  if(i===1){ renderCFunds(); ['cp-home','cp-proj','cp-upd'].forEach(id=>document.getElementById(id)?.classList.add('hidden')); }
+  if(i===2){
+    ['cp-home','cp-proj','cp-upd','cp-funds'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+    let svTab = document.getElementById('cp-supervisors');
+    if(!svTab){ svTab=document.createElement('div'); svTab.id='cp-supervisors'; svTab.className='cp-section'; document.getElementById('page-cont').appendChild(svTab); }
+    svTab.classList.remove('hidden');
+    svTab.innerHTML = '<div style="padding:16px"><div id="sv-panel">'+renderSupervisorPanel()+'</div></div>';
+  }
 }
 
 function renderCFunds(){

@@ -7,7 +7,11 @@ async function openDetail(id){
   saveNavState(); // remember where we came from
   dpid=id;
   const p = GP(id);
-  if(p) logProjectView(p);
+  if(p){
+    logProjectView(p);
+    if(typeof pushDetailHistory === 'function') pushDetailHistory(id, p.name);
+    if(typeof saveSessionState === 'function') saveSessionState();
+  }
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   document.querySelectorAll('.nav-link').forEach(e=>e.classList.remove('active'));
   document.getElementById('sec-detail').classList.remove('hidden');
@@ -203,6 +207,9 @@ function renderDetail(id){
         <!-- Interest accrued — see Interest tab --><div style="font-size:11px;color:var(--text3);margin-top:4px"><a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a></div>
         ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
       </div>
+
+      <!-- MATERIAL CREDIT -->
+      ${renderProjectMatCredit(p)}
 
       <!-- LIFECYCLE TIMELINE -->
       ${buildLifecycleTimeline(p,id)}
@@ -534,7 +541,13 @@ function buildLifecycleTimeline(p, id){
   const refundApplied = !!p.refundApplied;
   const refundReceived = !!p.refundReceived;
 
-  // EMD/ASD/FSD refund eligibility (2 years from JV)
+  // ASD refund — eligible immediately after EA number
+  const asdAmount = p.asd||0;
+  const asdApplied = !!p.asdRefundApplied;
+  const asdReceived = !!p.asdRefundReceived;
+  const asdEligible = hasEA && asdAmount > 0;
+
+  // EMD/FSD refund eligibility (2 years from JV)
   let refundDaysLeft = null;
   let refundEligible = false;
   if(p.jvDate){
@@ -601,6 +614,19 @@ function buildLifecycleTimeline(p, id){
         ? '<button class="btn btn-sm btn-navy" onclick="markWECReceived(\''+id+'\')">✓ Mark WEC Received</button>'
         : '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markWECApplied(\''+id+'\')">✓ Mark WEC Applied</button>') : ''
     },
+    // ASD REFUND — eligible immediately after EA number
+    ...(asdAmount > 0 ? [{
+      icon:'💵', label:'ASD Refund',
+      done: asdReceived,
+      date: asdReceived ? 'Received — '+fmt(asdAmount) : asdApplied ? '⏳ Applied — awaiting refund of '+fmt(asdAmount) : hasEA ? '🟢 Eligible now — '+fmt(asdAmount)+' can be claimed' : '',
+      pending: asdEligible && !asdApplied ? '⚠️ Apply for ASD refund — eligible after EA number' : '',
+      warning: asdEligible && !asdApplied,
+      locked: !hasEA,
+      detail: 'ASD: '+fmt(asdAmount)+' · Eligible from day EA number received',
+      actions: asdEligible && !asdApplied
+        ? '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markASDApplied(\''+id+'\')">✓ Mark ASD Applied</button>'
+        : asdApplied && !asdReceived ? '<button class="btn btn-sm btn-navy" onclick="markASDReceived(\''+id+'\')">✓ Mark ASD Received</button>' : ''
+    }] : []),
     {
       icon:'💰', label:'Payment Received from GVMC',
       done: hasPayment,
@@ -619,14 +645,14 @@ function buildLifecycleTimeline(p, id){
       actions: hasPayment ? '<button class="btn btn-sm" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="openGSTProjectPanel(\''+id+'\')">🧾 Open GST Details</button>' : ''
     },
     {
-      icon:'🏦', label:'EMD / ASD / FSD Refund',
+      icon:'🏦', label:'EMD / FSD Refund',
       done: refundReceived,
       date: refundReceived ? 'Refund received' : refundApplied ? '⏳ Applied '+fmtDate(p.refundAppliedDate)+' — awaiting refund' :
         refundDaysLeft!==null ? (refundEligible ? '🔴 Eligible NOW — apply immediately' : 'Eligible in '+Math.max(0,refundDaysLeft)+' days ('+fmtDate(new Date(new Date(p.jvDate).setFullYear(new Date(p.jvDate).getFullYear()+2)))+')') : '',
-      pending: refundEligible && !refundApplied ? '⚠️ 2 years since JV — apply for EMD/ASD/FSD refund NOW' : '',
+      pending: refundEligible && !refundApplied ? '⚠️ 2 years since JV — apply for EMD/FSD refund NOW' : '',
       warning: refundEligible && !refundReceived,
       locked: !hasJV,
-      detail: (p.emd||p.asd||p.fsd) ? 'EMD: '+fmt(p.emd||0)+' · ASD: '+fmt(p.asd||0)+' · FSD: '+fmt(p.fsd||0) : '',
+      detail: (p.emd||p.fsd) ? 'EMD: '+fmt(p.emd||0)+' · FSD: '+fmt(p.fsd||0) : '',
       actions: hasJV && refundEligible && !refundApplied ? '<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markRefundApplied(\''+id+'\')">✓ Mark Applied</button>' :
         refundApplied && !refundReceived ? '<button class="btn btn-sm btn-navy" onclick="markRefundReceived(\''+id+'\')">✓ Mark Received</button>' : ''
     },

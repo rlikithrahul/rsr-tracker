@@ -1,38 +1,113 @@
-// ─── CUSTOM WORK TYPE ────────────────────────────────
-// Custom types are stored in settings and added to dropdown
-function handleCustomType(selectId, inputId){
-  const sel = document.getElementById(selectId);
-  const inp = document.getElementById(inputId);
+// ─── WORK TYPE SYSTEM ────────────────────────────────
+// Multi-select work types with persistent custom types
+
+const BASE_WORK_TYPES = [
+  'Road','Building','Drain','SW DRAIN','Culvert','Bridge',
+  'Retaining Wall','False Ceiling','Compound Wall','Community Hall',
+  'Electrical','Plumbing','Central Median','Bailing Water','Other'
+];
+
+function getAllWorkTypes(){
+  const custom = D.customWorkTypes||[];
+  return [...new Set([...BASE_WORK_TYPES, ...custom])];
+}
+
+async function saveCustomWorkTypes(){
+  try{
+    await sbReq('settings?key=eq.custom_work_types','PATCH',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])});
+  }catch(e){
+    try{ await sbReq('settings','POST',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])}); }catch(e2){}
+  }
+}
+
+async function loadCustomWorkTypes(){
+  try{
+    const rows = await sbReq('settings?key=eq.custom_work_types','GET');
+    if(rows&&rows[0]) D.customWorkTypes = JSON.parse(rows[0].value||'[]');
+  }catch(e){}
+}
+
+// Render multi-select type chips widget
+function renderTypeChips(containerId, selectedTypes){
+  const sel = Array.isArray(selectedTypes) ? selectedTypes : (selectedTypes ? [selectedTypes] : []);
+  const all = getAllWorkTypes();
+  const el = document.getElementById(containerId);
+  if(!el) return;
+
+  el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="'+containerId+'-chips">'
+    +all.map(t=>'<button type="button" onclick="toggleTypeChip(\''+containerId+'\',\''+t+'\')" '
+      +'id="chip-'+containerId+'-'+t.replace(/\s/g,'_')+'" '
+      +'style="padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '
+      +(sel.includes(t)?'var(--navy)':'var(--border)')+';background:'
+      +(sel.includes(t)?'var(--navy)':'#fff')+';color:'
+      +(sel.includes(t)?'#fff':'var(--text2)'+';transition:all .15s')+'">'+t+'</button>').join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<input type="text" id="'+containerId+'-custom-input" placeholder="+ Add custom type" '
+    +'style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:\'Inter\',sans-serif;flex:1" '
+    +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();addCustomTypeChip(\''+containerId+'\')}">'
+    +'<button type="button" onclick="addCustomTypeChip(\''+containerId+'\')" '
+    +'style="padding:6px 12px;background:var(--navy);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">+ Add</button>'
+    +'</div>'
+    +'<div id="'+containerId+'-selected" style="font-size:11px;color:var(--text3);margin-top:6px">'
+    +(sel.length?'Selected: '+sel.join(', '):'No types selected')+'</div>';
+}
+
+function toggleTypeChip(containerId, type){
+  const chipsEl = document.getElementById(containerId+'-chips');
+  if(!chipsEl) return;
+  const btn = document.getElementById('chip-'+containerId+'-'+type.replace(/\s/g,'_'));
+  if(!btn) return;
+  const isSelected = btn.style.background === 'var(--navy)' || btn.getAttribute('data-sel')==='1';
+  if(isSelected){
+    btn.style.background='#fff'; btn.style.color='var(--text2)'; btn.style.borderColor='var(--border)';
+    btn.removeAttribute('data-sel');
+  } else {
+    btn.style.background='var(--navy)'; btn.style.color='#fff'; btn.style.borderColor='var(--navy)';
+    btn.setAttribute('data-sel','1');
+  }
+  // Update selected label
+  const selected = getSelectedTypes(containerId);
+  const selEl = document.getElementById(containerId+'-selected');
+  if(selEl) selEl.textContent = selected.length ? 'Selected: '+selected.join(', ') : 'No types selected';
+}
+
+async function addCustomTypeChip(containerId){
+  const inp = document.getElementById(containerId+'-custom-input');
   if(!inp) return;
-  if(sel.value === '__custom__'){
-    inp.style.display = 'block';
-    inp.focus();
-  } else {
-    inp.style.display = 'none';
+  const val = inp.value.trim();
+  if(!val) return;
+  // Add to global custom types if not already there
+  if(!D.customWorkTypes) D.customWorkTypes=[];
+  if(!D.customWorkTypes.includes(val) && !BASE_WORK_TYPES.includes(val)){
+    D.customWorkTypes.push(val);
+    saveCustomWorkTypes().catch(()=>{});
   }
+  // Re-render with new type selected
+  const current = getSelectedTypes(containerId);
+  current.push(val);
+  renderTypeChips(containerId, current);
+  // Re-select the newly added chip
+  setTimeout(()=>{
+    const btn = document.getElementById('chip-'+containerId+'-'+val.replace(/\s/g,'_'));
+    if(btn){ btn.style.background='var(--navy)'; btn.style.color='#fff'; btn.style.borderColor='var(--navy)'; btn.setAttribute('data-sel','1'); }
+    const selEl = document.getElementById(containerId+'-selected');
+    const sel = getSelectedTypes(containerId);
+    if(selEl) selEl.textContent = sel.length ? 'Selected: '+sel.join(', ') : 'No types selected';
+  }, 50);
 }
 
-function getSelectedType(selectId, inputId){
-  const sel = document.getElementById(selectId);
-  const inp = document.getElementById(inputId);
-  if(sel.value === '__custom__') return (inp&&inp.value.trim()) || 'Other';
-  return sel.value;
+function getSelectedTypes(containerId){
+  const chipsEl = document.getElementById(containerId+'-chips');
+  if(!chipsEl) return [];
+  return Array.from(chipsEl.querySelectorAll('[data-sel="1"]')).map(b=>b.textContent.trim());
 }
 
-function setTypeDropdown(selectId, inputId, value){
-  const sel = document.getElementById(selectId);
-  if(!sel || !value) return;
-  // Check if value exists in dropdown
-  const exists = Array.from(sel.options).some(o=>o.value===value);
-  if(exists){
-    sel.value = value;
-  } else {
-    // Custom type — select custom option and show input
-    sel.value = '__custom__';
-    const inp = document.getElementById(inputId);
-    if(inp){ inp.style.display='block'; inp.value=value; }
-  }
-}
+// Legacy compat
+function handleCustomType(selectId, inputId){}
+function getSelectedType(selectId, inputId){ return getSelectedTypes(selectId).join(', ')||'Other'; }
+function setTypeDropdown(selectId, inputId, value){}
+
 
 // ═══════════════════════════════════════
 // project_ops.js
@@ -54,6 +129,8 @@ function initNP(){
   });
   const dateEl=document.getElementById('np-date');
   if(dateEl) dateEl.value=new Date().toISOString().split('T')[0];
+  // Render type chips (empty selection)
+  renderTypeChips('np-type-chips', []);
   // Render BOQ upload section
   const uploadSection=document.getElementById('boq-upload-section');
   if(uploadSection) uploadSection.innerHTML=renderBOQUploadSection();
@@ -104,7 +181,8 @@ async function saveProject(){
   const proj={
     id:uid(), name, tender,
     firm:document.getElementById('np-firm').value||'RSR Constructions',
-    type:getSelectedType('np-type','np-type-custom'),
+    type:getSelectedTypes('np-type-chips').join(', ')||'Other',
+    types:getSelectedTypes('np-type-chips'),
     contractorId, estimated:est,
     bidPct:parseFloat(document.getElementById('np-bid').value)||0,
     agreeDate:document.getElementById('np-date').value,
@@ -539,6 +617,9 @@ function openEditProject(pid){
 
   document.getElementById('ep-firm').value = p.firm||'RSR Constructions';
   setTypeDropdown('ep-type','ep-type-custom', p.type||'Road');
+  // Render type chips with current selection
+  const currentTypes = p.types && p.types.length ? p.types : (p.type ? p.type.split(', ').map(t=>t.trim()) : ['Road']);
+  setTimeout(()=>{ renderTypeChips('ep-type-chips', currentTypes); }, 100);
   document.getElementById('ep-name').value = p.name||'';
   document.getElementById('ep-tender').value = p.tender||'';
   document.getElementById('ep-date').value = p.agreeDate||'';
@@ -567,7 +648,8 @@ async function saveEditProject(){
   if(!name){ toast('Project name is required','error'); return; }
 
   p.firm = document.getElementById('ep-firm').value||'RSR Constructions';
-  p.type = getSelectedType('ep-type','ep-type-custom');
+  p.types = getSelectedTypes('ep-type-chips');
+  p.type = p.types.join(', ')||getSelectedType('ep-type','ep-type-custom')||'Other';
   p.name = name;
   p.tender = document.getElementById('ep-tender').value.trim();
   p.agreeDate = document.getElementById('ep-date').value;

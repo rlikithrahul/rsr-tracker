@@ -26,7 +26,7 @@ const UPLOAD_WORKER_URL = 'https://rsr-upload-worker.likithrahul-rlr.workers.dev
 const PHOTO_RETENTION_DAYS = 365;
 
 // ─── GLOBAL STATE ─────────────────────────────────────
-let D = { contractors: [], projects: [], ownerPw: 'RSR@2024' };
+let D = { contractors: [], projects: [], ownerPw: 'RSR@2024', customWorkTypes: [] };
 let CU = null;
 let bqc = 0, atab = 0, dpid = null, rfpid = null, vpid = null;
 let notesPid = null, changePwContractorId = null;

@@ -311,7 +311,7 @@ function renderInterest(){
           ? '<span style="color:var(--green);font-size:10px">Zero balance</span>'
           : `<span style="color:var(--red);font-size:10px">${fmt(pi.outstanding)} outstanding</span>`;
       return `<tr>
-        <td><a href="#" onclick="openDetail('${p.id}');ownerTab(5);return false" style="color:var(--navy);font-weight:600">${p.name}</a></td>
+        <td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:600">${p.name}</a></td>
         <td style="text-align:right">${fmt(totPayments(p))}</td>
         <td style="text-align:right;color:var(--green)">${fmt(pi.settled)}</td>
         <td style="text-align:right">${statusLabel}</td>
