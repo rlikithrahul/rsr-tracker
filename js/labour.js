@@ -139,9 +139,20 @@ function renderLabourTab(pid){
         </div>
       </div>
 
-      <button class="btn btn-navy" onclick="saveLabourEntryFromDate('${pid}')" style="width:100%">
+      <button class="btn btn-navy" onclick="saveLabourEntryFromDate('${pid}')" style="width:100%;margin-bottom:10px">
         ✓ Save Labour Entry
       </button>
+
+      <!-- Optional photo -->
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">📸 Optional — attach photo</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="triggerLabourPhoto('${pid}','camera')" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">📷 Camera</button>
+          <button onclick="triggerLabourPhoto('${pid}','gallery')" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">🖼️ Gallery</button>
+        </div>
+        <input type="file" id="labour-photo-input-${pid}" accept="image/*" style="display:none" onchange="previewLabourPhoto('${pid}',this)">
+        <div id="labour-photo-preview-${pid}" style="margin-top:8px"></div>
+      </div>
     </div>
 
     <!-- History -->
@@ -307,7 +318,18 @@ function renderExpenseTab(pid){
         <div class="fg"><label>Amount (₹)</label><input type="number" id="exp_amt_${pid}" placeholder="Enter amount" step="0.01" min="0"></div>
         <div class="fg"><label>Note (optional)</label><input type="text" id="exp_note_${pid}" placeholder="Brief description"></div>
       </div>
-      <button class="btn btn-navy" onclick="addExpense('${pid}')" style="width:100%;margin-top:8px">+ Add Expense</button>
+      <button class="btn btn-navy" onclick="addExpense('${pid}')" style="width:100%;margin-top:8px;margin-bottom:10px">+ Add Expense</button>
+
+      <!-- Optional photo for expense -->
+      <div style="border-top:1px solid var(--border);padding-top:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">📸 Optional — attach receipt photo</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="triggerExpensePhoto('${pid}','camera')" style="flex:1;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">📷 Camera</button>
+          <button onclick="triggerExpensePhoto('${pid}','gallery')" style="flex:1;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">🖼️ Gallery</button>
+        </div>
+        <input type="file" id="expense-photo-input-${pid}" accept="image/*" style="display:none" onchange="previewExpensePhoto('${pid}',this)">
+        <div id="expense-photo-preview-${pid}" style="margin-top:8px"></div>
+      </div>
     </div>
 
     <!-- Summary -->
@@ -381,4 +403,72 @@ async function deleteExpense(pid, idx){
     const wrap = document.getElementById('expense-tab-wrap');
     if(wrap) wrap.innerHTML = renderExpenseTab(pid);
   }catch(e){ toast('Failed','error'); }
+}
+
+// ─── PHOTO HELPERS FOR LABOUR / EXPENSE / MATERIAL ───
+let _labourPhotoFile = {}; // pid -> {file, dataUrl}
+
+function triggerLabourPhoto(pid, source){
+  const inp = document.getElementById('labour-photo-input-'+pid);
+  if(!inp) return;
+  if(source==='camera') inp.setAttribute('capture','environment');
+  else inp.removeAttribute('capture');
+  inp.click();
+}
+
+function previewLabourPhoto(pid, input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    _labourPhotoFile[pid] = {file, dataUrl:e.target.result};
+    const prev = document.getElementById('labour-photo-preview-'+pid);
+    if(prev) prev.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--surface2);border-radius:var(--rs)">'
+      +'<img src="'+e.target.result+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px">'
+      +'<span style="font-size:11px;color:var(--text2)">'+file.name+'</span>'
+      +'<button onclick="clearLabourPhoto(\''+pid+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+      +'</div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLabourPhoto(pid){
+  delete _labourPhotoFile[pid];
+  const prev = document.getElementById('labour-photo-preview-'+pid);
+  if(prev) prev.innerHTML='';
+  const inp = document.getElementById('labour-photo-input-'+pid);
+  if(inp) inp.value='';
+}
+
+// ─── EXPENSE PHOTO HELPERS ────────────────────────────
+let _expensePhotoFile = {}; // pid -> {file, dataUrl}
+
+function triggerExpensePhoto(pid, source){
+  const inp = document.getElementById('expense-photo-input-'+pid);
+  if(!inp) return;
+  if(source==='camera') inp.setAttribute('capture','environment');
+  else inp.removeAttribute('capture');
+  inp.click();
+}
+
+function previewExpensePhoto(pid, input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    _expensePhotoFile[pid] = {file, dataUrl:e.target.result};
+    const prev = document.getElementById('expense-photo-preview-'+pid);
+    if(prev) prev.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--surface2);border-radius:var(--rs)">'
+      +'<img src="'+e.target.result+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px">'
+      +'<span style="font-size:11px;color:var(--text2)">'+file.name+'</span>'
+      +'<button onclick="clearExpensePhoto(\''+pid+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+      +'</div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearExpensePhoto(pid){
+  delete _expensePhotoFile[pid];
+  const prev = document.getElementById('expense-photo-preview-'+pid);
+  if(prev) prev.innerHTML='';
+  const inp = document.getElementById('expense-photo-input-'+pid);
+  if(inp) inp.value='';
 }

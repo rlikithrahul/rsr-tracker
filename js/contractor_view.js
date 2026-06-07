@@ -210,8 +210,7 @@ async function cOpenProj(id){
       ${renderUpdateHistory(p.id)}
     </div>
 
-    <!-- RSR Project Documents (JV, EA, Gen Code, WEC) -->
-    <div class="card" style="margin-bottom:12px">
+    <!-- RSR Project Documents (JV, EA, Gen Code, WEC) -->    <div class="card" style="margin-bottom:12px">
       <div class="st" style="margin-bottom:10px">📋 Project Documents (RSR)</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${[
@@ -231,8 +230,8 @@ async function cOpenProj(id){
       </div>
     </div>
 
-    <!-- Site Documents -->
-    <div id="cont-docs-wrap-${id}">${renderContractorDocs('${id}')}</div>
+    <!-- Site Documents (upload drawings, PDFs, photos) -->
+    <div id="site-docs-section-${id}">${renderSiteDocuments('${id}')}</div>
 
     <!-- Labour & Expense Tabs -->
     <div style="display:flex;gap:0;margin-bottom:0;border-radius:var(--rs) var(--rs) 0 0;overflow:hidden;border:1px solid var(--border)">
@@ -768,7 +767,7 @@ const BASE_MATERIALS = [
   {id:'tiles', name:'Tiles', defaultUnit:'Sqft'},
 ];
 
-const MAT_UNITS = ['Bags','MT','Cum','Nos','Sqft','Sqm','Rmt','Ltrs','Kgs','LS','Other'];
+const MAT_UNITS = ['Bags','MT','Cum','Units (2.83 Cum)','Nos','Sqft','Sqm','Rmt','Ltrs','Kgs','LS','Other'];
 
 function getContractorMaterials(){
   // Base + custom materials added by this contractor
@@ -830,6 +829,15 @@ function openAddMaterialEntry(pid){
     +'<div class="fg"><label>Date *</label><input type="date" id="me-date" value="'+new Date().toISOString().split('T')[0]+'"></div>'
     +'<div class="fg"><label>Invoice Amount (₹) — optional</label><input type="number" id="me-amount" placeholder="Leave blank if not known"></div>'
     +'<div class="fg"><label>Notes</label><input type="text" id="me-notes" placeholder="Any remarks"></div>'
+    +'<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">📸 Optional — attach delivery photo</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="triggerMatPhoto(\'camera\')" style="flex:1;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:\'Inter\',sans-serif">📷 Camera</button>'
+    +'<button onclick="triggerMatPhoto(\'gallery\')" style="flex:1;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:\'Inter\',sans-serif">🖼️ Gallery</button>'
+    +'</div>'
+    +'<input type="file" id="mat-photo-input" accept="image/*" style="display:none" onchange="previewMatPhoto(this)">'
+    +'<div id="mat-photo-preview" style="margin-top:8px"></div>'
+    +'</div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
     +'<button class="btn" onclick="CM(\'modal-mat-entry\')">Cancel</button>'
     +'<button class="btn btn-navy" onclick="saveMaterialEntry(\''+pid+'\')">✓ Save</button>'
@@ -907,4 +915,144 @@ async function saveMaterialEntry(pid){
     toast('✓ Material entry saved','ok');
     if(typeof haptic==='function') haptic('success');
   }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── MATERIAL PHOTO HELPERS ───────────────────────────
+let _matPhotoFile = null;
+
+function triggerMatPhoto(source){
+  const inp = document.getElementById('mat-photo-input');
+  if(!inp) return;
+  if(source==='camera') inp.setAttribute('capture','environment');
+  else inp.removeAttribute('capture');
+  inp.click();
+}
+
+function previewMatPhoto(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    _matPhotoFile = {file, dataUrl:e.target.result};
+    const prev = document.getElementById('mat-photo-preview');
+    if(prev) prev.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--surface2);border-radius:var(--rs)">'
+      +'<img src="'+e.target.result+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px">'
+      +'<span style="font-size:11px;color:var(--text2)">'+file.name+'</span>'
+      +'<button onclick="_matPhotoFile=null;document.getElementById(\'mat-photo-preview\').innerHTML=\'\'" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+      +'</div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ═══════════════════════════════════════════════════════
+// SITE DOCUMENTS — Contractor can upload drawings, PDFs etc
+// Admin sees all uploaded documents
+// Max 5 documents per project
+// ═══════════════════════════════════════════════════════
+
+function renderSiteDocuments(pid){
+  const p = GP(pid); if(!p) return '';
+  const docs = (p.siteDocuments||[]).filter(d=>!isArchived(d));
+  const maxDocs = 5;
+
+  return '<div class="card" style="margin-bottom:12px;border-top:3px solid var(--navy)">'
+    +'<details data-toggle="sitedocs-'+pid+'" open>'
+    +'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">'
+    +'<div class="st" style="margin:0;border:none;padding:0">📁 Site Documents <span style="font-size:11px;color:var(--text3);font-weight:400">('+docs.length+'/'+maxDocs+')</span></div>'
+    +'<span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>'
+    +'</summary>'
+    +'<div style="margin-top:12px">'
+    +(docs.length ? docs.map(d=>'<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px">'
+        +(d.type==='image' ? '<img src="'+d.url+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;flex-shrink:0" onclick="lightbox(\''+d.url+'\')">'
+          : '<div style="width:48px;height:48px;background:var(--navy);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📄</div>')
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+d.name+'</div>'
+        +'<div style="font-size:11px;color:var(--text3)">'+fmtDate(d.uploadedAt)+(d.uploadedBy?' · '+d.uploadedBy:'')+'</div>'
+        +'</div>'
+        +'<a href="'+d.url+'" target="_blank" style="flex-shrink:0;background:var(--navy);color:#fff;border-radius:var(--rs);padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none">↓ Open</a>'
+        +'</div>').join('')
+      : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No site documents uploaded yet.</div>')
+    +(docs.length < maxDocs
+      ? '<div style="margin-top:12px">'
+        +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Upload drawings, reports, site photos, PDFs — any format (max '+maxDocs+' per project)</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button onclick="triggerSiteDoc(\''+pid+'\',\'camera\')" style="flex:1;min-width:100px;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:\'Inter\',sans-serif">📷 Camera</button>'
+        +'<button onclick="triggerSiteDoc(\''+pid+'\',\'gallery\')" style="flex:1;min-width:100px;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:\'Inter\',sans-serif">🖼️ Photo/Image</button>'
+        +'<button onclick="triggerSiteDoc(\''+pid+'\',\'pdf\')" style="flex:1;min-width:100px;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:\'Inter\',sans-serif">📄 PDF/File</button>'
+        +'</div>'
+        +'<input type="file" id="site-doc-input-'+pid+'" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.dwg" style="display:none" onchange="uploadSiteDoc(\''+pid+'\',this)">'
+        +'<div id="site-doc-uploading-'+pid+'" style="display:none;font-size:12px;color:var(--navy);margin-top:8px">⏳ Uploading…</div>'
+        +'</div>'
+      : '<div style="font-size:11px;color:var(--amber);margin-top:8px">Maximum '+maxDocs+' documents reached. Delete one to upload more.</div>')
+    +'</div>'
+    +'</details>'
+    +'</div>';
+}
+
+function triggerSiteDoc(pid, type){
+  const inp = document.getElementById('site-doc-input-'+pid);
+  if(!inp) return;
+  if(type==='camera'){ inp.setAttribute('accept','image/*'); inp.setAttribute('capture','environment'); }
+  else if(type==='gallery'){ inp.setAttribute('accept','image/*'); inp.removeAttribute('capture'); }
+  else { inp.setAttribute('accept','.pdf,.doc,.docx,.xls,.xlsx,.dwg,.jpg,.png,.jpeg'); inp.removeAttribute('capture'); }
+  inp.click();
+}
+
+async function uploadSiteDoc(pid, input){
+  const file = input.files[0]; if(!file) return;
+  const p = GP(pid); if(!p) return;
+  if(!p.siteDocuments) p.siteDocuments=[];
+  if(p.siteDocuments.filter(d=>!isArchived(d)).length >= 5){ toast('Max 5 documents per project','error'); return; }
+
+  const uploadingEl = document.getElementById('site-doc-uploading-'+pid);
+  if(uploadingEl) uploadingEl.style.display='block';
+
+  try{
+    // Upload via R2 worker
+    const docId = (typeof uid==='function'?uid():Date.now().toString());
+    let url = '';
+    if(typeof uploadPhoto === 'function'){
+      url = await uploadPhoto(file, pid, 'sitedoc-'+docId);
+    } else {
+      // Fallback: base64 local
+      url = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+    }
+
+    const isImage = file.type.startsWith('image/');
+    p.siteDocuments.push({
+      id: docId,
+      name: file.name,
+      url,
+      type: isImage ? 'image' : 'file',
+      size: file.size,
+      uploadedAt: new Date().toISOString().split('T')[0],
+      uploadedBy: (typeof CU!=='undefined'&&CU) ? CU.name : 'contractor'
+    });
+
+    await saveProjectDB(p);
+
+    // Re-render site docs section
+    const sectEl = document.getElementById('site-docs-section-'+pid);
+    if(sectEl) sectEl.outerHTML = '<div id="site-docs-section-'+pid+'">'+renderSiteDocuments(pid)+'</div>';
+    if(typeof applyToggleStates==='function') applyToggleStates();
+    toast('✓ Document uploaded','ok');
+    if(typeof haptic==='function') haptic('success');
+  }catch(e){
+    toast('Upload failed — try again','error');
+    console.error(e);
+  }finally{
+    if(uploadingEl) uploadingEl.style.display='none';
+    input.value='';
+  }
+}
+
+async function deleteSiteDoc(pid, docId){
+  if(!confirm('Remove this document?')) return;
+  const p = GP(pid); if(!p) return;
+  const doc = (p.siteDocuments||[]).find(d=>d.id===docId);
+  if(doc) doc._archived=true;
+  await saveProjectDB(p);
+  const sectEl = document.getElementById('site-docs-section-'+pid);
+  if(sectEl) sectEl.outerHTML = '<div id="site-docs-section-'+pid+'">'+renderSiteDocuments(pid)+'</div>';
+  if(typeof applyToggleStates==='function') applyToggleStates();
+  toast('Document removed','ok');
 }

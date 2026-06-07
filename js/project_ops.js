@@ -1088,3 +1088,114 @@ async function deleteSettlement(pid, sid){
     toast('Settlement removed','ok');
   }catch(e){ toast('Failed to remove','error'); }
 }
+
+// ─── OPEN VERIFICATION MODAL ─────────────────────────
+function openVer(pid){
+  const p = GP(pid); if(!p) return;
+  const modal = document.getElementById('modal-ver');
+  if(!modal) return;
+  const verBody = document.getElementById('ver-body');
+  if(!verBody) return;
+
+  const boqItems = (p.boq||[]);
+
+  verBody.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Record RSR physical verification of work completed on site.</div>
+    <div class="fg"><label>Verification Date</label><input type="date" id="ver-date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="fg"><label>Verified By</label><input type="text" id="ver-by" value="Likith" placeholder="Your name"></div>
+    ${boqItems.length ? `
+    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">Quantities Verified (cumulative to date):</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:12px">
+      ${boqItems.map(item=>`
+        <div style="background:var(--surface2);border-radius:var(--rs);padding:10px">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${item.desc||item.name} (${item.unit})</div>
+          <input type="number" min="0" step="0.01" id="ver-qty-${item.id}"
+            value="${(p.verifiedItems||{})[item.id]||''}"
+            placeholder="0"
+            style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-weight:700;text-align:right;font-family:'Inter',sans-serif">
+        </div>`).join('')}
+    </div>` : ''}
+    <div class="fg"><label>Notes</label><input type="text" id="ver-notes" placeholder="Observations, issues..."></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="CM('modal-ver')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveVerification('${pid}')">✓ Save Verification</button>
+    </div>`;
+
+  OM('modal-ver');
+}
+
+async function saveVerification(pid){
+  const p = GP(pid); if(!p) return;
+  const date = document.getElementById('ver-date')?.value;
+  const verifiedBy = document.getElementById('ver-by')?.value?.trim()||'Likith';
+  const notes = document.getElementById('ver-notes')?.value?.trim();
+
+  if(!date){ toast('Select verification date','error'); return; }
+
+  // Collect verified quantities
+  const verifiedItems = {};
+  (p.boq||[]).forEach(item=>{
+    const val = parseFloat(document.getElementById('ver-qty-'+item.id)?.value)||0;
+    if(val>0) verifiedItems[item.id] = val;
+  });
+
+  if(!p.verifications) p.verifications=[];
+  p.verifiedItems = {...(p.verifiedItems||{}), ...verifiedItems};
+
+  p.verifications.push({
+    id: uid(),
+    date, verifiedBy, notes,
+    quantities: verifiedItems,
+    createdAt: new Date().toISOString()
+  });
+
+  try{
+    await saveProjectDB(p, {type:'verification', amount:0, ref:null, meta:{verifiedBy, date}});
+    CM('modal-ver');
+    renderDetail(pid);
+    toast('✓ Verification saved','ok');
+    if(typeof haptic==='function') haptic('success');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── FULL BOQ MODAL ────────────────────────────────────
+function openFullBOQModal(pid){
+  const p = GP(pid); if(!p) return;
+  const boq = p.boq||[];
+  if(!boq.length){ toast('No BOQ items yet — click Edit BOQ to add','info'); return; }
+
+  let modal = document.getElementById('modal-full-boq');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-full-boq'; document.body.appendChild(modal); }
+
+  const total = boq.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+  modal.innerHTML = `<div class="mbox" style="max-width:720px">
+    <div class="mhdr"><h2>📋 Full BOQ — ${p.name.substring(0,40)}</h2><button class="mx" onclick="CM('modal-full-boq')">✕</button></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Item Description</th><th>Unit</th>
+        <th style="text-align:right">Qty</th>
+        <th style="text-align:right">Rate (₹)</th>
+        <th style="text-align:right">Value (₹)</th>
+        <th style="text-align:right">Reported</th>
+        <th style="text-align:right">Verified</th>
+      </tr></thead>
+      <tbody>
+        ${boq.map((item,i)=>`<tr style="background:${i%2===0?'#fff':'var(--surface2)'}">
+          <td style="font-size:12px">${item.desc||item.name||'—'}</td>
+          <td style="font-size:12px">${item.unit||'—'}</td>
+          <td style="text-align:right;font-size:12px">${item.qty||0}</td>
+          <td style="text-align:right;font-size:12px">${fmt(item.rate||0)}</td>
+          <td style="text-align:right;font-size:12px;font-weight:700">${fmt((item.qty||0)*(item.rate||0))}</td>
+          <td style="text-align:right;font-size:12px;color:var(--amber)">${(p.reportedItems||{})[item.id]||'—'}</td>
+          <td style="text-align:right;font-size:12px;color:var(--green);font-weight:700">${(p.verifiedItems||{})[item.id]||'—'}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--navy);font-weight:700">
+          <td colspan="4" style="padding:10px 12px;color:var(--gold)">Total BOQ Value</td>
+          <td style="text-align:right;padding:10px 12px;color:#fff">${fmt(total)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>`;
+  modal.classList.add('open');
+}

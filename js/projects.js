@@ -220,9 +220,9 @@ function renderDetail(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
           <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
           <button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;font-weight:700" onclick="openSettle('${p.id}')">🏦 Settle</button>
-          <button class="btn btn-sm" onclick="openBOQEdit('${p.id}')">📊 Edit BOQ</button>
-          <button class="btn btn-sm" onclick="openFullBOQ('${p.id}')">👁 Full BOQ</button>
-          <button class="btn btn-sm" onclick="openEditProj('${p.id}')">✏️ Edit</button>
+          <button class="btn btn-sm" onclick="openEditBOQ('${p.id}')">📊 Edit BOQ</button>
+          <button class="btn btn-sm" onclick="openFullBOQModal('${p.id}')">👁 Full BOQ</button>
+          <button class="btn btn-sm" onclick="openEditProject('${p.id}')">✏️ Edit</button>
           <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')">📝 Notes${p.ownerNotes?' ●':''}</button>
           <div class="amenu-wrap"><button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pdm-${p.id}')">⋮</button>
           <div class="amenu" id="pdm-${p.id}">
@@ -307,6 +307,27 @@ function renderDetail(id){
 
     <!-- Document Vault -->
     <div id="doc-vault-${id}">${typeof renderDocVault==='function'?renderDocVault(p,true):''}</div>
+
+    <!-- Site Documents uploaded by contractor -->
+    ${(p.siteDocuments&&p.siteDocuments.filter(d=>!isArchived(d)).length>0)?`
+    <div class="card" style="margin-bottom:14px">
+      <details data-toggle="admin-sitedocs-${id}">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="st" style="margin:0;border:none;padding:0">📁 Contractor Site Documents (${p.siteDocuments.filter(d=>!isArchived(d)).length})</div>
+          <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
+        </summary>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px">
+          ${p.siteDocuments.filter(d=>!isArchived(d)).map(d=>`
+            <div style="width:120px">
+              ${d.type==='image'
+                ? `<img src="${d.url}" style="width:120px;height:90px;object-fit:cover;border-radius:var(--rs);cursor:pointer;border:1px solid var(--border)" onclick="lightbox('${d.url}')">`
+                : `<a href="${d.url}" target="_blank" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:120px;height:90px;background:var(--surface2);border-radius:var(--rs);border:1px solid var(--border);text-decoration:none"><span style="font-size:28px">📄</span></a>`}
+              <div style="font-size:10px;color:var(--text3);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+              <div style="font-size:10px;color:var(--text3)">${d.uploadedBy||''} · ${fmtDate(d.uploadedAt)}</div>
+            </div>`).join('')}
+        </div>
+      </details>
+    </div>`:''}
 
     <!-- Activity log for this project -->
     <div class="card" style="margin-bottom:14px">
