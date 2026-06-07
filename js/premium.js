@@ -490,3 +490,45 @@ function initPremium(){
     if(document.hidden) saveSessionState();
   });
 }
+
+// ─── TOGGLE STATE MANAGER ────────────────────────────
+// Persists open/closed state for session only
+// Clears on logout, survives re-renders
+
+const _toggleState = {};
+
+function toggleSection(key, detailsEl){
+  if(!detailsEl) detailsEl = document.querySelector('[data-toggle="'+key+'"]');
+  if(!detailsEl) return;
+  const isOpen = detailsEl.hasAttribute('open');
+  if(isOpen){
+    detailsEl.removeAttribute('open');
+    _toggleState[key] = false;
+  } else {
+    detailsEl.setAttribute('open','');
+    _toggleState[key] = true;
+  }
+}
+
+function applyToggleStates(){
+  // Apply saved states to all toggle sections
+  document.querySelectorAll('[data-toggle]').forEach(el=>{
+    const key = el.getAttribute('data-toggle');
+    const saved = _toggleState[key];
+    if(saved === true) el.setAttribute('open','');
+    else if(saved === false) el.removeAttribute('open');
+    // if undefined, use default (element's current state)
+  });
+}
+
+function clearToggleStates(){
+  Object.keys(_toggleState).forEach(k=>delete _toggleState[k]);
+}
+
+// Intercept all <details data-toggle> clicks to save state
+document.addEventListener('toggle', e=>{
+  const el = e.target;
+  if(!el.hasAttribute('data-toggle')) return;
+  const key = el.getAttribute('data-toggle');
+  _toggleState[key] = el.hasAttribute('open');
+}, true);

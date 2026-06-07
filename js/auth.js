@@ -142,6 +142,8 @@ async function contLogin(){
 
 function logout(){
   if(CU) writeActivityLog('logout', `${CU.name} logged out`).catch(()=>{});
+  if(typeof clearToggleStates === 'function') clearToggleStates();
+  try{ sessionStorage.removeItem('rsr_session_state_v2'); }catch(e){}
   CU=null; clearSession(); stopAutoRefresh();
   // Hide sidebar when logging out
   const sb = document.getElementById('sidebar');

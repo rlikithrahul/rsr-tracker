@@ -115,17 +115,22 @@ function toggleCBOQ(id){
 // ─── SWITCH CONTRACTOR PROJECT TAB ───────────────────
 function switchContractorTab(pid, tab){
   const labourBtn = document.getElementById('tab-btn-labour-'+pid);
+  const materialBtn = document.getElementById('tab-btn-material-'+pid);
   const expenseBtn = document.getElementById('tab-btn-expense-'+pid);
   const content = document.getElementById('contractor-tab-content-'+pid);
   if(!content) return;
 
+  // Reset all tabs
+  [labourBtn, materialBtn, expenseBtn].forEach(b=>{ if(b){ b.style.background='var(--surface2)'; b.style.color='var(--navy)'; }});
+
   if(tab==='labour'){
-    labourBtn.style.background='var(--navy)'; labourBtn.style.color='#fff';
-    expenseBtn.style.background='var(--surface2)'; expenseBtn.style.color='var(--navy)';
+    if(labourBtn){ labourBtn.style.background='var(--navy)'; labourBtn.style.color='#fff'; }
     content.innerHTML='<div id="labour-tab-wrap">'+renderLabourTab(pid)+'</div>';
+  } else if(tab==='material'){
+    if(materialBtn){ materialBtn.style.background='var(--navy)'; materialBtn.style.color='#fff'; }
+    content.innerHTML='<div id="material-tab-wrap">'+renderMaterialRegisterTab(pid)+'</div>';
   } else {
-    expenseBtn.style.background='var(--navy)'; expenseBtn.style.color='#fff';
-    labourBtn.style.background='var(--surface2)'; labourBtn.style.color='var(--navy)';
+    if(expenseBtn){ expenseBtn.style.background='var(--navy)'; expenseBtn.style.color='#fff'; }
     content.innerHTML='<div id="expense-tab-wrap">'+renderExpenseTab(pid)+'</div>';
   }
 }
@@ -140,12 +145,22 @@ async function cOpenProj(id){
   el.classList.remove('hidden');
   const lv=(p.verifications||[]).slice(-1)[0];
   const myUpd=(p.contractorUpdates||[]).filter(u=>u.contractorId===CU.id).slice().reverse();
+  const typeDisplay = (p.types&&p.types.length) ? p.types.join(' · ') : (p.type||'');
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <button class="btn btn-sm" onclick="renderCHome()">← Back</button>
-      <div style="flex:1;min-width:150px"><div style="font-size:16px;font-weight:700;color:var(--navy)">${p.name}</div>
-      <div style="font-size:12px;color:var(--text3)">#${p.tender} · ${p.type}</div></div>
+    <!-- COMPACT HEADER -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="renderCHome()" style="flex-shrink:0">← Back</button>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;font-size:11px;align-items:center">
+          ${p.tender?`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px 7px;font-weight:600;color:var(--text2)">#${p.tender}</span>`:''}
+          ${typeDisplay?`<span style="background:var(--surface2);border-radius:8px;padding:2px 7px;color:var(--text2)">${typeDisplay}</span>`:''}
+          ${p.firm?`<span style="background:var(--navy);color:var(--gold);border-radius:8px;padding:2px 7px;font-weight:700">${p.firm==='RSR Constructions'?'RSR':p.firm==='R Sadhu Rao'?'RS Rao':'RLR'}</span>`:''}
+          ${p.location?`<span style="color:var(--text3);font-size:11px">📍 ${p.location}</span>`:''}
+        </div>
+      </div>
+      <div style="font-size:18px;font-weight:800;color:var(--navy);line-height:1.3">${p.name}</div>
     </div>
+
     <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:14px" onclick="cOpenUpd('${id}')">
       📸 Update Progress + Upload Photos
     </button>
@@ -179,13 +194,15 @@ async function cOpenProj(id){
     </div>
 
     <div class="card" style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
-        <div class="st" style="margin:0;border:none;padding:0">📊 Bill of Quantities</div>
-        <button onclick="toggleCBOQ('cboq-${id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">View Full BOQ</button>
-      </div>
-      <div id="cboq-${id}" style="display:none;margin-top:12px">
-        ${renderBOQContractorView(p)}
-      </div>
+      <details data-toggle="cboq-${id}">
+        <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div class="st" style="margin:0;border:none;padding:0">📊 Bill of Quantities</div>
+          <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ View Full BOQ</span>
+        </summary>
+        <div style="margin-top:12px">
+          ${renderBOQContractorView(p)}
+        </div>
+      </details>
     </div>
     <!-- Update History -->
     <div class="card" style="margin-bottom:12px">
@@ -221,11 +238,15 @@ async function cOpenProj(id){
     <div style="display:flex;gap:0;margin-bottom:0;border-radius:var(--rs) var(--rs) 0 0;overflow:hidden;border:1px solid var(--border)">
       <button id="tab-btn-labour-${id}" onclick="switchContractorTab('${id}','labour')"
         style="flex:1;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">
-        👷 Labour Register
+        👷 Labour
+      </button>
+      <button id="tab-btn-material-${id}" onclick="switchContractorTab('${id}','material')"
+        style="flex:1;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--surface2);color:var(--navy);border-right:1px solid var(--border)">
+        🧱 Materials
       </button>
       <button id="tab-btn-expense-${id}" onclick="switchContractorTab('${id}','expense')"
         style="flex:1;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;background:var(--surface2);color:var(--navy)">
-        💸 Site Expenses
+        💸 Expenses
       </button>
     </div>
     <div id="contractor-tab-content-${id}" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rs) var(--rs);margin-bottom:16px;background:#fff">
@@ -727,4 +748,163 @@ function checkSupervisorLogin(name, pw){
     if(sv) return { supervisor:sv, contractor:c };
   }
   return null;
+}
+
+// ═══════════════════════════════════════════════════════
+// MATERIAL REGISTER (Contractor Side)
+// Daily material receipt log per project
+// Items: Sand, Steel, Cement etc + custom per contractor
+// ═══════════════════════════════════════════════════════
+
+const BASE_MATERIALS = [
+  {id:'cement', name:'Cement', defaultUnit:'Bags'},
+  {id:'steel', name:'Steel', defaultUnit:'MT'},
+  {id:'sand', name:'Sand', defaultUnit:'Cum'},
+  {id:'aggregate', name:'Aggregate (Metal)', defaultUnit:'Cum'},
+  {id:'bricks', name:'Bricks', defaultUnit:'Nos'},
+  {id:'gravel', name:'Gravel / Dust', defaultUnit:'Cum'},
+  {id:'paint', name:'Paint', defaultUnit:'Ltrs'},
+  {id:'pvc', name:'PVC Pipes', defaultUnit:'Rmt'},
+  {id:'tiles', name:'Tiles', defaultUnit:'Sqft'},
+];
+
+const MAT_UNITS = ['Bags','MT','Cum','Nos','Sqft','Sqm','Rmt','Ltrs','Kgs','LS','Other'];
+
+function getContractorMaterials(){
+  // Base + custom materials added by this contractor
+  const c = D.contractors.find(x=>x.id===CU.id);
+  const custom = (c&&c.customMaterials)||[];
+  return [...BASE_MATERIALS, ...custom.map(m=>({id:m.id,name:m.name,defaultUnit:m.unit||'Nos'}))];
+}
+
+function renderMaterialRegisterTab(pid){
+  const p = GP(pid); if(!p) return '';
+  const entries = ((p.materialRegister||[]).filter(e=>!isArchived(e))).slice().reverse();
+  const materials = getContractorMaterials();
+
+  return '<div style="padding:14px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--navy)">🧱 Material Register</div>'
+    +'<button onclick="openAddMaterialEntry(\''+pid+'\')" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">+ Add Entry</button>'
+    +'</div>'
+    +(entries.length===0 ? '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">No material entries yet.<br>Tap + Add Entry to log received materials.</div>' :
+      entries.map(e=>{
+        const mat = materials.find(m=>m.id===e.materialId)||{name:e.materialId, defaultUnit:e.unit};
+        return '<div style="padding:10px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<div>'
+          +'<div style="font-size:13px;font-weight:700">'+mat.name+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'+e.date+' · '+e.supplierName+'</div>'
+          +(e.notes?'<div style="font-size:11px;color:var(--text2);font-style:italic">'+e.notes+'</div>':'')
+          +'</div>'
+          +'<div style="text-align:right;flex-shrink:0">'
+          +'<div style="font-size:15px;font-weight:800;color:var(--navy)">'+e.qty+' '+e.unit+'</div>'
+          +(e.amount?'<div style="font-size:11px;color:var(--text3)">₹'+Number(e.amount).toLocaleString('en-IN')+'</div>':'')
+          +'</div>'
+          +'</div>';
+      }).join(''))
+    +'</div>';
+}
+
+function openAddMaterialEntry(pid){
+  const materials = getContractorMaterials();
+  let modal = document.getElementById('modal-mat-entry');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-mat-entry'; document.body.appendChild(modal); }
+
+  modal.innerHTML = '<div class="mbox" style="max-width:420px">'
+    +'<div class="mhdr"><h2>🧱 Add Material Entry</h2><button class="mx" onclick="CM(\'modal-mat-entry\')">✕</button></div>'
+    +'<div class="fg"><label>Material *</label>'
+    +'<select id="me-material" onchange="updateMatUnit()" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px">'
+    +materials.map(m=>'<option value="'+m.id+'" data-unit="'+m.defaultUnit+'">'+m.name+'</option>').join('')
+    +'<option value="__custom__">+ Add custom material...</option>'
+    +'</select></div>'
+    +'<div id="me-custom-wrap" style="display:none" class="fg"><label>Custom Material Name</label><input type="text" id="me-custom-name" placeholder="e.g. Waterproofing compound"><select id="me-custom-unit" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px;margin-top:6px">'
+    +MAT_UNITS.map(u=>'<option>'+u+'</option>').join('')
+    +'</select></div>'
+    +'<div class="frow">'
+    +'<div class="fg"><label>Quantity *</label><input type="number" id="me-qty" placeholder="e.g. 50"></div>'
+    +'<div class="fg"><label>Unit</label><select id="me-unit" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:\'Inter\',sans-serif;font-size:13px">'
+    +MAT_UNITS.map(u=>'<option>'+u+'</option>').join('')
+    +'</select></div>'
+    +'</div>'
+    +'<div class="fg"><label>Supplier / Source</label><input type="text" id="me-supplier" placeholder="Supplier name"></div>'
+    +'<div class="fg"><label>Date *</label><input type="date" id="me-date" value="'+new Date().toISOString().split('T')[0]+'"></div>'
+    +'<div class="fg"><label>Invoice Amount (₹) — optional</label><input type="number" id="me-amount" placeholder="Leave blank if not known"></div>'
+    +'<div class="fg"><label>Notes</label><input type="text" id="me-notes" placeholder="Any remarks"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+    +'<button class="btn" onclick="CM(\'modal-mat-entry\')">Cancel</button>'
+    +'<button class="btn btn-navy" onclick="saveMaterialEntry(\''+pid+'\')">✓ Save</button>'
+    +'</div></div>';
+
+  modal.classList.add('open');
+  // Set default unit for first material
+  setTimeout(updateMatUnit, 100);
+}
+
+function updateMatUnit(){
+  const sel = document.getElementById('me-material');
+  const unitSel = document.getElementById('me-unit');
+  const customWrap = document.getElementById('me-custom-wrap');
+  if(!sel||!unitSel) return;
+  const opt = sel.options[sel.selectedIndex];
+  if(sel.value === '__custom__'){
+    if(customWrap) customWrap.style.display='block';
+  } else {
+    if(customWrap) customWrap.style.display='none';
+    const defaultUnit = opt.getAttribute('data-unit')||'Nos';
+    // Set matching unit
+    Array.from(unitSel.options).forEach((o,i)=>{ if(o.value===defaultUnit) unitSel.selectedIndex=i; });
+  }
+}
+
+async function saveMaterialEntry(pid){
+  const matSel = document.getElementById('me-material');
+  const isCustom = matSel.value === '__custom__';
+  const customName = document.getElementById('me-custom-name')?.value?.trim();
+  const qty = parseFloat(document.getElementById('me-qty')?.value)||0;
+  const unit = isCustom ? (document.getElementById('me-custom-unit')?.value||'Nos') : (document.getElementById('me-unit')?.value||'Nos');
+  const date = document.getElementById('me-date')?.value;
+  const supplier = document.getElementById('me-supplier')?.value?.trim();
+  const amount = parseFloat(document.getElementById('me-amount')?.value)||0;
+  const notes = document.getElementById('me-notes')?.value?.trim();
+
+  if(!qty){ toast('Enter quantity','error'); return; }
+  if(isCustom && !customName){ toast('Enter material name','error'); return; }
+
+  let materialId = matSel.value;
+  let materialName = matSel.options[matSel.selectedIndex]?.text;
+
+  // Save custom material to contractor profile for future use
+  if(isCustom){
+    materialId = 'custom_'+Date.now();
+    materialName = customName;
+    const c = D.contractors.find(x=>x.id===CU.id);
+    if(c){
+      if(!c.customMaterials) c.customMaterials=[];
+      c.customMaterials.push({id:materialId, name:customName, unit});
+      // Save contractor
+      if(typeof saveContractorDB==='function') saveContractorDB(c).catch(()=>{});
+    }
+  }
+
+  const p = GP(pid); if(!p) return;
+  if(!p.materialRegister) p.materialRegister=[];
+  p.materialRegister.push({
+    id:(typeof uid==='function'?uid():Date.now().toString()),
+    materialId, materialName, qty, unit, date,
+    supplierName:supplier||'',
+    amount: amount||null,
+    notes: notes||'',
+    addedBy: CU.name,
+    createdAt: new Date().toISOString()
+  });
+
+  try{
+    await saveProjectDB(p);
+    CM('modal-mat-entry');
+    // Refresh material tab
+    const wrap = document.getElementById('material-tab-wrap');
+    if(wrap) wrap.innerHTML = renderMaterialRegisterTab(pid);
+    toast('✓ Material entry saved','ok');
+    if(typeof haptic==='function') haptic('success');
+  }catch(e){ toast('Save failed','error'); }
 }

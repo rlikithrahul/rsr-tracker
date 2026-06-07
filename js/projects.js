@@ -155,378 +155,176 @@ function renderDetail(id){
         </div>
       </div>
     </div>`).join('')||'<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>';
+  const typeDisplay = (p.types&&p.types.length) ? p.types.join(' · ') : (p.type||'');
+
+  // Build verHtml — verification history collapsible
+  const verHtml = verLog && verLog !== '<div style="font-size:13px;color:var(--text3)">No verifications yet.</div>'
+    ? `<div class="card" style="margin-bottom:12px">
+        <details data-toggle="ver-${id}">
+          <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div class="st" style="margin:0;border:none;padding:0">📋 Verifications (${(p.verifications||[]).filter(v=>!isArchived(v)).length})</div>
+            <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
+          </summary>
+          <div style="margin-top:10px">${verLog}</div>
+        </details>
+      </div>` : '';
+
+  // Build boqHtml — BOQ progress table
+  const boqHtml = (()=>{
+    if(!p.boq||!p.boq.length) return '<div style="font-size:13px;color:var(--text3);padding:8px">No BOQ items yet.</div>';
+    return `<div class="tbl-wrap"><table><thead><tr>
+      <th>Item</th><th>Unit</th><th style="text-align:right">BOQ Qty</th>
+      <th style="text-align:right">Reported</th><th style="text-align:right">Verified</th>
+      <th style="text-align:right">Value</th><th>Progress</th>
+    </tr></thead><tbody>`+
+    p.boq.map(item=>{
+      const boqQty = item.qty||0;
+      const reported = (p.reportedItems||{})[item.id]||0;
+      const verified = (p.verifiedItems||{})[item.id]||0;
+      const pct = boqQty>0?Math.round(verified/boqQty*100):0;
+      const value = (item.rate||0)*(item.qty||0);
+      return `<tr>
+        <td style="font-size:12px">${item.desc||item.name||'—'}</td>
+        <td style="font-size:12px">${item.unit||'—'}</td>
+        <td style="text-align:right;font-size:12px">${boqQty}</td>
+        <td style="text-align:right;font-size:12px;color:var(--amber)">${reported}</td>
+        <td style="text-align:right;font-size:12px;color:var(--green);font-weight:700">${verified}</td>
+        <td style="text-align:right;font-size:12px">${fmt(value)}</td>
+        <td style="min-width:80px"><div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden"><div style="height:100%;background:${pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--navy)'};width:${Math.min(pct,100)}%"></div></div><div style="font-size:10px;color:var(--text3);text-align:center">${pct}%</div></td>
+      </tr>`;
+    }).join('')+
+    '</tbody></table></div>';
+  })();
   document.getElementById('detail-wrap').innerHTML=`
     ${renderSettlementDetectionBanner(p)}
-    ${isIncomplete(p) ? `<div style="background:#fff3cd;border:1.5px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px">
-      <div style="font-size:18px;line-height:1">🔴</div>
+    ${isIncomplete(p) ? `<div style="background:#fff3cd;border:1.5px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:16px;line-height:1">🔴</div>
       <div style="flex:1">
-        <div style="font-weight:700;color:#856404;font-size:13px;margin-bottom:6px">Incomplete Project — Missing Fields</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${getMissingFields(p).map(f=>`<span style="background:#856404;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600">${f}</span>`).join('')}
-        </div>
-        <div style="font-size:11px;color:#856404;margin-top:8px">Click <strong>✏️ Edit</strong> to fill in missing details. This banner disappears once all fields are complete.</div>
+        <div style="font-weight:700;color:#856404;font-size:12px;margin-bottom:4px">Incomplete — Missing: ${getMissingFields(p).join(', ')}</div>
+        <div style="font-size:11px;color:#856404">Click ✏️ Edit to fill in missing details.</div>
       </div>
     </div>` : ''}
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <button class="btn btn-sm" onclick="goBack()">← Back</button>
-      <div style="flex:1;min-width:200px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:18px;font-weight:700;color:var(--navy)">${p.name}</div>${statusBadge(p)}</div>
-      <div style="font-size:12px;color:var(--text3)">#${p.tender} · <span style="color:var(--gold);font-weight:600">${p.firm||'RSR Constructions'}</span> · ${p.type} · ${c?`<span onclick="ownerTab(2)" style="color:var(--navy);font-weight:600;cursor:pointer">${c.name}</span>`:'—'} · ${p.location||''}</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
-        <button class="btn btn-green btn-sm" onclick="openSettle('${p.id}')">🏦 Settle</button>
-        <button class="btn btn-sm" onclick="openEditBOQ('${p.id}')">📊 Edit BOQ</button>
-        <button class="btn btn-sm" onclick="toggleFullBOQ('boq-full-${p.id}')" style="background:var(--surface2);color:var(--navy)">📋 View Full BOQ</button>
-        <button class="btn btn-sm" onclick="openEditProject('${p.id}')">✏️ Edit</button>
-        <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')" title="Private owner notes">📝 Notes${p.ownerNotes?` <span style="width:7px;height:7px;background:var(--gold);border-radius:50%;display:inline-block;margin-left:2px"></span>`:''}</button>
-        <div class="amenu-wrap">
-          <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('detail-menu')">⋮</button>
-          <div class="amenu" id="detail-menu">
-            <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV${p.expectedJVMonth?' ✓':''}</button>
-            ${(p.status||'active')==='active'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>`:''}
-            ${(p.status||'active')==='onhold'?`<button class="amenu-item" style="color:var(--green)" onclick="changeProjectStatus('${p.id}','active')">▶ Mark Active</button>`:''}
-            ${(p.status||'active')!=='completed'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','completed')">✓ Mark Completed</button>`:''}
-            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">🗑️ Delete Project</button>
-          </div>
+
+    <!-- NEW HEADER: compact back + meta + project name -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="goBack()" style="flex-shrink:0;white-space:nowrap">← Back</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px">
+          ${p.tender?`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--text2)">#${p.tender}</span>`:''}
+          <span style="background:#1a2744;color:var(--gold);border-radius:8px;padding:2px 8px;font-weight:700">${p.firm||'RSR'}</span>
+          ${typeDisplay?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--text2)">${typeDisplay}</span>`:''}
+          ${c?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--navy);font-weight:600;cursor:pointer" onclick="ownerTab(2)">👷 ${c.name}</span>`:''}
+          ${p.location?`<span style="color:var(--text3)">📍 ${p.location}</span>`:''}
+          ${statusBadge(p)}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">
+          <button class="btn btn-sm" onclick="openVer('${p.id}')">📋 Verify</button>
+          <button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;font-weight:700" onclick="openSettle('${p.id}')">🏦 Settle</button>
+          <button class="btn btn-sm" onclick="openBOQEdit('${p.id}')">📊 Edit BOQ</button>
+          <button class="btn btn-sm" onclick="openFullBOQ('${p.id}')">👁 Full BOQ</button>
+          <button class="btn btn-sm" onclick="openEditProj('${p.id}')">✏️ Edit</button>
+          <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')">📝 Notes${p.ownerNotes?' ●':''}</button>
+          <div class="amenu-wrap"><button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pdm-${p.id}')">⋮</button>
+          <div class="amenu" id="pdm-${p.id}">
+            <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Settlement</button>
+            <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV</button>
+            <button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>
+            <button class="amenu-item danger" onclick="deleteProject('${p.id}')">📦 Archive</button>
+          </div></div>
         </div>
       </div>
+      <div style="font-size:20px;font-weight:800;color:var(--navy);line-height:1.3;padding:4px 0 0">${p.name}</div>
     </div>
+
     ${ah}
-    ${(()=>{const alerts=getProjectAlerts(p);return alerts.map(a=>`<div class="alert-banner ab-${a.type}">${a.msg}</div>`).join('');})()}
     ${pendHtml}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="card"><div class="st">Financials</div>
-        <div class="fr"><span class="fl">Estimated BOQ</span><span class="fv">${fmt(p.estimated)}</span></div>
-        <div class="fr"><span class="fl">Bid %</span><span class="fv">${p.bidPct>0?'+':''}${p.bidPct}%</span></div>
-        <div class="fr"><span class="fl">Agreement Amount</span><span class="fv">${fmt(agAmt(p))}</span></div>
-        <div class="fr"><span class="fl">Max Fundable (70%)</span><span class="fv">${fmt(max)}</span></div>
-        <div class="fr"><span class="fl">Total Deployed</span><span class="fv">${fmt(rel)}</span></div>
-        <div class="fr"><span class="fl">Cap Used</span><span class="fv" style="color:${rel/max>=0.85?'var(--red)':rel/max>=0.65?'var(--amber)':'var(--green)'}">${Math.round(rel/max*100)||0}%</span></div>
-        <div class="fr"><span class="fl">Total Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
-        <div class="fr"><span class="fl">Outstanding</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
-        <div class="fr"><span class="fl">Eligible (verified work)</span><span class="fv" style="color:var(--green)">${fmt(el)}</span></div>
-        <!-- Interest accrued — see Interest tab --><div style="font-size:11px;color:var(--text3);margin-top:4px"><a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a></div>
-        ${p.costCentre?`<div class="fr"><span class="fl" style="font-size:11px">Tally Cost Centre</span><span style="font-family:monospace;font-size:11px;color:var(--text3)">${p.costCentre}</span></div>`:''}
+    ${verHtml}
+
+    <!-- MAIN CONTENT GRID: Financials + Lifecycle side by side on desktop -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px" class="detail-main-grid">
+
+      <!-- LEFT: Financials -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">💰 Financials</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${[
+            ['Estimated BOQ', fmt(p.estimated||0)],
+            ['Bid %', (p.bidPct||0)+'%'],
+            ['Agreement Amount', fmt(agAmt(p))],
+            ['Max Fundable (70%)', fmt(max)],
+            ['Total Deployed', fmt(rel), rel>max?'color:var(--red)':''],
+            ['Cap Used', Math.round(rel/Math.max(max,1)*100)+'%', rel/Math.max(max,1)>=0.85?'color:var(--red);font-weight:800':''],
+            ['Total Settled', fmt((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)), 'color:var(--green)'],
+            ['Outstanding', fmt(Math.max(0,rel-((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)))), 'color:var(--red)'],
+            ['Eligible (verified)', fmt(el)],
+          ].map(([lbl,val,style])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--surface2)">
+            <span style="font-size:12px;color:var(--text2)">${lbl}</span>
+            <span style="font-size:13px;font-weight:700;${style||'color:var(--navy)'}">${val}</span>
+          </div>`).join('')}
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">
+            <a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a>
+          </div>
+          <div style="font-size:11px;color:var(--text3)">Tally Cost Centre: <strong>${p.costCentre||'—'}</strong></div>
+        </div>
       </div>
 
-      <!-- MATERIAL CREDIT -->
-      ${renderProjectMatCredit(p)}
-
-      <!-- LIFECYCLE TIMELINE -->
-      ${buildLifecycleTimeline(p,id)}
-
-      <!-- ACTION ITEMS: WEC + Refund (legacy fallback) -->
-
-    <!-- Full BOQ (collapsible) -->
-    <div class="card" id="boq-full-${id}" style="display:none">
-      <div class="st" style="margin-bottom:12px">📋 Full BOQ — Items & Rates</div>
-      ${(p.boq&&p.boq.length)?`<div class="tbl-wrap"><table>
-        <thead><tr>
-          <th>Item Description</th><th>Unit</th>
-          <th style="text-align:right">Qty</th>
-          <th style="text-align:right">Rate (₹)</th>
-          <th style="text-align:right">Value (₹)</th>
-        </tr></thead>
-        <tbody>
-          ${p.boq.map(item=>`<tr>
-            <td style="font-size:12px">${item.desc||item.name||'—'}</td>
-            <td style="font-size:12px">${item.unit||'—'}</td>
-            <td style="text-align:right;font-size:12px">${item.qty||0}</td>
-            <td style="text-align:right;font-size:12px">${fmt(item.rate||0)}</td>
-            <td style="text-align:right;font-weight:600;font-size:12px">${fmt((item.qty||0)*(item.rate||0))}</td>
-          </tr>`).join('')}
-          <tr style="border-top:2px solid var(--border);background:var(--surface2)">
-            <td colspan="4" style="font-weight:700;font-size:13px">Total BOQ Value</td>
-            <td style="text-align:right;font-weight:800;font-size:13px;color:var(--navy)">${fmt(p.boq.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0))}</td>
-          </tr>
-        </tbody>
-      </table></div>`:'<div style="color:var(--text3);font-size:13px">No BOQ items added yet.</div>'}
+      <!-- RIGHT: Project Lifecycle -->
+      <div>${buildLifecycleTimeline(p,id)}</div>
     </div>
 
-      <!-- Contractor Uploaded Documents (visible to RSR) -->
-      ${(p.contractorDocs&&Object.keys(p.contractorDocs).length)?`
-      <div class="card" style="margin-bottom:14px">
-        <div class="st" style="margin-bottom:10px">📁 Contractor Site Documents</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          ${[
-            {id:'drawing',label:'Site Drawing / Plan',icon:'📐'},
-            {id:'estimate',label:'Work Estimate',icon:'📋'},
-            {id:'other',label:'Other Document',icon:'📎'}
-          ].map(slot=>{
-            const doc = (p.contractorDocs||{})[slot.id];
-            if(!doc||!doc.url) return '';
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:var(--rs);flex-wrap:wrap;gap:8px">'
-              +'<div><div style="font-size:12px;font-weight:600">'+slot.icon+' '+slot.label+'</div>'
-              +'<div style="font-size:11px;color:var(--text3)">'+doc.name+' · Uploaded '+fmtDate(doc.uploadedAt)+(doc.uploadedBy?' by '+doc.uploadedBy:'')+'</div></div>'
-              +'<a href="'+doc.url+'" target="_blank" style="font-size:12px;padding:6px 12px;background:var(--navy);color:#fff;border-radius:var(--rs);font-weight:600;text-decoration:none">View →</a>'
-              +'</div>';
-          }).join('')}
-        </div>
-      </div>`:''}
+    <!-- SECOND ROW: Fund Releases + Material Credit (both collapsed by default) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px" class="detail-main-grid">
 
+      <!-- Fund Releases -->
       <div class="card">
-        <details>
+        <details data-toggle="funds-${id}">
           <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
-            <div class="st" style="margin:0;border:none;padding:0">Fund Releases</div>
+            <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${(p.releases||[]).filter(r=>!isArchived(r)).length} entries)</span></div>
             <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
           </summary>
           <div style="margin-top:12px">${relLog}</div>
-          ${settleLog?'<div style="margin-top:14px"><div class="st">Government Payments Received</div>'+settleLog+'</div>':''} 
+          ${settleLog?`<div style="margin-top:14px"><div class="st">Government Payments Received</div>${settleLog}</div>`:''}
         </details>
       </div>
+
+      <!-- Material Credit -->
+      <div>${renderProjectMatCredit(p)}</div>
     </div>
-    <div class="card">
-      <details open>
-        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="st" style="margin:0;border:none;padding:0">📊 BOQ Progress ${lv?`<span style="font-weight:400;text-transform:none;color:var(--text3);font-size:11px">— Last verified: ${lv.date}</span>`:''}</div>
-          </div>
-          <div style="display:flex;gap:12px;font-size:11px;font-weight:600">
-            <span style="color:var(--amber)">🟡 Reported</span>
-            <span style="color:var(--navy)">🔵 Verified</span>
-            <span style="color:var(--text3);font-size:11px">▼</span>
-          </div>
+
+    <!-- BOQ Progress (collapsed by default) -->
+    <div class="card" style="margin-bottom:14px">
+      <details data-toggle="boq-${id}">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="st" style="margin:0;border:none;padding:0">📊 BOQ Progress</div>
+          <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
         </summary>
-        <div style="margin-top:12px">
-          <div class="tbl-wrap"><table><thead><tr>
-            <th>Item</th><th>Unit</th>
-            <th style="text-align:center">BOQ Qty</th>
-            <th style="text-align:center;color:var(--amber)">Reported</th>
-            <th style="text-align:center;color:var(--navy)">RSR Verified</th>
-            <th>Progress</th>
-            <th style="text-align:right">Value</th>
-          </tr></thead><tbody>${brows}</tbody></table></div>
-          <div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">
-            <strong style="color:var(--amber)">Reported</strong> = accepted from contractor updates.&nbsp;&nbsp;
-            <strong style="color:var(--navy)">RSR Verified</strong> = physically confirmed on site — controls funding.
-          </div>
+        <div style="margin-top:14px">${boqHtml}</div>
+      </details>
+    </div>
+
+    <!-- Settlement Detection -->
+    ${renderSettlementDetectionBanner ? '' : ''}
+
+    <!-- Document Vault -->
+    <div id="doc-vault-${id}">${typeof renderDocVault==='function'?renderDocVault(p,true):''}</div>
+
+    <!-- Activity log for this project -->
+    <div class="card" style="margin-bottom:14px">
+      <details data-toggle="activity-${id}">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="st" style="margin:0;border:none;padding:0">📋 Project Activity</div>
+          <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
+        </summary>
+        <div style="margin-top:12px" id="proj-activity-${id}">
+          <button onclick="loadProjActivity('${id}')" style="background:none;border:1px solid var(--border);border-radius:var(--rs);padding:6px 14px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">Load Activity Log</button>
         </div>
       </details>
     </div>
-    <div class="card"><div class="st">Verification Log</div>${verLog}</div>
-    ${p.ownerNotes?`<div class="card" style="border-left:4px solid var(--gold)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="st" style="margin:0;border:none;padding:0;color:var(--gold)">📝 Owner Notes (Private)</div>
-        <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')">Edit</button>
-      </div>
-      <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6">${p.ownerNotes}</div>
-      ${p.ownerNotesUpdated?`<div style="font-size:11px;color:var(--text3);margin-top:8px">Last updated: ${new Date(p.ownerNotesUpdated).toLocaleString('en-IN')}</div>`:''}
-    </div>`:''}
-    ${allUpdHtml}
-    <!-- Contractor Notes (visible to owner) -->
-    ${(()=>{
-      const notes = p.contractorNotes||[];
-      if(!notes.length) return '';
-      return `<div class="card" style="border-top:3px solid var(--gold)">
-        <div class="st">📓 Contractor Notes (${notes.length})</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Notes written by ${GC(p.contractorId)?.name||'contractor'} for this project.</div>
-        ${notes.slice().reverse().map(n=>`
-          <div style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface2);border-radius:0 var(--rs) var(--rs) 0">
-            ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
-            <div style="font-size:13px">${n.text.replace(/\n/g,'<br>')}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} · by ${n.by||'contractor'}</div>
-          </div>`).join('')}
-      </div>`;
-    })()}
-    ${renderDocVault(p, true)}
-    <div class="card">
-      <div class="st">📅 Project Timeline</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Complete chronological log — every payment, receipt, update, verification and settlement.</div>
-      ${renderTimeline(id)}
-    </div>
   `;
-}
 
-async function markRev(pid,uid_val){
-  const p=GP(pid); if(!p)return;
-  const u=(p.contractorUpdates||[]).find(x=>x.id===uid_val);
-  if(!u) return;
-  u.reviewed=true;
-  // Update reported quantities — take the maximum of existing reported and this update's quantities
-  // (since contractor reports cumulative, we always take their latest claim)
-  if(!p.reportedItems) p.reportedItems={};
-  (p.boq||[]).forEach(item=>{
-    const claimed = u.quantities?.[item.id]||0;
-    const existing = p.reportedItems[item.id]||0;
-    // Take the higher of the two (cumulative reporting — can only go up)
-    p.reportedItems[item.id] = Math.max(claimed, existing);
-  });
-  try {
-    await saveProjectDB(p);
-    renderDetail(pid);
-    toast('✓ Reviewed — reported quantities updated','ok');
-  } catch(e){ toast('Save failed','error'); }
-}
+  // Restore toggle states for this project
+  if(typeof applyToggleStates === 'function') applyToggleStates();
 
-// ═══════════════════════════════════════════════════════
-// VERIFY
-// ═══════════════════════════════════════════════════════
-function openVer(id){
-  vpid=id; const p=GP(id); const lv=(p.verifications||[]).slice(-1)[0];
-  document.getElementById('ver-body').innerHTML=`
-    <div class="frow">
-      <div class="fg"><label>Date</label><input type="date" id="vd-date" value="${new Date().toISOString().split('T')[0]}"></div>
-      <div class="fg"><label>Verified By</label><input type="text" id="vd-by" placeholder="Name / supervisor" value="${CU.name}"></div>
-    </div>
-    <div class="fg"><label>Notes</label><textarea id="vd-notes" rows="2" placeholder="Observations at site…"></textarea></div>
-    <div class="st" style="margin-top:4px">Measured Quantities (your physical measurement)</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Enter total cumulative quantity verified so far.</div>
-    ${(p.boq||[]).map(item=>{const prev=lv?(lv.items[item.id]||0):0;return`<div class="vrow"><div class="vdesc">${item.desc}</div><div class="vmeta">of ${item.qty} ${item.unit}</div><input type="number" class="vinput" id="vi-${item.id}" value="${prev}" min="0" max="${item.qty}" step="0.1"></div>`;}).join('')}
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-      <button class="btn" onclick="CM('modal-ver')">Cancel</button>
-      <button class="btn btn-navy" onclick="saveVer()">Save Verification</button>
-    </div>`;
-  OM('modal-ver');
-}
-
-async function saveVer(){
-  const p=GP(vpid); if(!p)return;
-  const date=document.getElementById('vd-date').value;
-  const notes=document.getElementById('vd-notes').value;
-  const verifiedBy=document.getElementById('vd-by').value;
-  const items={};
-  (p.boq||[]).forEach(item=>{const v=parseFloat(document.getElementById('vi-'+item.id)?.value)||0;items[item.id]=Math.min(v,item.qty);});
-  if(!p.verifications) p.verifications=[];
-  p.verifications.push({id:uid(),date,notes,verifiedBy,items});
-  try {
-    await saveProjectDB(p);
-    CM('modal-ver');
-    renderDetail(vpid);
-    toast('✓ Verification saved — BOQ progress updated','ok');
-  } catch(e){ toast('Save failed: '+e.message,'error'); }
-}
-
-// ═══════════════════════════════════════════════════════
-// RELEASE FUNDS
-// ═══════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════
-// CONTRACTORS
-// ═══════════════════════════════════════════════════════
-// ─── PROJECT TIMELINE ────────────────────────────────
-function renderTimeline(pid){
-  const p=GP(pid); if(!p) return '';
-  const events=[];
-
-  // Releases (payments + receipts)
-  (p.releases||[]).filter(r=>!isArchived(r)).forEach(r=>{
-    const isRec=r.txType==='receipt';
-    events.push({
-      date:r.date,
-      icon:isRec?'📥':'💸',
-      type:isRec?'receipt':'payment',
-      title:isRec?`Receipt: ${fmt(r.amount)}`:`Payment: ${fmt(r.amount)}`,
-      sub:`Vch #${r.ref||'—'} · ${r.notes||r.method||''}`,
-      color:isRec?'var(--green)':'var(--navy)'
-    });
-  });
-
-  // Contractor updates
-  (p.contractorUpdates||[]).filter(u=>!isArchived(u)).forEach(u=>{
-    events.push({
-      date:u.date,
-      icon:u.rejected?'✗':u.reviewed?'✓':'⏳',
-      type:'update',
-      title:`Site Update by ${u.submittedBy||'contractor'}`,
-      sub:`${u.notes||'No notes'} · ${u.photos&&u.photos.length?u.photos.length+' photos':'no photos'} · ${u.rejected?'Rejected':u.reviewed?'Approved':'Pending review'}`,
-      color:u.rejected?'var(--red)':u.reviewed?'var(--green)':'var(--amber)'
-    });
-  });
-
-  // Verifications
-  (p.verifications||[]).filter(v=>!isArchived(v)).forEach(v=>{
-    events.push({
-      date:v.date,
-      icon:'🔍',
-      type:'verification',
-      title:`RSR Verification`,
-      sub:`Verified by ${v.verifiedBy||'RSR'} · ${v.notes||''}`,
-      color:'var(--navy)'
-    });
-  });
-
-  // Settlements
-  (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{
-    events.push({
-      date:s.date,
-      icon:'🏦',
-      type:'settlement',
-      title:`Government Settlement: ${fmt(s.amount)}`,
-      sub:`${s.mode||'—'} · Ref: ${s.ref||'—'} · ${s.notes||''}`,
-      color:'var(--green)'
-    });
-  });
-
-  // Status changes
-  if(p.statusChangedAt) events.push({
-    date:p.statusChangedAt.split('T')[0],
-    icon:'📋',
-    type:'status',
-    title:`Status changed to ${p.status}`,
-    sub:`By ${p.statusChangedBy||'owner'}`,
-    color:'var(--text2)'
-  });
-
-  if(!events.length) return '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No activity recorded yet.</div>';
-
-  events.sort((a,b)=>b.date.localeCompare(a.date));
-
-  return `<div style="position:relative;padding-left:28px">
-    <div style="position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--border)"></div>
-    ${events.map(e=>`
-      <div style="position:relative;margin-bottom:14px">
-        <div style="position:absolute;left:-22px;width:22px;height:22px;border-radius:50%;background:${e.color};display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15)">${e.icon}</div>
-        <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 12px;border:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-            <div style="font-weight:700;font-size:13px;color:${e.color}">${e.title}</div>
-            <div style="font-size:11px;color:var(--text3);white-space:nowrap">${e.date}</div>
-          </div>
-          ${e.sub?`<div style="font-size:12px;color:var(--text2);margin-top:2px">${e.sub}</div>`:''}
-        </div>
-      </div>`).join('')}
-  </div>`;
-}
-
-// ─── ACTION ITEMS SECTION ────────────────────────────
-function buildActionItems(p, id){
-  const eaNum = p.eaNumber || (p.docVault && p.docVault.ea) || '';
-  const today = new Date();
-
-  let showRefund = false;
-  let daysUntilRefund = null;
-  if(p.jvDate){
-    const twoYears = new Date(p.jvDate);
-    twoYears.setFullYear(twoYears.getFullYear() + 2);
-    daysUntilRefund = Math.round((twoYears - today) / 86400000);
-    showRefund = daysUntilRefund <= 30 && !p.refundApplied;
-  }
-
-  const showWEC = eaNum && !p.wecReceived;
-
-  if(!showWEC && !showRefund) return '';
-
-  return `<div class="card" style="border-top:3px solid var(--amber);margin-bottom:0">
-    <div class="st" style="margin-bottom:12px">📋 Action Items</div>
-    ${showWEC ? `<div style="padding:12px;background:#fffbeb;border-radius:var(--rs);margin-bottom:10px;border:1px solid #f59e0b">
-      <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:6px">📜 Work Experience Certificate</div>
-      ${p.wecApplied
-        ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">✓ Applied on <strong>${fmtDate(p.wecAppliedDate)}</strong> — awaiting receipt from government</div>
-           <button class="btn btn-sm btn-navy" onclick="markWECReceived('${id}')">✓ Mark as Received</button>`
-        : `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">EA Number received — apply for Work Experience Certificate now</div>
-           <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none" onclick="markWECApplied('${id}')">✓ Mark WEC as Applied</button>`
-      }
-    </div>` : ''}
-    ${showRefund ? `<div style="padding:12px;background:#fef2f2;border-radius:var(--rs);border:1px solid var(--red)">
-      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">💰 ${daysUntilRefund<=0?'EMD/ASD/FSD Refund Eligible NOW':'EMD/ASD/FSD Refund Eligible Soon'}</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${daysUntilRefund<=0?'2 years completed since JV — apply for deposit refund immediately':`Refund eligibility in ${daysUntilRefund} days — prepare documents`}</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">EMD: ${fmt(p.emd||0)} · ASD: ${fmt(p.asd||0)} · FSD: ${fmt(p.fsd||0)}</div>
-      ${daysUntilRefund<=0?`<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="markRefundApplied('${id}')">✓ Mark Refund as Applied</button>`:''}
-    </div>` : ''}
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════
-// PROJECT LIFECYCLE TIMELINE
-// ═══════════════════════════════════════════════════════
 function buildLifecycleTimeline(p, id){
   const today = new Date();
 
@@ -861,4 +659,19 @@ async function markRefundReceived(pid){
     renderDetail(pid);
     toast('✓ Refund marked as received','ok');
   }catch(e){ toast('Save failed','error'); }
+}
+}
+
+// ─── PROJECT ACTIVITY LOG LOADER ──────────────────────
+async function loadProjActivity(pid){
+  const el = document.getElementById('proj-activity-'+pid);
+  if(!el) return;
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading…</div>';
+  if(typeof renderActivityLog === 'function'){
+    const wrapperId = 'proj-activity-log-'+pid;
+    el.innerHTML = '<div id="'+wrapperId+'"></div>';
+    await renderActivityLog(wrapperId, {projectId:pid, limit:50});
+  } else {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Activity log not available.</div>';
+  }
 }

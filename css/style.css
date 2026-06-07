@@ -15,11 +15,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 /* ─── NAV — FULLY RESPONSIVE ─────────────────────────── */
 .nav{
   background:var(--navy);
-  height:56px;
+  height:calc(56px + env(safe-area-inset-top, 0px));
+  padding-top:env(safe-area-inset-top, 0px);
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 clamp(8px,2vw,16px);
+  padding-left:max(clamp(8px,2vw,16px), env(safe-area-inset-left, 0px));
+  padding-right:max(clamp(8px,2vw,16px), env(safe-area-inset-right, 0px));
   position:sticky;top:0;
   z-index:100;
   box-shadow:0 2px 8px rgba(0,0,0,.2);
@@ -522,6 +524,9 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
   overflow-y:auto;
   box-shadow:2px 0 12px rgba(0,0,0,.2);
   transition:transform .25s ease;
+  padding-top:env(safe-area-inset-top, 0px);
+  padding-left:env(safe-area-inset-left, 0px);
+  padding-bottom:env(safe-area-inset-bottom, 0px);
 }
 .sidebar-logo{
   display:flex;align-items:center;
@@ -921,4 +926,93 @@ input:focus, select:focus, textarea:focus {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
   }
+}
+
+/* ─── PROJECT DETAIL GRID ────────────────────────────── */
+.detail-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+@media(max-width: 768px){
+  .detail-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Project detail header meta pills */
+.proj-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  white-space: nowrap;
+}
+/* Load project activity button */
+#proj-activity-log-content { max-height: 300px; overflow-y: auto; }
+
+/* ─── RESPONSIVE — ALL DEVICES ───────────────────────── */
+
+/* Tablet portrait (768px–1024px) */
+@media(min-width:769px) and (max-width:1024px){
+  .page-owner{ margin-left:220px; }
+  .page-owner .wrap{ padding:16px 20px; }
+  .proj-grid{ grid-template-columns:repeat(2,1fr); }
+  .detail-main-grid{ grid-template-columns:1fr 1fr; }
+  .stats{ grid-template-columns:repeat(2,1fr); }
+}
+
+/* Tablet landscape + small desktop (1024px–1280px) */
+@media(min-width:1025px) and (max-width:1279px){
+  .proj-grid{ grid-template-columns:repeat(3,1fr); }
+  .detail-main-grid{ grid-template-columns:1fr 1fr; }
+  .stats{ grid-template-columns:repeat(4,1fr); }
+}
+
+/* Large desktop 1280px–1600px */
+@media(min-width:1280px) and (max-width:1599px){
+  .proj-grid{ grid-template-columns:repeat(3,1fr); }
+  #dash-main-grid{ grid-template-columns:1fr 360px; }
+}
+
+/* Mobile landscape */
+@media(max-width:768px) and (orientation:landscape){
+  .nav{ height:calc(44px + env(safe-area-inset-top,0px)); }
+  .bnav{ padding-bottom:max(6px,env(safe-area-inset-bottom,6px)); }
+  .detail-main-grid{ grid-template-columns:1fr; }
+}
+
+/* Small phones (< 375px) */
+@media(max-width:374px){
+  .proj-grid{ grid-template-columns:1fr; gap:8px; }
+  .nav{ gap:4px; }
+  .nav-btn-label{ display:none; }
+}
+
+/* Foldable phones open state (>520px but mobile) */
+@media(min-width:520px) and (max-width:768px){
+  .proj-grid{ grid-template-columns:repeat(2,1fr); }
+  .detail-main-grid{ grid-template-columns:1fr; }
+}
+
+/* iOS safe areas — page content */
+.page-owner .wrap{
+  padding-bottom:max(24px, env(safe-area-inset-bottom,24px));
+}
+@media(max-width:768px){
+  .page-owner .wrap{
+    padding-left:max(12px, env(safe-area-inset-left,12px));
+    padding-right:max(12px, env(safe-area-inset-right,12px));
+  }
+}
+
+/* Contractor page safe areas */
+.page-cont{
+  padding-bottom:max(64px, calc(64px + env(safe-area-inset-bottom,0px)));
 }
