@@ -231,7 +231,7 @@ async function cOpenProj(id){
     </div>
 
     <!-- Site Documents (upload drawings, PDFs, photos) -->
-    <div id="site-docs-section-${id}">${renderSiteDocuments('${id}')}</div>
+    <div id="site-docs-section-${id}">${renderSiteDocuments(id)}</div>
 
     <!-- Labour & Expense Tabs -->
     <div style="display:flex;gap:0;margin-bottom:0;border-radius:var(--rs) var(--rs) 0 0;overflow:hidden;border:1px solid var(--border)">
