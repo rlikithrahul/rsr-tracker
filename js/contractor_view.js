@@ -798,6 +798,7 @@ function renderMaterialRegisterTab(pid){
           +'<div style="text-align:right;flex-shrink:0">'
           +'<div style="font-size:15px;font-weight:800;color:var(--navy)">'+e.qty+' '+e.unit+'</div>'
           +(e.amount?'<div style="font-size:11px;color:var(--text3)">₹'+Number(e.amount).toLocaleString('en-IN')+'</div>':'')
+          +'<button onclick="deleteMaterialEntry(\''+pid+'\',\''+e.id+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:2px;margin-top:4px">🗑️</button>'
           +'</div>'
           +'</div>';
       }).join(''))
@@ -912,6 +913,7 @@ async function saveMaterialEntry(pid){
     // Refresh material tab
     const wrap = document.getElementById('material-tab-wrap');
     if(wrap) wrap.innerHTML = renderMaterialRegisterTab(pid);
+    logActivity({category:'project',action:'material_added',projectId:pid,projectName:p.name,description:(CU?CU.name:'Contractor')+' added '+materialName+' '+qty+' '+unit+(supplier?' from '+supplier:'')+' — '+p.name});
     toast('✓ Material entry saved','ok');
     if(typeof haptic==='function') haptic('success');
   }catch(e){ toast('Save failed','error'); }
@@ -969,6 +971,7 @@ function renderSiteDocuments(pid){
         +'<div style="font-size:11px;color:var(--text3)">'+fmtDate(d.uploadedAt)+(d.uploadedBy?' · '+d.uploadedBy:'')+'</div>'
         +'</div>'
         +'<a href="'+d.url+'" target="_blank" style="flex-shrink:0;background:var(--navy);color:#fff;border-radius:var(--rs);padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none">↓ Open</a>'
+        +'<button onclick="deleteSiteDoc(\''+pid+'\',\''+d.id+'\')" style="flex-shrink:0;background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px">🗑️</button>'
         +'</div>').join('')
       : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No site documents uploaded yet.</div>')
     +(docs.length < maxDocs
@@ -1034,6 +1037,7 @@ async function uploadSiteDoc(pid, input){
     const sectEl = document.getElementById('site-docs-section-'+pid);
     if(sectEl) sectEl.outerHTML = '<div id="site-docs-section-'+pid+'">'+renderSiteDocuments(pid)+'</div>';
     if(typeof applyToggleStates==='function') applyToggleStates();
+    logActivity({category:'project',action:'site_doc_uploaded',projectId:pid,projectName:p.name,description:(CU?CU.name:'Contractor')+' uploaded document: '+file.name+' to '+p.name});
     toast('✓ Document uploaded','ok');
     if(typeof haptic==='function') haptic('success');
   }catch(e){
@@ -1046,13 +1050,34 @@ async function uploadSiteDoc(pid, input){
 }
 
 async function deleteSiteDoc(pid, docId){
-  if(!confirm('Remove this document?')) return;
   const p = GP(pid); if(!p) return;
   const doc = (p.siteDocuments||[]).find(d=>d.id===docId);
-  if(doc) doc._archived=true;
+  if(!doc) return;
+  const ok = await showConfirm({title:'Delete Document?',message:'<strong>'+doc.name+'</strong><br><br>This will be saved in the deleted bin and can be restored by admin within 7 days.',confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  saveToBin('site_document', {...doc}, pid, p.name);
+  logActivity({category:'project',action:'site_doc_deleted',projectId:pid,projectName:p.name,description:(CU?CU.name:'Contractor')+' deleted document: '+doc.name});
+  doc._archived=true;
   await saveProjectDB(p);
   const sectEl = document.getElementById('site-docs-section-'+pid);
   if(sectEl) sectEl.outerHTML = '<div id="site-docs-section-'+pid+'">'+renderSiteDocuments(pid)+'</div>';
   if(typeof applyToggleStates==='function') applyToggleStates();
-  toast('Document removed','ok');
+  toast('Document moved to deleted bin','ok');
+}
+
+async function deleteMaterialEntry(pid, entryId){
+  const p = GP(pid); if(!p) return;
+  const entry = (p.materialRegister||[]).find(e=>e.id===entryId);
+  if(!entry) return;
+  const ok = await showConfirm({title:'Delete Material Entry?',message:'<strong>'+entry.materialName+'</strong> — '+entry.qty+' '+entry.unit+' on '+entry.date+'<br><br>Can be restored within 7 days.',confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  saveToBin('material_entry', {...entry}, pid, p.name);
+  logActivity({category:'project',action:'material_deleted',projectId:pid,projectName:p.name,description:(CU?CU.name:'Contractor')+' deleted material entry: '+entry.materialName+' '+entry.qty+' '+entry.unit+' from '+p.name});
+  entry._archived = true;
+  try{
+    await saveProjectDB(p);
+    const wrap = document.getElementById('material-tab-wrap');
+    if(wrap) wrap.innerHTML = renderMaterialRegisterTab(pid);
+    toast('Entry moved to deleted bin','ok');
+  }catch(e){ toast('Failed to remove','error'); }
 }

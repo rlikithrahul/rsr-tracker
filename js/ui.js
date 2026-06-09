@@ -174,7 +174,7 @@ function renderDash(){
   // Right sidebar column — capital + EMI
   const sidebarCol = document.getElementById('dash-sidebar-col');
   if(sidebarCol){
-    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div><div id="dash-matcredit-section"></div>`;
+    sidebarCol.innerHTML=`<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div><div id="dash-matcredit-section"></div><div id="dash-pipeline-section"></div>`;
   } else {
     document.getElementById('dash-cards').insertAdjacentHTML('beforeend','<div id="dash-capital-section"></div><div id="dash-emi-section"></div><div id="dash-gst-section"></div><div id="dash-matcredit-section"></div>');
   }
@@ -195,6 +195,11 @@ function renderDash(){
   const matEl = document.getElementById('dash-matcredit-section');
   if(matEl && typeof getMatCreditDashboardAlerts === 'function'){
     matEl.innerHTML = getMatCreditDashboardAlerts();
+  }
+  // Pipeline urgent alert
+  const pipeEl = document.getElementById('dash-pipeline-section');
+  if(pipeEl && typeof getPipelineDashboardAlert === 'function'){
+    pipeEl.innerHTML = getPipelineDashboardAlert();
   }
 }
 
@@ -737,6 +742,7 @@ const SIDEBAR_TABS = [
   {i:5, icon:'💳', label:'EMI Calendar'},
   {i:7, icon:'🧾', label:'GST'},
   {i:8, icon:'🧱', label:'Material Credit'},
+  {i:9, icon:'⚡', label:'Action Centre'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -794,7 +800,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -809,6 +815,7 @@ function ownerTab(i){
   if(i===6) renderSettings();
   if(i===7) renderGST();
   if(i===8) renderMatCredit();
+  if(i===9) renderPipeline();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();

@@ -465,7 +465,7 @@ async function applyActivityFilter(){
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:'+userBg+';color:#fff">'+e.user+'</span>'
         +'<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:'+cm.color+'22;color:'+cm.color+';font-weight:600">'+cm.label+'</span>'
-        +(e.projectName?'<span style="font-size:10px;color:var(--navy);font-weight:600">'+e.projectName.substring(0,30)+(e.projectName.length>30?'…':'')+'</span>':'')
+        +(e.projectId?'<span style="font-size:10px;color:var(--navy);font-weight:600;cursor:pointer;text-decoration:underline" onclick="if(typeof openDetail===\'function\')openDetail(\''+e.projectId+'\')">'+((e.projectName||'').substring(0,30))+(((e.projectName||'').length>30)?'…':'')+'</span>':'')
         +(e.amount?'<span style="font-size:10px;color:var(--green);font-weight:700">'+fmtLog(e.amount)+'</span>':'')
         +'<span style="font-size:10px;color:var(--text3)" title="'+fmtTS(e.ts)+'">'+timeAgo(e.ts)+'</span>'
         +'</div>'

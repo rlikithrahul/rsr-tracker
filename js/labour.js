@@ -177,6 +177,7 @@ function renderLabourTab(pid){
                 <td style="padding:7px 8px;font-weight:600;white-space:nowrap">${fmtDate(d)}</td>
                 ${types.map(t=>`<td style="padding:7px 8px;text-align:center">${e[t.id]||'—'}</td>`).join('')}
                 <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--navy)">${total}</td>
+                <td style="padding:4px"><button onclick="deleteLabourEntry('${pid}','${d}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px">🗑️</button></td>
               </tr>`;
             }).join('')}
             <!-- Totals row -->
@@ -205,6 +206,8 @@ async function saveLabourEntry(pid, date){
   D.labourData[pid][date] = entry;
   try{
     await saveLabourData();
+    const lp = (typeof GP==='function')?GP(pid):null;
+    logActivity({category:'project',action:'labour_added',projectId:pid,projectName:lp?lp.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' added labour for '+fmtDate(date)+(lp?' — '+lp.name:'')});
     toast('✓ Labour saved for '+fmtDate(date),'ok');
     // Re-render labour tab
     const wrap = document.getElementById('labour-tab-wrap');
@@ -388,6 +391,8 @@ async function addExpense(pid){
     await saveExpenseData();
     document.getElementById('exp_amt_'+pid).value='';
     document.getElementById('exp_note_'+pid).value='';
+    const ep2 = (typeof GP==='function')?GP(pid):null;
+    logActivity({category:'project',action:'expense_added',projectId:pid,projectName:ep2?ep2.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' added expense'+(ep2?' — '+ep2.name:'')});
     toast('✓ Expense added','ok');
     const wrap = document.getElementById('expense-tab-wrap');
     if(wrap) wrap.innerHTML = renderExpenseTab(pid);
@@ -395,7 +400,11 @@ async function addExpense(pid){
 }
 
 async function deleteExpense(pid, idx){
-  if(!confirm('Delete this expense?')) return;
+  const p2 = (typeof GP==='function')?GP(pid):null;
+  const expItem = ((D.expenseData||{})[pid]||[])[idx];
+  const ok2 = await showConfirm({title:'Delete Expense?',message:(expItem?'<strong>'+fmt(expItem.amount||0)+'</strong> — '+(expItem.note||expItem.cat||'Expense')+'<br><br>':'')+'Can be restored within 7 days by admin.',confirmLabel:'Yes, Delete'});
+  if(!ok2) return;
+  if(expItem){ saveToBin('expense_entry',{...expItem},pid,p2?p2.name:''); logActivity({category:'project',action:'expense_deleted',projectId:pid,projectName:p2?p2.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted expense '+(expItem?fmt(expItem.amount):'')+(p2?' — '+p2.name:'')}); }
   if(D.expenseData&&D.expenseData[pid]) D.expenseData[pid].splice(idx,1);
   try{
     await saveExpenseData();
@@ -471,4 +480,21 @@ function clearExpensePhoto(pid){
   if(prev) prev.innerHTML='';
   const inp = document.getElementById('expense-photo-input-'+pid);
   if(inp) inp.value='';
+}
+
+async function deleteLabourEntry(pid, date){
+  const ok = await showConfirm({title:'Delete Labour Entry?',message:'Labour entry for <strong>'+fmtDate(date)+'</strong><br><br>Can be restored within 7 days by admin.',confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  if(!D.labourData||!D.labourData[pid]) return;
+  const entry = D.labourData[pid][date];
+  const p = (typeof GP==='function')?GP(pid):null;
+  saveToBin('labour_entry', {date, entry}, pid, p?p.name:'');
+  logActivity({category:'project',action:'labour_deleted',projectId:pid,projectName:p?p.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted labour entry for '+fmtDate(date)+(p?' — '+p.name:'')});
+  delete D.labourData[pid][date];
+  try{
+    await saveLabourData();
+    const wrap = document.getElementById('labour-tab-wrap');
+    if(wrap) wrap.innerHTML = renderLabourTab(pid);
+    toast('Labour entry moved to deleted bin','ok');
+  }catch(e){ toast('Failed to delete','error'); }
 }
