@@ -46,7 +46,7 @@ function openLetterModal(pid, defaultType){
     document.body.appendChild(modal);
   }
 
-  const refNo = p.eaNumber||(p.docVault&&p.docVault.ea)||p.tender||'';
+  // ref numbers now come from three separate input fields
   const firmName = getFirmName(p);
 
   modal.innerHTML = `<div class="mbox" style="max-width:540px">
@@ -93,9 +93,16 @@ function openLetterModal(pid, defaultType){
         <label>Firm Name</label>
         <input type="text" id="ltr-firm" value="${firmName}">
       </div>
-      <div class="fg">
-        <label>Reference / EA Number</label>
-        <input type="text" id="ltr-ref" value="${refNo}">
+      <div class="fg" style="grid-column:1/-1">
+        <label>Reference Numbers <span style="font-size:10px;color:var(--text3);font-weight:400">— all will appear in the letter</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">EA / Accounts Number</div>
+            <input type="text" id="ltr-ea" value="${p.eaNumber||(p.docVault&&p.docVault.ea)||''}" placeholder="EA number" style="width:100%;box-sizing:border-box;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Gen Code</div>
+            <input type="text" id="ltr-gencode" value="${p.genCode||(p.docVault&&p.docVault.gencode)||''}" placeholder="Gen code" style="width:100%;box-sizing:border-box;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Tender ID</div>
+            <input type="text" id="ltr-tender" value="${p.tender||''}" placeholder="Tender ID" style="width:100%;box-sizing:border-box;padding:7px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px"></div>
+        </div>
       </div>
     </div>
     <div class="fg">
@@ -132,7 +139,13 @@ function updateLetterPreview(pid){
   const p = GP(pid); if(!p) return;
   const type = document.querySelector('input[name="letter-type"]:checked')?.value||'wec';
   const firmName = document.getElementById('ltr-firm')?.value||getFirmName(p);
-  const refNo = document.getElementById('ltr-ref')?.value||'';
+  const eaNum = document.getElementById('ltr-ea')?.value||'';
+  const genCode = document.getElementById('ltr-gencode')?.value||'';
+  const tenderID = document.getElementById('ltr-tender')?.value||'';
+  const refLines = [];
+  if(eaNum) refLines.push('EA No: '+eaNum);
+  if(genCode) refLines.push('Gen Code: '+genCode);
+  if(tenderID) refLines.push('Tender ID: '+tenderID);
   const workName = document.getElementById('ltr-work')?.value||p.name;
   const jvAmt = document.getElementById('ltr-jv')?.value||p.jvAmount||0;
   const date = document.getElementById('ltr-date')?.value||todayFormatted();
@@ -159,7 +172,7 @@ function updateLetterPreview(pid){
     <div>G.V.M.C, Visakhapatnam.</div>
     <div style="margin-top:8px">&nbsp;&nbsp;&nbsp;&nbsp;Respected Sir / Madam,</div>
     <div style="margin-top:6px">&nbsp;&nbsp;&nbsp;&nbsp;${subj}</div>
-    <div>&nbsp;&nbsp;&nbsp;&nbsp;Ref: - 1) <strong>${refNo}.</strong></div>
+    <div>&nbsp;&nbsp;&nbsp;&nbsp;Ref: - ${refLines.map((r,i)=>'<strong>'+(i+1)+') '+r+'</strong>').join(' &nbsp;&nbsp; ')}</div>
     <div style="margin-top:6px">&nbsp;&nbsp;&nbsp;&nbsp;<strong>NAME OF WORK-</strong> ${workName}</div>
     <div>&nbsp;&nbsp;&nbsp;&nbsp;<strong>JV AMOUNT:</strong> ${fmtAmtWords(jvAmt)}</div>
     <div style="margin-top:10px">&nbsp;&nbsp;&nbsp;&nbsp;${body}</div>
@@ -173,7 +186,14 @@ async function generateAndDownloadLetter(pid){
   const p = GP(pid); if(!p) return;
   const type = document.querySelector('input[name="letter-type"]:checked')?.value||'wec';
   const firmName = document.getElementById('ltr-firm')?.value||getFirmName(p);
-  const refNo = document.getElementById('ltr-ref')?.value||p.eaNumber||p.tender||'';
+  const eaNum = document.getElementById('ltr-ea')?.value||p.eaNumber||(p.docVault&&p.docVault.ea)||'';
+  const genCode = document.getElementById('ltr-gencode')?.value||p.genCode||(p.docVault&&p.docVault.gencode)||'';
+  const tenderID = document.getElementById('ltr-tender')?.value||p.tender||'';
+  // Build numbered reference lines
+  const refItems = [];
+  if(eaNum) refItems.push('EA No: '+eaNum);
+  if(genCode) refItems.push('Gen Code: '+genCode);
+  if(tenderID) refItems.push('Tender ID: '+tenderID);
   const workName = document.getElementById('ltr-work')?.value||p.name;
   const jvAmt = parseFloat(document.getElementById('ltr-jv')?.value)||p.jvAmount||0;
   const date = document.getElementById('ltr-date')?.value||todayFormatted();
@@ -264,7 +284,14 @@ async function generateAndDownloadLetter(pid){
           // Subject
           mixed(subjectRun,{after:80}),
           // Ref
-          mixed(refRun,{after:160}),
+          // One numbered ref line per ref item
+          ...(refItems.length ? refItems.map((r,i) => new Paragraph({
+            spacing:{before:0,after:i===refItems.length-1?160:60},
+            children:[
+              new TextRun({text:'\t\tRef: - '+(i+1)+') ',bold:true,font,size:sz}),
+              new TextRun({text:r+'.',bold:true,font,size:sz})
+            ]
+          })) : [new Paragraph({spacing:{after:160},children:[new TextRun({text:'\t\tRef: - 1) —',bold:true,font,size:sz})]})]),
           br(),
           // Work name + JV
           mixed([{text:'\t\tNAME OF WORK- ',bold:true},{text:workName,bold:true}],{after:80}),
