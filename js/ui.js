@@ -512,8 +512,8 @@ function buildQuickPills(list){
     html += `<button class="qfilter-pill${projQuickFilter===f?' active':''}" onclick="setQuickFilter('${f}','firm')">🏢 ${short}</button>`;
   });
 
-  // Contractor pills (top 6 by project count)
-  contractorIds.slice(0,6).forEach(cid=>{
+  // Contractor pills — ALL contractors with active projects
+  contractorIds.forEach(cid=>{
     const c = GC(cid); if(!c) return;
     const name = c.name.split(' ').slice(0,2).join(' ');
     html += `<button class="qfilter-pill${projQuickFilter===cid?' active':''}" onclick="setQuickFilter('${cid}','contractor')">👷 ${name}</button>`;

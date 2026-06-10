@@ -63,7 +63,11 @@ function openLetterModal(pid, defaultType){
     <!-- Preview -->
     <div style="background:#fffef0;border:1px solid #e5e0c0;border-radius:var(--rs);padding:16px;margin-top:14px;font-family:'Times New Roman',serif;font-size:13px;line-height:1.9;max-height:320px;overflow-y:auto" id="ltr-preview"></div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;align-items:center;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-right:auto;padding:8px 12px;background:var(--surface2);border-radius:var(--rs);border:1px solid var(--border)">
+        <input type="checkbox" id="lf-letterhead" onchange="updateLetterPreview('${pid}')" style="width:16px;height:16px;cursor:pointer">
+        <span>🖨️ Printing on letterhead <span style="font-size:11px;color:var(--text3)">(adds top space)</span></span>
+      </label>
       <button class="btn" onclick="CM('modal-letters')">Cancel</button>
       <button class="btn btn-navy" onclick="downloadLetter('${pid}')">⬇️ Download .docx</button>
     </div>
@@ -86,9 +90,9 @@ function updateLetterPreview(pid){
   const jv = document.getElementById('lf-jv')?.value||'';
 
   const refs = [];
-  if(ea) refs.push(ea);
-  if(gc) refs.push(gc);
-  if(tid) refs.push(tid);
+  if(ea) refs.push('EA / Accounts No: '+ea);
+  if(gc) refs.push('Gen Code: '+gc);
+  if(tid) refs.push('Tender ID: '+tid);
 
   let subject='', body='';
   if(type==='wec'){
@@ -103,7 +107,14 @@ function updateLetterPreview(pid){
     body=`I &nbsp;<b>${firm}</b>&nbsp; have successfully completed the above work and it has been more than two years since the JV date of ${p.jvDate?fmtDate(p.jvDate):'—'}. So, I am requesting You to please arrange the refund of EMD <b>Rs.${fmtINR(p.emd||0)}</b> + FSD <b>Rs.${fmtINR(p.fsd||0)}</b> = Total <b>Rs.${fmtINR(total)}</b> as early as Possible.`;
   }
 
-  document.getElementById('ltr-preview').innerHTML =
+  const letterhead = document.getElementById('lf-letterhead')?.checked||false;
+
+  // Show letterhead space in preview
+  const topNote = letterhead
+    ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:28px 0;margin-bottom:12px;font-family:sans-serif">[ Letterhead area — ~4cm ]</div>'
+    : '';
+
+  document.getElementById('ltr-preview').innerHTML = topNote +
     `<div style="text-align:right">${date}</div>
      <br>To,<br>The Commissioner,<br>G.V.M.C,<br>Visakhapatnam.
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Respected Sir / Madam,
@@ -130,9 +141,9 @@ function downloadLetter(pid){
 
   // Build ref items — only non-empty
   const refs = [];
-  if(ea) refs.push(ea);
-  if(gc) refs.push(gc);
-  if(tid) refs.push(tid);
+  if(ea) refs.push('EA / Accounts No: '+ea);
+  if(gc) refs.push('Gen Code: '+gc);
+  if(tid) refs.push('Tender ID: '+tid);
 
   // Body text per type
   let subject='', body='', extraLines=[], fileName='';
@@ -153,8 +164,12 @@ function downloadLetter(pid){
   }
 
   // Build XML paragraphs
+  const letterhead = document.getElementById('lf-letterhead')?.checked||false;
+  // 4cm = 2268 twips, normal = 1440 twips (1 inch)
+  const topMargin = letterhead ? 2268 : 1440;
+
   const xml = buildLetterXML({ firm, date, refs, work, jv, subject, body, extraLines });
-  const docx = buildDOCX(xml);
+  const docx = buildDOCX(xml, topMargin);
   triggerDownload(docx, fileName);
 
   logActivity({category:'project',action:'letter_generated',projectId:pid,projectName:p.name,
@@ -247,7 +262,8 @@ function buildLetterXML({firm, date, refs, work, jv, subject, body, extraLines})
 }
 
 // ─── DOCX ZIP BUILDER (no library needed) ────────────
-function buildDOCX(bodyXml){
+function buildDOCX(bodyXml, topMargin){
+  const top = topMargin||1440;
   // 4cm top margin = 2268 twips (1cm = 567 twips)
   const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
@@ -257,7 +273,7 @@ function buildDOCX(bodyXml){
 ${bodyXml}
 <w:sectPr>
   <w:pgSz w:w="11906" w:h="16838"/>
-  <w:pgMar w:top="2268" w:right="1440" w:bottom="1440" w:left="1800"/>
+  <w:pgMar w:top="${top}" w:right="1440" w:bottom="1440" w:left="1800"/>
 </w:sectPr>
 </w:body>
 </w:document>`;
