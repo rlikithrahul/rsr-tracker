@@ -299,6 +299,11 @@ function renderPipeline(){
           +(p.tender?'<span style="font-size:10px;color:var(--text3)">#'+p.tender+'</span>':'')
           +'</div>'
           +(detail?'<div style="font-size:11px;color:'+def.color+';margin-top:3px;font-weight:600">'+detail+'</div>':'')
+          +'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'
+          +(def.key==='wec_to_apply'||def.key==='wec_applied'?'<button onclick="event.stopPropagation();openLetterModal(\''+p.id+'\',\'wec\')" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📄 WEC Letter</button>':'')
+          +(def.key==='asd_to_apply'?'<button onclick="event.stopPropagation();openLetterModal(\''+p.id+'\',\'asd\')" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📄 ASD Letter</button>':'')
+          +(def.key==='emd_overdue'||def.key==='emd_to_apply'||def.key==='emd_applied'?'<button onclick="event.stopPropagation();openLetterModal(\''+p.id+'\',\'emd_fsd\')" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📄 EMD/FSD Letter</button>':'')
+          +'</div>'
           +'</div>'
           +'<div style="font-size:12px;color:var(--navy);font-weight:700;flex-shrink:0">Open →</div>'
           +'</div>';

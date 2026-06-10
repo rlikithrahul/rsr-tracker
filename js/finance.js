@@ -525,26 +525,62 @@ function parseRowsByType(rows, type){
 
     // txType from VchType column — most reliable
     const txType = vchType.toLowerCase().includes('receipt') ? 'receipt' : 'payment';
-    const amount = txType === 'receipt' ? credit : debit;
-    if(amount <= 0) continue;
+    const totalAmount = txType === 'receipt' ? credit : debit;
+    if(totalAmount <= 0) continue;
 
     // Cost centre resolution
-    let costCentre = headerCC; // for cost centre reports, already set
     let narration  = '';
 
     if(type === 'daybook' || type === 'monthly'){
-      // Next row (R+1) has cost centre in col1, confirmed by Dr/Cr in col3
-      if(i+1 < rows.length){
-        const r1 = rows[i+1];
-        const cc = String(r1[1]||'').trim();
-        const drCr = String(r1[3]||'').trim();
+      // Collect ALL cost centre sub-rows that follow (each has Dr/Cr in col3)
+      const ccEntries = [];
+      let j = i + 1;
+      while(j < rows.length){
+        const rj = rows[j];
+        const cc = String(rj[1]||'').trim();
+        const drCr = String(rj[3]||'').trim();
+        const ccAmt = parseFloat(String(rj[2]||'').replace(/,/g,''))||0;
         if((drCr === 'Dr' || drCr === 'Cr') && cc && !SKIP_CC.some(s=>cc.startsWith(s))){
-          costCentre = cc;
+          ccEntries.push({ cc: cc.toUpperCase(), amount: ccAmt });
+          j++;
+        } else {
+          break;
         }
       }
-      // Narration is R+3 col1
-      if(i+3 < rows.length){
-        narration = String(rows[i+3][1]||'').trim();
+      // Narration: look ahead past cc rows + credit row
+      const narRow = rows[i + ccEntries.length + 2];
+      if(narRow) narration = String(narRow[1]||'').trim();
+
+      if(ccEntries.length === 0){
+        // No cost centre found — use header or blank
+        transactions.push({
+          date, ledger, vchType, vchNo, txType,
+          amount: totalAmount,
+          costCentre: (headerCC||'').toUpperCase(),
+          narration
+        });
+      } else if(ccEntries.length === 1){
+        // Single cost centre — normal case
+        transactions.push({
+          date, ledger, vchType, vchNo, txType,
+          amount: ccEntries[0].amount > 0 ? ccEntries[0].amount : totalAmount,
+          costCentre: ccEntries[0].cc,
+          narration
+        });
+      } else {
+        // Multiple cost centres — SPLIT into one transaction per CC
+        // Use each CC's own amount (col2 of that row); fallback to proportional split
+        const ccTotal = ccEntries.reduce((s,e)=>s+e.amount, 0);
+        ccEntries.forEach(entry=>{
+          const amt = entry.amount > 0 ? entry.amount : totalAmount * (1/ccEntries.length);
+          transactions.push({
+            date, ledger, vchType, vchNo, txType,
+            amount: Math.round(amt * 100) / 100,
+            costCentre: entry.cc,
+            narration,
+            multiCC: true  // flag so we can show this in UI
+          });
+        });
       }
     } else {
       // Cost centre report: narration in R+1 col1
@@ -558,18 +594,18 @@ function parseRowsByType(rows, type){
       }
       // ledger from header if set
       if(headerLedger && !ledger) ledger = headerLedger;
+      // Cost centre report — single push
+      transactions.push({
+        date:       dateStr,
+        ledger:     ledger || headerLedger,
+        vchType,
+        vchNo,
+        txType,
+        amount:     totalAmount,
+        costCentre: (headerCC||'').toUpperCase(),
+        narration
+      });
     }
-
-    transactions.push({
-      date:       dateStr,
-      ledger:     ledger || headerLedger,
-      vchType,
-      vchNo,
-      txType,
-      amount,
-      costCentre: costCentre.toUpperCase(),
-      narration
-    });
   }
 
   return transactions;
