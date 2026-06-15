@@ -31,6 +31,7 @@ function renderConts(){
       ${pp.length?`<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Released</th><th>Verified</th><th>Status</th></tr></thead><tbody>
         ${pp.map(p=>`<tr><td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td></tr>`).join('')}</tbody></table></div>`
       :'<div style="font-size:13px;color:var(--text3)">No projects assigned.</div>'}
+      ${typeof renderContractorPersonalProjects==='function'?renderContractorPersonalProjects(c.id):''}
     </div>`;}).join('');
 }
 

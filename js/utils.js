@@ -37,7 +37,18 @@ const fmtNum = n => {
 };
 const pct = n => (Math.round((n||0)*100)/100).toFixed(2).replace(/\.?0+$/,'') + '%';
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-function GP(id){ return D.projects.find(p=>p.id===id)||null; }
+function GP(id){
+  let p = D.projects.find(p=>p.id===id);
+  if(p) return p;
+  // Check personal projects (contractor-owned, not linked to RSR)
+  for(const c of (D.contractors||[])){
+    if(c.personalProjects){
+      const pp = c.personalProjects.find(x=>x.id===id);
+      if(pp) return pp;
+    }
+  }
+  return null;
+}
 function GC(id){ return D.contractors.find(c=>c.id===id)||null; }
 function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }

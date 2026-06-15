@@ -751,7 +751,7 @@ function buildSidebar(isSuperAdmin){
   if(!linksEl) return;
 
   const tabs = isSuperAdmin
-    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}]
+    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧮', label:'GST Calc'}]
     : SIDEBAR_TABS;
 
   linksEl.innerHTML = tabs.map(t=>`
@@ -800,7 +800,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -816,6 +816,7 @@ function ownerTab(i){
   if(i===7) renderGST();
   if(i===8) renderMatCredit();
   if(i===9) renderPipeline();
+  if(i===10) renderGSTCalc();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();

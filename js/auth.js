@@ -209,21 +209,41 @@ function enterCont(){
   bnav.innerHTML=`
     <button class="bn active" id="cbn-0" onclick="cTab(0)"><div class="bn-icon">🏗️</div><div>My Sites</div></button>
     <button class="bn" id="cbn-1" onclick="cTab(1)" style="${CU.isSupervisor?'display:none':''}"><div class="bn-icon">💰</div><div>My Funds</div></button>
+    <button class="bn" id="cbn-3" onclick="cTab(3)"><div class="bn-icon">📁</div><div>Other</div></button>
     <button class="bn" id="cbn-2" onclick="cTab(2)" style="${CU.isSupervisor?'display:none':''}"><div class="bn-icon">👥</div><div>Team</div></button>`;
   SP('page-cont'); cTab(0);
   startAutoRefresh();
 }
 
 function cTab(i){
-  document.querySelectorAll('[id^="cbn-"]').forEach((b,j)=>b.classList.toggle('active',j===i));
-  if(i===0){ renderCHome(); document.getElementById('cp-funds').classList.add('hidden'); }
-  if(i===1){ renderCFunds(); ['cp-home','cp-proj','cp-upd'].forEach(id=>document.getElementById(id)?.classList.add('hidden')); }
+  document.querySelectorAll('[id^="cbn-"]').forEach((b)=>{
+    const idx = parseInt(b.id.split('-')[1]);
+    b.classList.toggle('active', idx===i);
+  });
+  if(i===0){
+    renderCHome();
+    ['cp-funds','cp-personal','cp-personal-detail'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+    document.getElementById('cp-supervisors')?.classList.add('hidden');
+  }
+  if(i===1){
+    renderCFunds();
+    ['cp-home','cp-proj','cp-upd','cp-personal','cp-personal-detail'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+    document.getElementById('cp-supervisors')?.classList.add('hidden');
+  }
   if(i===2){
-    ['cp-home','cp-proj','cp-upd','cp-funds'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+    ['cp-home','cp-proj','cp-upd','cp-funds','cp-personal','cp-personal-detail'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
     let svTab = document.getElementById('cp-supervisors');
     if(!svTab){ svTab=document.createElement('div'); svTab.id='cp-supervisors'; svTab.className='cp-section'; document.getElementById('page-cont').appendChild(svTab); }
     svTab.classList.remove('hidden');
     svTab.innerHTML = '<div style="padding:16px"><div id="sv-panel">'+renderSupervisorPanel()+'</div></div>';
+  }
+  if(i===3){
+    ['cp-home','cp-proj','cp-upd','cp-funds','cp-personal-detail'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+    document.getElementById('cp-supervisors')?.classList.add('hidden');
+    let ppTab = document.getElementById('cp-personal');
+    if(!ppTab){ ppTab=document.createElement('div'); ppTab.id='cp-personal'; ppTab.className='cp-section'; ppTab.style.padding='16px'; document.getElementById('page-cont').appendChild(ppTab); }
+    ppTab.classList.remove('hidden');
+    renderPersonalProjectsTab();
   }
 }
 

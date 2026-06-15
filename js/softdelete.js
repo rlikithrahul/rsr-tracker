@@ -96,7 +96,9 @@ function renderDeletedBin(){
     'site_document':'📄 Site Document',
     'project':'🏗️ Project',
     'fund_release':'💰 Fund Release',
-    'settlement':'🏦 Settlement'
+    'settlement':'🏦 Settlement',
+    'personal_project':'📁 Other Project',
+    'work_progress':'📸 Progress Update'
   };
 
   el.innerHTML = bin.map(b=>{
@@ -117,6 +119,19 @@ async function restoreDeletedItem(binId){
   const bin = getDeletedBin();
   const item = bin.find(b=>b.id===binId);
   if(!item){ toast('Item not found or expired','error'); return; }
+
+  // personal_project: restore at contractor level (no GP lookup needed)
+  if(item.type==='personal_project'){
+    const c = D.contractors.find(x=>(x.personalProjects||[]).some(pp=>pp.id===item.data.id));
+    if(!c){ toast('Contractor not found','error'); return; }
+    const pp = c.personalProjects.find(x=>x.id===item.data.id);
+    if(pp) delete pp._archived;
+    await saveContractorDB(c);
+    removeFromBin(binId);
+    renderDeletedBin();
+    toast('✓ Project restored successfully','ok');
+    return;
+  }
 
   const p = GP(item.projectId);
   if(!p){ toast('Project not found','error'); return; }
@@ -143,6 +158,12 @@ async function restoreDeletedItem(binId){
       const existing = p.siteDocuments.find(d=>d.id===item.data.id);
       if(existing) delete existing._archived;
       else p.siteDocuments.push(item.data);
+      await saveProjectDB(p);
+    } else if(item.type==='work_progress'){
+      if(!p.workProgress) p.workProgress=[];
+      const existing = p.workProgress.find(w=>w.id===item.data.id);
+      if(existing) delete existing._archived;
+      else p.workProgress.push(item.data);
       await saveProjectDB(p);
     }
     removeFromBin(binId);

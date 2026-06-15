@@ -148,6 +148,16 @@ async function saveContractorDB(c) {
 }
 
 async function saveProjectDB(p, eventMeta) {
+  // Personal projects (contractor's own work, not linked to RSR) save via contractor record
+  if(p._isPersonal && p._ownerContractorId){
+    const c = D.contractors.find(x=>x.id===p._ownerContractorId);
+    if(c){
+      const idx = (c.personalProjects||[]).findIndex(x=>x.id===p.id);
+      if(idx>=0) c.personalProjects[idx]=p;
+      await saveContractorDB(c);
+    }
+    return;
+  }
   setBusy(true,'Saving…');
   try {
     // Migrate schema before saving
