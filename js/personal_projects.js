@@ -126,6 +126,9 @@ function openPersonalProject(pid){
       <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.clientName?'For: '+p.clientName:''}${p.location?' · 📍 '+p.location:''}</div>
     </div>
 
+    <!-- BOQ Document -->
+    <div id="pp-boq-section-${pid}">${renderPersonalBOQ(pid)}</div>
+
     <!-- Work Progress -->
     <div class="card" style="margin-bottom:12px;border-top:3px solid var(--navy)">
       <details data-toggle="pp-progress-${pid}" open>
@@ -172,6 +175,99 @@ function cBackToPersonalList(){
   if(detail) detail.classList.add('hidden');
   document.getElementById('cp-personal').classList.remove('hidden');
   renderPersonalProjectsTab();
+}
+
+// ─── BOQ DOCUMENT (file upload — PDF/Excel/image) ────
+function renderPersonalBOQ(pid){
+  const p = GP(pid); if(!p) return '';
+  const boq = p.boqFile;
+
+  return `<div class="card" style="margin-bottom:12px;border-top:3px solid var(--gold)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="st" style="margin:0;border:none;padding:0">📊 Bill of Quantities (BOQ)</div>
+    </div>
+    ${boq ? `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface2);border-radius:var(--rs)">
+        ${boq.type==='image'
+          ? `<img src="${boq.url}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="lightbox('${boq.url}')">`
+          : `<div style="width:56px;height:56px;background:var(--navy);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">📄</div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${boq.name}</div>
+          <div style="font-size:11px;color:var(--text3)">Uploaded ${fmtDate(boq.uploadedAt)}</div>
+        </div>
+        <a href="${boq.url}" target="_blank" style="background:var(--navy);color:#fff;border-radius:var(--rs);padding:6px 12px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0">↓ View</a>
+        <button onclick="deletePersonalBOQ('${pid}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px;flex-shrink:0">🗑️</button>
+      </div>
+      <div style="margin-top:10px">
+        <button onclick="triggerPPBOQ('${pid}','replace')" style="width:100%;background:none;border:1px solid var(--border);border-radius:var(--rs);padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">🔄 Replace BOQ File</button>
+      </div>
+    ` : `
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">No BOQ uploaded yet. Add a PDF, Excel sheet, or photo of the BOQ.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="triggerPPBOQ('${pid}','camera')" style="flex:1;min-width:100px;padding:9px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">📷 Camera</button>
+        <button onclick="triggerPPBOQ('${pid}','image')" style="flex:1;min-width:100px;padding:9px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">🖼️ Photo</button>
+        <button onclick="triggerPPBOQ('${pid}','file')" style="flex:1;min-width:100px;padding:9px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">📄 PDF/Excel</button>
+      </div>
+    `}
+    <input type="file" id="pp-boq-input-${pid}" accept="*/*" style="display:none" onchange="uploadPersonalBOQ('${pid}',this)">
+    <div id="pp-boq-uploading-${pid}" style="display:none;font-size:12px;color:var(--navy);margin-top:8px">⏳ Uploading…</div>
+  </div>`;
+}
+
+function triggerPPBOQ(pid, mode){
+  const inp = document.getElementById('pp-boq-input-'+pid);
+  if(!inp) return;
+  if(mode==='camera'){ inp.setAttribute('accept','image/*'); inp.setAttribute('capture','environment'); }
+  else if(mode==='image'){ inp.setAttribute('accept','image/*'); inp.removeAttribute('capture'); }
+  else { inp.setAttribute('accept','.pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png'); inp.removeAttribute('capture'); }
+  inp.click();
+}
+
+async function uploadPersonalBOQ(pid, input){
+  const file = input.files[0]; if(!file) return;
+  const p = GP(pid); if(!p) return;
+
+  const uploadingEl = document.getElementById('pp-boq-uploading-'+pid);
+  if(uploadingEl) uploadingEl.style.display='block';
+
+  try{
+    const boqId = uid();
+    let url = '';
+    if(typeof uploadPhoto === 'function'){
+      url = await uploadPhoto(file, pid, 'boq-'+boqId);
+    } else {
+      url = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+    }
+    const isImage = file.type.startsWith('image/');
+    p.boqFile = {
+      id: boqId, name: file.name, url,
+      type: isImage?'image':'file',
+      uploadedAt: new Date().toISOString().split('T')[0]
+    };
+    await saveProjectDB(p);
+    logActivity({category:'contractor',action:'boq_uploaded',projectId:pid,projectName:p.name,description:CU.name+' uploaded BOQ for '+p.name});
+    const sect = document.getElementById('pp-boq-section-'+pid);
+    if(sect) sect.innerHTML = renderPersonalBOQ(pid);
+    toast('✓ BOQ uploaded','ok');
+    if(typeof haptic==='function') haptic('success');
+  }catch(e){
+    toast('Upload failed — try again','error');
+  }finally{
+    if(uploadingEl) uploadingEl.style.display='none';
+    input.value='';
+  }
+}
+
+async function deletePersonalBOQ(pid){
+  const p = GP(pid); if(!p||!p.boqFile) return;
+  const ok = await showConfirm({title:'Delete BOQ?',message:'<strong>'+p.boqFile.name+'</strong><br><br>This will remove the BOQ file from this project.',confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  logActivity({category:'contractor',action:'boq_deleted',projectId:pid,projectName:p.name,description:CU.name+' deleted BOQ from '+p.name});
+  p.boqFile = null;
+  await saveProjectDB(p);
+  const sect = document.getElementById('pp-boq-section-'+pid);
+  if(sect) sect.innerHTML = renderPersonalBOQ(pid);
+  toast('BOQ removed','ok');
 }
 
 // ─── WORK PROGRESS (photos + notes, no BOQ) ──────────

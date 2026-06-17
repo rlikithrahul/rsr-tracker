@@ -665,6 +665,21 @@ async function saveEditProject(){
   p.contractorId = document.getElementById('ep-cont').value;
   p.status = document.getElementById('ep-status').value;
 
+  // ASD validation: any bid % above 25% MUST have an ASD amount entered
+  // ASD = (bidPct - 25)% of estimated value, paid as additional security deposit
+  if(p.bidPct > 25 && (!p.asd || p.asd <= 0)){
+    const proceed = await showConfirm({
+      title:'⚠️ ASD Amount Missing',
+      message:'This project is quoted at <strong>'+p.bidPct+'%</strong> (above 25%). '
+        +'Tenders quoted above 25% require an <strong>Additional Security Deposit (ASD)</strong> — '
+        +'roughly <strong>'+(p.bidPct-25).toFixed(2)+'%</strong> of the estimated value.<br><br>'
+        +'You have not entered an ASD amount. Continue anyway, or go back and enter it?',
+      confirmLabel:'Continue without ASD',
+      cancelLabel:'Go back and add ASD'
+    });
+    if(!proceed) return;
+  }
+
   // Recalculate agreement amount
   const boqTotal = (p.boq||[]).reduce((s,x)=>s+x.amount,0);
   const base = p.estimated || boqTotal;
@@ -1167,9 +1182,16 @@ function openFullBOQModal(pid){
   let modal = document.getElementById('modal-full-boq');
   if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-full-boq'; document.body.appendChild(modal); }
 
+  const bidPct = p.bidPct||0;
+  const bidMult = 1 + (bidPct/100);
   const total = boq.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
-  modal.innerHTML = `<div class="mbox" style="max-width:720px">
+  const totalAdjusted = total * bidMult;
+
+  modal.innerHTML = `<div class="mbox" style="max-width:780px">
     <div class="mhdr"><h2>📋 Full BOQ — ${p.name.substring(0,40)}</h2><button class="mx" onclick="CM('modal-full-boq')">✕</button></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs)">
+      Bid quoted: <strong style="color:${bidPct<0?'var(--red)':'var(--green)'}">${bidPct>0?'+':''}${bidPct}%</strong> — rates below show <strong>quoted rate</strong> with <strong style="color:var(--navy)">(actual rate after bid%)</strong> underneath
+    </div>
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Item Description</th><th>Unit</th>
@@ -1180,18 +1202,33 @@ function openFullBOQModal(pid){
         <th style="text-align:right">Verified</th>
       </tr></thead>
       <tbody>
-        ${boq.map((item,i)=>`<tr style="background:${i%2===0?'#fff':'var(--surface2)'}">
+        ${boq.map((item,i)=>{
+          const qty = item.qty||0;
+          const rate = item.rate||0;
+          const value = qty*rate;
+          const adjRate = rate*bidMult;
+          const adjValue = value*bidMult;
+          return `<tr style="background:${i%2===0?'#fff':'var(--surface2)'}">
           <td style="font-size:12px">${item.desc||item.name||'—'}</td>
           <td style="font-size:12px">${item.unit||'—'}</td>
-          <td style="text-align:right;font-size:12px">${item.qty||0}</td>
-          <td style="text-align:right;font-size:12px">${fmt(item.rate||0)}</td>
-          <td style="text-align:right;font-size:12px;font-weight:700">${fmt((item.qty||0)*(item.rate||0))}</td>
+          <td style="text-align:right;font-size:12px">${qty}</td>
+          <td style="text-align:right;font-size:12px">
+            ${fmt(rate)}
+            ${bidPct!==0?`<div style="color:var(--navy);font-weight:700;font-size:11px">(${fmt(adjRate)})</div>`:''}
+          </td>
+          <td style="text-align:right;font-size:12px;font-weight:700">
+            ${fmt(value)}
+            ${bidPct!==0?`<div style="color:var(--navy);font-weight:700;font-size:11px">(${fmt(adjValue)})</div>`:''}
+          </td>
           <td style="text-align:right;font-size:12px;color:var(--amber)">${(p.reportedItems||{})[item.id]||'—'}</td>
           <td style="text-align:right;font-size:12px;color:var(--green);font-weight:700">${(p.verifiedItems||{})[item.id]||'—'}</td>
-        </tr>`).join('')}
+        </tr>`;}).join('')}
         <tr style="background:var(--navy);font-weight:700">
           <td colspan="4" style="padding:10px 12px;color:var(--gold)">Total BOQ Value</td>
-          <td style="text-align:right;padding:10px 12px;color:#fff">${fmt(total)}</td>
+          <td style="text-align:right;padding:10px 12px;color:#fff">
+            ${fmt(total)}
+            ${bidPct!==0?`<div style="color:var(--gold);font-size:11px">(${fmt(totalAdjusted)})</div>`:''}
+          </td>
           <td colspan="2"></td>
         </tr>
       </tbody>
