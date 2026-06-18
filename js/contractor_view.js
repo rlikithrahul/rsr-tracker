@@ -6,6 +6,59 @@
 // ═══════════════════════════════════════════════════════
 // CONTRACTOR VIEWS
 // ═══════════════════════════════════════════════════════
+// ─── IMAGE COMPRESSION ─────────────────────────────────
+// Resizes + recompresses photos before upload so they're
+// small enough for mobile data and fast for the gallery view
+function compressImage(file, maxWidth=1280, quality=0.75){
+  return new Promise((resolve, reject)=>{
+    if(!file || !file.type || !file.type.startsWith('image/')){
+      resolve(file); // not an image (shouldn't happen, but don't break)
+      return;
+    }
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e)=>{
+      img.onload = ()=>{
+        try{
+          let { width, height } = img;
+          if(width > maxWidth){
+            height = Math.round(height * (maxWidth/width));
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(blob=>{
+            if(!blob){ resolve(file); return; } // fallback to original on failure
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            resolve(compressedFile);
+          }, 'image/jpeg', quality);
+        }catch(err){
+          console.error('compressImage canvas error:', err);
+          resolve(file); // fallback to original rather than losing the photo
+        }
+      };
+      img.onerror = ()=>{
+        console.error('compressImage: failed to load image for compression');
+        resolve(file); // fallback to original
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>{
+      console.error('compressImage: FileReader failed');
+      resolve(file); // fallback to original
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function renderCHome(){
   document.getElementById('cp-home').classList.remove('hidden');
   document.getElementById('cp-proj').classList.add('hidden');
@@ -407,7 +460,10 @@ async function handlePhotos(evt, source='unknown'){
         source, // 'camera' or 'gallery'
         gps:gpsData?{lat:gpsData.lat,lng:gpsData.lng,area:gpsData.area,time:gpsData.time}:null
       });
-    }catch(e){console.error(e);}
+    }catch(e){
+      console.error('Photo processing failed:', e);
+      toast('Could not process '+file.name+' — try again','error');
+    }
     setBusy(false);
   }
   const req=document.getElementById('photo-req-msg');
