@@ -312,7 +312,7 @@ async function cOpenProj(id){
       <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Total</th><th style="color:var(--amber)">You Reported</th><th style="color:var(--navy)">RSR Verified</th><th>Progress</th></tr></thead><tbody>
       ${(p.boq||[]).map(item=>{
         const rd=(p.reportedItems||{})[item.id]||0;
-        const vd=lv?(lv.items[item.id]||0):0;
+        const vd=lv?((lv.items||lv.quantities||{})[item.id]||0):0;
         const vpct=item.qty?Math.round(vd/item.qty*100):0;
         return`<tr>
           <td>${item.desc}</td>

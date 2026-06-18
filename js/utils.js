@@ -58,8 +58,9 @@ function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p)); } // NE
 function verPct(p){
   // Based on RSR physical verification only — controls funding
   const lv=(p.verifications||[]).slice(-1)[0]; if(!lv) return 0;
+  const items = lv.items||lv.quantities||{};
   const tv=(p.boq||[]).reduce((s,i)=>s+i.qty*i.rate,0); if(!tv) return 0;
-  return (p.boq||[]).reduce((s,i)=>s+(lv.items[i.id]||0)*i.rate,0)/tv*100;
+  return (p.boq||[]).reduce((s,i)=>s+(items[i.id]||0)*i.rate,0)/tv*100;
 }
 function reportedPct(p){
   // Based on contractor-reported quantities (from reviewed updates) — for display only

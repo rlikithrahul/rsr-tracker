@@ -996,7 +996,7 @@ async function exportAllData(){
       const lv=(p.verifications||[]).slice(-1)[0];
       (p.boq||[]).forEach(item=>{
         const reported=(p.reportedItems||{})[item.id]||0;
-        const verified=lv?(lv.items[item.id]||0):0;
+        const verified=lv?((lv.items||lv.quantities||{})[item.id]||0):0;
         boqRows.push([
           p.name, item.desc, item.unit, item.qty, item.rate,
           Math.round(item.qty*item.rate), reported, verified,

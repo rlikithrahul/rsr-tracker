@@ -292,7 +292,6 @@ function renderExpectedJVSection(allProjects){
 }
 
 function dashGoTo(filter){
-  dashFilter = fil
   dashFilter = filter;
   ownerTab(1);
 }

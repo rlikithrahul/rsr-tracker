@@ -389,6 +389,23 @@ function openReviewUpd(pid, uid_val){
   const u=(p.contractorUpdates||[]).find(x=>x.id===uid_val); if(!u) return;
   reviewUpdPid=pid; reviewUpdId=uid_val;
   let html='';
+
+  // Show contractor's photos for this update first
+  if(u.photos && u.photos.length){
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📸 Site Photos (${u.photos.length})</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${u.photos.map(ph=>`<img src="${ph.url}" style="width:90px;height:90px;object-fit:cover;border-radius:var(--rs);cursor:pointer;border:1px solid var(--border)" onclick="lightbox('${ph.url}')">`).join('')}
+      </div>
+    </div>`;
+  } else {
+    html += `<div style="font-size:12px;color:var(--text3);margin-bottom:14px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs)">⚠️ No photos attached to this update.</div>`;
+  }
+
+  if(u.notes){
+    html += `<div style="font-size:13px;color:var(--text2);margin-bottom:14px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs)"><strong>Contractor's note:</strong> ${u.notes}</div>`;
+  }
+
   (p.boq||[]).forEach(item=>{
     const claimed=u.quantities?.[item.id]||0;
     const existing=(p.reportedItems||{})[item.id]||0;
@@ -1160,7 +1177,8 @@ async function saveVerification(pid){
   p.verifications.push({
     id: uid(),
     date, verifiedBy, notes,
-    quantities: verifiedItems,
+    items: verifiedItems,       // canonical key — read by verPct, eligR, projects.js, finance.js, contractor_view.js
+    quantities: verifiedItems,  // alias kept for backward/forward compatibility
     createdAt: new Date().toISOString()
   });
 

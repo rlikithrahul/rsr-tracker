@@ -90,7 +90,7 @@ function renderDetail(id){
 
   const brows=(p.boq||[]).map(item=>{
     const rd = (p.reportedItems||{})[item.id]||0; // contractor reported (after review)
-    const vd = lv?(lv.items[item.id]||0):0;        // RSR physically verified
+    const vd = lv?((lv.items||lv.quantities||{})[item.id]||0):0;        // RSR physically verified
     const rpct = item.qty?Math.round(rd/item.qty*100):0;
     const vpct = item.qty?Math.round(vd/item.qty*100):0;
     return `<tr>
@@ -307,6 +307,30 @@ function renderDetail(id){
 
     <!-- Document Vault -->
     <div id="doc-vault-${id}">${typeof renderDocVault==='function'?renderDocVault(p,true):''}</div>
+
+    <!-- Work Progress Photo Timeline (all contractor updates with dates + photos) -->
+    ${(p.contractorUpdates&&p.contractorUpdates.filter(u=>!isArchived(u)).length>0)?`
+    <div class="card" style="margin-bottom:14px">
+      <details data-toggle="admin-progress-${id}">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="st" style="margin:0;border:none;padding:0">📸 Work Progress Photos (${p.contractorUpdates.filter(u=>!isArchived(u)).length})</div>
+          <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
+        </summary>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+          ${p.contractorUpdates.filter(u=>!isArchived(u)).slice().reverse().map(u=>`
+            <div style="background:var(--surface2);border-radius:var(--rs);padding:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                <div style="font-size:12px;font-weight:700;color:var(--navy)">${fmtDate(u.date)}</div>
+                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:${u.reviewed?'var(--green)':'var(--amber)'};color:#fff">${u.reviewed?'✓ Reviewed':'⏳ Pending Review'}</span>
+              </div>
+              ${u.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px">${u.notes}</div>`:''}
+              ${(u.photos&&u.photos.length)?`<div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${u.photos.map(ph=>`<img src="${ph.url}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border)" onclick="lightbox('${ph.url}')">`).join('')}
+              </div>`:`<div style="font-size:11px;color:var(--text3)">No photos attached</div>`}
+            </div>`).join('')}
+        </div>
+      </details>
+    </div>`:''}
 
     <!-- Site Documents uploaded by contractor -->
     ${(p.siteDocuments&&p.siteDocuments.filter(d=>!isArchived(d)).length>0)?`
