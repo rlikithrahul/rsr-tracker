@@ -877,7 +877,7 @@ async function processBulkImport(){
     status.innerHTML = html;
 
     // Refresh projects list
-    await fetchAllData();
+    await loadDB();
     renderProjects();
 
   }catch(e){

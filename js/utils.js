@@ -105,12 +105,6 @@ function capAlert(p){
   if(pct>=0.55) return `<div class="alert al-amber">🟡 Caution 1 — ${pp}% used. Early warning — ensure site is on schedule.</div>`;
   return '';
 }
-function intr(p){
-  return (p.releases||[]).reduce((s,r)=>{
-    const d=Math.max(0,Math.round((Date.now()-new Date(r.date).getTime())/86400000));
-    return s+r.amount*0.24*d/365;
-  },0);
-}
 function togglePw(id,btn){
   const el=document.getElementById(id);
   el.type=el.type==='password'?'text':'password';
@@ -129,29 +123,12 @@ function statusBadge(p){
   return ''; // active = no badge, just use cap badge
 }
 
-// ─── INTEREST — fixed to use outstanding only ──────────
-function intr(p){
-  const settled = (p.settlements||[]).reduce((s,x)=>s+x.amount,0);
-  // Use compounded principal if it exists
-  const basePrincipal = p.compoundedPrincipal || 0;
-  return (p.releases||[]).reduce((s,r)=>{
-    const d = Math.max(0, Math.round((Date.now()-new Date(r.date).getTime())/86400000));
-    return s + r.amount * 0.24 * d / 365;
-  }, 0) - (settled * 0.24 * 1); // rough reduction for settled portion
-}
+// intr(p) removed — approximate formula, no longer called.
+// Authoritative interest calculation is calcProjectInterest(p) in interest.js
+// (chronological event-based, correctly handles receipts/settlements/compounding).
+// Used by: Interest tab, Backup/Excel export.
 
-// Better interest calc — only on outstanding balance
-function intrOutstanding(p){
-  const settled = (p.settlements||[]).reduce((s,x)=>s+x.amount,0);
-  const outstanding = Math.max(0, totRel(p) - settled);
-  if(!outstanding) return 0;
-  // Find earliest unreleased date
-  const releases = (p.releases||[]);
-  if(!releases.length) return 0;
-  const earliest = releases.reduce((min,r)=>r.date<min?r.date:min, releases[0].date);
-  const days = Math.max(0, Math.round((Date.now()-new Date(earliest).getTime())/86400000));
-  return outstanding * 0.24 * days / 365;
-}
+// (Used by: Interest tab, Backup/Excel export, integrity self-test.)
 
 // ─── LAST ACTIVITY ────────────────────────────────────
 function lastActivityDays(p){
@@ -238,7 +215,10 @@ function getMissingFields(p){
   if(!p.tender) missing.push('Tender ID');
   if(!p.costCentre) missing.push('Tally Cost Centre');
   if(!p.type || p.type==='Other') missing.push('Work Type');
-  if(!p.agreeDate) missing.push('Agreement Date');
+  // Agreement Date: not required for completed projects — JV received already
+  // implies the agreement was done, even if the exact date wasn't recorded
+  // (common for old/bulk-imported closed projects)
+  if(!p.agreeDate && p.status!=='completed') missing.push('Agreement Date');
   if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
   if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
   if(!p.boq || p.boq.length===0) missing.push('BOQ Items');

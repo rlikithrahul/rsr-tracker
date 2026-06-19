@@ -766,7 +766,7 @@ async function matchAndImport(transactions){
   updateOfflineQueueBadge();
   // Show duplicate review if any were skipped
   if(skippedDuplicates.length > 0){
-    setTimeout(()=>showDuplicateReview(skippedDuplicates), 500);
+    setTimeout(()=>showDuplicateReviewModal(skippedDuplicates), 500);
   }
 }
 
@@ -951,7 +951,7 @@ async function exportAllData(){
         Math.round(rel), Math.round(rel/max*100)+'%',
         Math.round(verPct(p))+'%',
         Math.round(settled), Math.round(Math.max(0,rel-settled)),
-        Math.round(intr(p)),
+        Math.round(calcProjectInterest(p).interest),
         pStat(p)==='green'?'On Track':pStat(p)==='red'?'High Risk':'Caution'
       ]);
     });

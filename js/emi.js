@@ -101,39 +101,8 @@ function renderEMIList(){
   </table></div>`;
 }
 
-// ─── RENDER CARD LIST ─────────────────────────────────
-function renderCardList(){
-  const cards = D.emiData.cards||[];
-  if(!cards.length) return '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No credit cards added yet.</div>';
-
-  return cards.map(card=>{
-    const thisMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-    const billAmt = D.emiData.billAmounts[`${card.id}_${thisMonthKey}`];
-    return `<div style="padding:12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-weight:700;font-size:14px">${card.name}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">
-          Bill generates: ${card.billDay}th · Due: ${card.dueDay}th
-        </div>
-        <div style="font-size:12px;margin-top:4px">
-          ${billAmt!==undefined
-            ? `This month's bill: <strong style="color:var(--navy)">₹${billAmt.toLocaleString('en-IN')}</strong>`
-            : `<span style="color:var(--amber)">Bill amount not entered for this month</span>`}
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn btn-sm" onclick="enterBillAmount('${card.id}','${card.name}')">💰 Enter Bill</button>
-        <div class="amenu-wrap">
-          <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('cd-${card.id}')">⋮</button>
-          <div class="amenu" id="cd-${card.id}">
-            <button class="amenu-item" onclick="editCard('${card.id}')">✏️ Edit</button>
-            <button class="amenu-item danger" onclick="deleteCard('${card.id}')">🗑️ Delete</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
+// renderCardList() removed — dead code, only renderCardListNew() (below) is ever called.
+// If you're looking for the card list UI, it's renderCardListNew().
 
 // ─── UPCOMING PAYMENTS ────────────────────────────────
 function renderUpcomingPayments(){
@@ -160,8 +129,8 @@ function renderUpcomingPayments(){
   (D.emiData.cards||[]).forEach(card=>{
     const daysUntil = card.dueDay >= todayDay ? card.dueDay - todayDay : (card.dueDay + 30 - todayDay);
     if(daysUntil <= 5){
-      const thisMonthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-      const billAmt = D.emiData.billAmounts[`${card.id}_${thisMonthKey}`] || 0;
+      const cycleKey = getCardCycleKey(card);
+      const billAmt = D.emiData.billAmounts[`${card.id}_${cycleKey}`] || 0;
       upcoming.push({
         type: 'card', name: card.name, amount: billAmt,
         daysUntil, dueDay: card.dueDay,
@@ -188,62 +157,9 @@ function renderUpcomingPayments(){
   </div>`;
 }
 
-// ─── DASHBOARD UPCOMING ───────────────────────────────
-function getEMIDashboardAlerts(){
-  if(!D.emiData) return '';
-  const today = new Date();
-  const todayDay = today.getDate();
-  const upcoming = [];
+// getEMIDashboardAlerts() dead first version removed — see phase-aware version below, which is the one actually active.
 
-  (D.emiData.emis||[]).filter(e=>e.active!==false).forEach(e=>{
-    const daysUntil = e.dueDay >= todayDay ? e.dueDay - todayDay : e.dueDay + 30 - todayDay;
-    if(daysUntil <= 3) upcoming.push({name:e.name, amount:e.amount, daysUntil, urgent:daysUntil<=1});
-  });
-
-  (D.emiData.cards||[]).forEach(card=>{
-    const daysUntil = card.dueDay >= todayDay ? card.dueDay - todayDay : card.dueDay + 30 - todayDay;
-    if(daysUntil <= 3){
-      const key = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-      const amt = D.emiData.billAmounts[`${card.id}_${key}`]||0;
-      upcoming.push({name:card.name+' (CC)', amount:amt, daysUntil, urgent:daysUntil<=1});
-    }
-  });
-
-  if(!upcoming.length) return '';
-  upcoming.sort((a,b)=>a.daysUntil-b.daysUntil);
-
-  return `<div class="card" style="border-top:3px solid ${upcoming.some(u=>u.urgent)?'var(--red)':'var(--amber)'};padding:12px;margin-bottom:14px">
-    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Upcoming Payments</div>
-    ${upcoming.slice(0,3).map(u=>`
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--surface2)">
-        <div style="font-size:12px;font-weight:600">${u.name}</div>
-        <div style="font-size:12px;color:${u.urgent?'var(--red)':'#92400e'}">
-          ${u.amount?fmt(u.amount):'—'} · ${u.daysUntil===0?'Today':u.daysUntil===1?'Tomorrow':u.daysUntil+'d'}
-        </div>
-      </div>`).join('')}
-    <button onclick="ownerTab(6)" style="margin-top:8px;background:none;border:none;font-size:11px;color:var(--navy);font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">View EMI Calendar →</button>
-  </div>`;
-}
-
-// ─── CHECK BILL PROMPTS ───────────────────────────────
-function checkBillPrompts(){
-  if(!D.emiData) return;
-  const today = new Date();
-  const todayDay = today.getDate();
-  const thisMonthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-
-  (D.emiData.cards||[]).forEach(card=>{
-    // Prompt day after bill generation
-    const promptDay = card.billDay + 1;
-    if(todayDay === promptDay){
-      const key = `${card.id}_${thisMonthKey}`;
-      if(D.emiData.billAmounts[key] === undefined){
-        // Show prompt after short delay
-        setTimeout(()=>enterBillAmount(card.id, card.name, true), 500);
-      }
-    }
-  });
-}
+// checkBillPrompts() removed — dead code, only checkBillPromptsNew() (below) is ever called.
 
 // ─── ADD/EDIT EMI ─────────────────────────────────────
 function openAddEMI(id){
@@ -366,43 +282,8 @@ async function deleteCard(id){
   catch(e){ toast('Delete failed','error'); }
 }
 
-// ─── ENTER BILL AMOUNT ────────────────────────────────
-function enterBillAmount(cardId, cardName, isAutoPrompt){
-  const today = new Date();
-  const monthKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthLabel = months[today.getMonth()]+' '+today.getFullYear();
-  const existing = D.emiData.billAmounts[`${cardId}_${monthKey}`];
-
-  let modal = document.getElementById('modal-bill-amount');
-  if(!modal){
-    modal = document.createElement('div');
-    modal.className='mov'; modal.id='modal-bill-amount';
-    document.body.appendChild(modal);
-  }
-  modal.innerHTML=`<div class="mbox" style="max-width:380px">
-    <div class="mhdr"><h2>💳 ${cardName} — ${monthLabel}</h2><button class="mx" onclick="CM('modal-bill-amount')">✕</button></div>
-    ${isAutoPrompt?'<div style="font-size:13px;color:var(--amber);margin-bottom:12px;font-weight:600">📨 Bill generated — please enter the bill amount for this month.</div>':''}
-    <div class="fg"><label>Bill Amount (₹) for ${monthLabel}</label><input type="number" id="bill-amount-input" placeholder="Enter bill amount" value="${existing||''}"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn" onclick="CM('modal-bill-amount')">Later</button>
-      <button class="btn btn-navy" onclick="saveBillAmount('${cardId}','${monthKey}')">✓ Save Amount</button>
-    </div>
-  </div>`;
-  modal.classList.add('open');
-  setTimeout(()=>document.getElementById('bill-amount-input')?.focus(),200);
-}
-
-async function saveBillAmount(cardId, monthKey){
-  const amt = parseFloat(document.getElementById('bill-amount-input').value)||0;
-  D.emiData.billAmounts[`${cardId}_${monthKey}`] = amt;
-  try{
-    await saveEMIData();
-    CM('modal-bill-amount');
-    renderEMI();
-    toast('✓ Bill amount saved','ok');
-  }catch(e){ toast('Save failed','error'); }
-}
+// ─── ENTER BILL AMOUNT (see cycle-aware version below — this old
+// monthKey-format pair was removed because it conflicted with it) ───
 
 // ─── CREDIT CARD CYCLE HELPERS ───────────────────────
 function getCardCycleKey(card, refDate){
@@ -466,7 +347,7 @@ function getEMIDashboardAlerts(){
     const isPrompt = u.type==='bill-prompt';
     const color = u.urgent?'var(--red)':isPrompt?'var(--amber)':'#92400e';
     const valHtml = isPrompt
-      ? '<button onclick="enterBillAmount(\''+u.cardId+'\',\''+u.cardName+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">Enter Amount</button>'
+      ? '<button onclick="enterBillAmountNew(\''+u.cardId+'\',\''+u.cardName+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">Enter Amount</button>'
       : (u.amount?fmt(u.amount):'—')+' · '+(u.daysUntil===0?'Today':u.daysUntil===1?'Tomorrow':u.daysUntil+'d');
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--surface2)">'
       +'<div style="font-size:12px;font-weight:600">'+u.icon+' '+u.name+'</div>'
@@ -508,7 +389,7 @@ function renderCardListNew(){
       +'<div style="margin-top:6px">'+statusHtml+'</div>'
       +'</div>'
       +'<div style="display:flex;gap:6px;align-items:center">'
-      +'<button class="btn btn-sm" onclick="enterBillAmount(\''+card.id+'\',\''+card.name+'\')" title="Enter or update bill amount">💰 Enter Bill</button>'
+      +'<button class="btn btn-sm" onclick="enterBillAmountNew(\''+card.id+'\',\''+card.name+'\')" title="Enter or update bill amount">💰 Enter Bill</button>'
       +'<div class="amenu-wrap">'
       +'<button class="amenu-btn" onclick="event.stopPropagation();toggleMenu(\'cd-'+card.id+'\')">⋮</button>'
       +'<div class="amenu" id="cd-'+card.id+'">'

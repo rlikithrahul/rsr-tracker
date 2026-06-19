@@ -302,22 +302,38 @@ function renderProjectMatCredit(p){
 
 // ─── ADD / EDIT MODAL ─────────────────────────────────
 function openAddMatCredit(pid){
-  // Build project dropdown if no pid given
-  const projOptions = pid ? '' : D.projects.filter(p=>!isArchived(p)).map(p=>`<option value="${p.id}">${p.name.substring(0,60)}</option>`).join('');
-
   // Get known suppliers for autocomplete
   const knownSuppliers = [...new Set(getAllMaterialCredits().map(m=>m.supplierName))];
+  const contractors = D.contractors.filter(c=>!isArchived(c)).sort((a,b)=>a.name.localeCompare(b.name));
 
   let modal = document.getElementById('modal-mat-credit');
   if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-mat-credit'; document.body.appendChild(modal); }
 
+  // Pre-fill if a project was already given (opened from within a project)
+  const prefilledProject = pid ? GP(pid) : null;
+
   modal.innerHTML = `<div class="mbox" style="max-width:520px">
     <div class="mhdr"><h2>🧱 Add Material Credit Entry</h2><button class="mx" onclick="CM('modal-mat-credit')">✕</button></div>
 
-    ${!pid?`<div class="fg"><label>Project *</label>
-      <select id="mc-project" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
-        <option value="">— Select Project —</option>${projOptions}
-      </select></div>`:'<input type="hidden" id="mc-project" value="'+pid+'">'}
+    ${!pid?`
+    <div class="fg">
+      <label>Contractor <span style="font-size:10px;color:var(--text3);font-weight:400">(narrows the project search below)</span></label>
+      <select id="mc-contractor-filter" onchange="filterMatProjectsByContractor()" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+        <option value="">— All Contractors —</option>
+        ${contractors.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg" style="position:relative">
+      <label>Project *</label>
+      <input type="text" id="mc-project-search" placeholder="🔍 Type to search project…"
+        oninput="filterMatProjectDropdown()"
+        onfocus="document.getElementById('mc-project-list').style.display='block'"
+        style="width:100%;box-sizing:border-box;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px">
+      <div id="mc-project-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--rs);z-index:999;max-height:220px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)">
+        ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div class="mc-proj-opt" data-cid="${p.contractorId||''}" onclick="selectMatProject('${p.id}','${p.name.replace(/'/g,'&#39;')}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name.substring(0,55)}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}</div></div>`).join('')}
+      </div>
+      <input type="hidden" id="mc-project" value="">
+    </div>`:'<input type="hidden" id="mc-project" value="'+pid+'">'}
 
     <div class="frow">
       <div class="fg">
@@ -357,7 +373,38 @@ function openAddMatCredit(pid){
     </div>
   </div>`;
   modal.classList.add('open');
-  setTimeout(()=>document.getElementById('mc-supplier')?.focus(), 200);
+  setTimeout(()=>document.getElementById(pid?'mc-supplier':'mc-project-search')?.focus(), 200);
+}
+
+function filterMatProjectsByContractor(){
+  const cid = document.getElementById('mc-contractor-filter')?.value||'';
+  document.querySelectorAll('.mc-proj-opt').forEach(opt=>{
+    opt.style.display = (!cid || opt.dataset.cid===cid) ? 'block' : 'none';
+  });
+  // Re-apply text filter on top of contractor filter
+  filterMatProjectDropdown();
+}
+
+function filterMatProjectDropdown(){
+  const q = (document.getElementById('mc-project-search')?.value||'').toLowerCase();
+  const cid = document.getElementById('mc-contractor-filter')?.value||'';
+  const list = document.getElementById('mc-project-list');
+  if(!list) return;
+  list.style.display = 'block';
+  Array.from(list.children).forEach(item=>{
+    const matchesText = item.textContent.toLowerCase().includes(q);
+    const matchesContractor = !cid || item.dataset.cid===cid;
+    item.style.display = (matchesText && matchesContractor) ? 'block' : 'none';
+  });
+}
+
+function selectMatProject(pid, pname){
+  const search = document.getElementById('mc-project-search');
+  const hidden = document.getElementById('mc-project');
+  const list = document.getElementById('mc-project-list');
+  if(search) search.value = pname;
+  if(hidden) hidden.value = pid;
+  if(list) list.style.display = 'none';
 }
 
 async function saveMatCredit(editId){

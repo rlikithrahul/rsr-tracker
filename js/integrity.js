@@ -138,7 +138,7 @@ async function checkInterestCalc(){
     releases:[{ id:'t1', date: testDate, amount:100000, txType:'payment' }],
     settlements:[], boq:[], contractorUpdates:[], verifications:[]
   };
-  const interest = intrOutstanding(testP);
+  const interest = calcProjectInterest(testP).interest;
   const expected = 100000*0.24*30/365;
   const ok = Math.abs(interest - expected) < 50; // within ₹50 tolerance
   return { pass:ok, detail: ok ? `✓ Interest ${Math.round(interest)} (expected ~${Math.round(expected)})` : `Got ${Math.round(interest)}, expected ~${Math.round(expected)}` };

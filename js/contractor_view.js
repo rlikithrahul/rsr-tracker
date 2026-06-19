@@ -472,6 +472,11 @@ async function handlePhotos(evt, source='unknown'){
   evt.target.value='';
 }
 
+function removePhoto(i){
+  photos.splice(i,1);
+  renderPhotoPreview();
+}
+
 function renderPhotoPreview(){
   const g=document.getElementById('cu-pgrid');if(!g)return;
   const addBtns=photos.length<5?`
@@ -882,7 +887,8 @@ function openAddMaterialEntry(pid){
     +MAT_UNITS.map(u=>'<option>'+u+'</option>').join('')
     +'</select></div>'
     +'</div>'
-    +'<div class="fg"><label>Supplier / Source</label><input type="text" id="me-supplier" placeholder="Supplier name"></div>'
+    +'<div class="fg"><label>Supplier / Source</label><input type="text" id="me-supplier" list="me-supplier-list" placeholder="Supplier name"></div>'
+    +'<datalist id="me-supplier-list">'+(typeof getAllSuppliers==='function'?getAllSuppliers().map(s=>'<option value="'+s.name+'">').join(''):'')+'</datalist>'
     +'<div class="fg"><label>Date *</label><input type="date" id="me-date" value="'+new Date().toISOString().split('T')[0]+'"></div>'
     +'<div class="fg"><label>Invoice Amount (₹) — optional</label><input type="number" id="me-amount" placeholder="Leave blank if not known"></div>'
     +'<div class="fg"><label>Notes</label><input type="text" id="me-notes" placeholder="Any remarks"></div>'

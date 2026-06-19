@@ -363,10 +363,12 @@ function buildCheckReceivedFY(fyFilter){
 }
 
 // ─── SHEET 6: TO BE AGREEMENT ─────────────────────────
-// Projects where agreement date is NOT set
+// Projects where agreement date is NOT set AND status is not completed
+// (completed projects already have a JV — agreement is implicitly done,
+// even if the exact agreement date wasn't recorded for old/imported projects)
 function buildToBeAgreement(){
   const projects = D.projects
-    .filter(p=>!isArchived(p) && !p.agreeDate)
+    .filter(p=>!isArchived(p) && !p.agreeDate && p.status!=='completed')
     .sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
 
   const headers = [
@@ -572,7 +574,7 @@ function getReportData(type, fy){
     case 'tobeagreement':
       title = 'To Be Agreement';
       headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Status','Created Date'];
-      rows = D.projects.filter(p=>!isArchived(p)&&!p.agreeDate)
+      rows = D.projects.filter(p=>!isArchived(p)&&!p.agreeDate&&p.status!=='completed')
         .sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''))
         .map((p,i)=>{
           const c=GC(p.contractorId);

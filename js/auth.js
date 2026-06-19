@@ -1,3 +1,15 @@
+// ─── BROWSER NOTIFICATION PERMISSION ──────────────────
+// Requested once per session, 2s after owner login.
+async function requestNotificationPermission(){
+  if(typeof Notification === 'undefined') return; // not supported in this browser
+  if(Notification.permission === 'granted' || Notification.permission === 'denied') return; // already decided
+  try{
+    await Notification.requestPermission();
+  }catch(e){
+    Notification.requestPermission(()=>{});
+  }
+}
+
 // ─── PASSWORD HASHING ─────────────────────────────────
 // SHA-256 + per-contractor salt using Web Crypto API
 // Salt stored alongside hash in contractor record

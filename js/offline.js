@@ -228,13 +228,8 @@ window.addEventListener('offline', ()=>{
 });
 
 
-// Show offline queue status if there are pending items
-function checkOfflineQueue(){
-  const q=getOfflineQueue();
-  if(q.length>0){
-    toast(`📥 ${q.length} update${q.length>1?'s':''} pending sync — connect to internet to upload`,'ok',5000);
-  }
-}
+// checkOfflineQueue() defined above (line ~209) — correctly awaits getOfflineQueue().
+// This duplicate (missing await, broke the sync notification) has been removed.
 
 // ─── INSTALL PROMPT ───────────────────────────────────
 window.addEventListener('beforeinstallprompt', e=>{
