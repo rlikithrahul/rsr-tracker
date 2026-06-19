@@ -297,6 +297,35 @@ function isDuplicateTx(proj, tx){
   );
 }
 
+// ─── FIND EXISTING RELEASE BY VOUCHER IDENTITY ────────
+// Voucher number + date together are GVMC's stable transaction identity —
+// they don't change even when amount is corrected or cost centre is reassigned
+// in Tally. This searches EVERY project (not just the cost-centre match) so
+// re-imports can detect corrections and cost-centre moves instead of either
+// silently duplicating or silently missing the change.
+// For multi-cost-centre vouchers (one Vch # split across several projects),
+// costCentre is included to disambiguate between the split portions.
+function findExistingReleaseByVoucher(vchNo, date, costCentre){
+  if(!vchNo || !date) return null;
+  for(const proj of D.projects){
+    if(isArchived(proj) || !proj.releases) continue;
+    const rel = proj.releases.find(r =>
+      r.ref === vchNo && r.date === date &&
+      (r.costCentre||'').toUpperCase() === (costCentre||'').toUpperCase()
+    );
+    if(rel) return { project: proj, release: rel };
+  }
+  // No exact cost-centre match — try voucher+date alone (handles the case
+  // where the SAME voucher portion moved to a different cost centre entirely,
+  // which is the reassignment scenario we need to detect)
+  for(const proj of D.projects){
+    if(isArchived(proj) || !proj.releases) continue;
+    const rel = proj.releases.find(r => r.ref === vchNo && r.date === date);
+    if(rel) return { project: proj, release: rel };
+  }
+  return null;
+}
+
 // ─── DATA MIGRATION FRAMEWORK ────────────────────────
 const CURRENT_SCHEMA = 4;
 

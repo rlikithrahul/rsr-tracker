@@ -174,7 +174,14 @@ function makeSheet(headers, rows, title){
 function buildRunningWorks(){
   const projects = D.projects
     .filter(p=>!isArchived(p) && !p.jvDate)
-    .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    .sort((a,b)=>{
+      // Agreement date ascending — earliest agreement first.
+      // Projects with no agreement date yet go to the bottom (still pending agreement).
+      if(!a.agreeDate && !b.agreeDate) return (a.createdAt||'').localeCompare(b.createdAt||'');
+      if(!a.agreeDate) return 1;
+      if(!b.agreeDate) return -1;
+      return a.agreeDate.localeCompare(b.agreeDate);
+    });
 
   const headers = [
     'Sl No','Firm','Project Name','Tender ID','Contractor',
@@ -542,7 +549,12 @@ function getReportData(type, fy){
       title = 'Running Works';
       headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Agreement Date','Agreement Amount','Bid %','Max Fundable (70%)','Total Deployed','Cap Used %','Status'];
       rows = D.projects.filter(p=>!isArchived(p)&&!p.jvDate)
-        .sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+        .sort((a,b)=>{
+          if(!a.agreeDate && !b.agreeDate) return (a.createdAt||'').localeCompare(b.createdAt||'');
+          if(!a.agreeDate) return 1;
+          if(!b.agreeDate) return -1;
+          return a.agreeDate.localeCompare(b.agreeDate);
+        })
         .map((p,i)=>{
           const c=GC(p.contractorId),rel=totRel(p),max=maxF(p);
           return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',fmtDate(p.agreeDate),agAmt_calc(p)||0,`${p.bidPct||0}%`,max||0,rel||0,max>0?`${Math.round(rel/max*100)}%`:'0%',(p.status||'active').toUpperCase()];

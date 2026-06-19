@@ -696,10 +696,75 @@ async function clearUnmatchedFromCloud(){
 
 async function matchAndImport(transactions){
   let matchedPayments=0, matchedReceipts=0, skipped=0, unmatchedCount=0;
+  let corrected=0, reassigned=0;
   const skippedDuplicates = []; // track for review
+  const correctionLog = []; // track for summary toast
+  const projectsTouched = new Set(); // batch saves — avoid saving the same project repeatedly
 
   for(const tx of transactions){
-    // Exact cost centre match (case-insensitive)
+    // ── STEP 1: Does this exact voucher (by number+date) already exist
+    // anywhere in the system? If so, this is a RE-IMPORT of a transaction
+    // we've already recorded — check whether anything about it changed. ──
+    const existing = findExistingReleaseByVoucher(tx.vchNo, tx.date, tx.costCentre);
+
+    if(existing){
+      const { project: oldProj, release: oldRel } = existing;
+      const targetProj = D.projects.find(p=>p.costCentre && p.costCentre.toUpperCase()===tx.costCentre.toUpperCase() && !isArchived(p));
+
+      const amountChanged = Math.abs(oldRel.amount - tx.amount) >= 1;
+      const movedProject = targetProj && targetProj.id !== oldProj.id;
+
+      if(!amountChanged && !movedProject){
+        // Truly identical — genuine duplicate, skip as before
+        skipped++;
+        skippedDuplicates.push({tx, proj: oldProj});
+        continue;
+      }
+
+      if(movedProject){
+        // Cost centre was reassigned in Tally — move the release to the correct project
+        oldProj.releases = (oldProj.releases||[]).filter(r=>r!==oldRel);
+        if(!targetProj.releases) targetProj.releases=[];
+        targetProj.releases.push({
+          ...oldRel,
+          amount: tx.amount, // also apply any amount correction at the same time
+          costCentre: tx.costCentre,
+          notes: tx.narration||oldRel.notes||'',
+          _fp: txFingerprint(tx),
+          _movedFrom: oldProj.name,
+          _movedAt: new Date().toISOString()
+        });
+        projectsTouched.add(oldProj.id);
+        projectsTouched.add(targetProj.id);
+        reassigned++;
+        correctionLog.push(`Vch #${tx.vchNo} moved: ${oldProj.name.substring(0,30)} → ${targetProj.name.substring(0,30)}`);
+        logActivity({
+          category:'finance', action:'tally_reassigned',
+          projectId:targetProj.id, projectName:targetProj.name,
+          amount:tx.amount, ref:tx.vchNo,
+          description:`Vch #${tx.vchNo} (₹${tx.amount.toLocaleString('en-IN')}) reassigned from cost centre of "${oldProj.name}" to "${targetProj.name}" — Tally cost centre changed`
+        });
+      } else if(amountChanged){
+        // Same project, same cost centre — just an amount correction
+        const oldAmount = oldRel.amount;
+        oldRel.amount = tx.amount;
+        oldRel.notes = tx.narration||oldRel.notes||'';
+        oldRel._fp = txFingerprint(tx);
+        oldRel._correctedAt = new Date().toISOString();
+        projectsTouched.add(oldProj.id);
+        corrected++;
+        correctionLog.push(`Vch #${tx.vchNo}: ₹${oldAmount.toLocaleString('en-IN')} → ₹${tx.amount.toLocaleString('en-IN')}`);
+        logActivity({
+          category:'finance', action:'tally_corrected',
+          projectId:oldProj.id, projectName:oldProj.name,
+          amount:tx.amount, ref:tx.vchNo,
+          description:`Vch #${tx.vchNo} amount corrected from ₹${oldAmount.toLocaleString('en-IN')} to ₹${tx.amount.toLocaleString('en-IN')} for ${oldProj.name} — Tally was re-imported with a different amount`
+        });
+      }
+      continue;
+    }
+
+    // ── STEP 2: Genuinely new transaction — match by cost centre as before ──
     const proj = D.projects.find(p=>p.costCentre && p.costCentre.toUpperCase()===tx.costCentre.toUpperCase() && !isArchived(p));
 
     if(!proj){
@@ -719,13 +784,6 @@ async function matchAndImport(transactions){
 
     if(!proj.releases) proj.releases=[];
 
-    // Dual duplicate check: voucher number match OR fingerprint match
-    if(isDuplicateTx(proj, tx)){
-      skipped++;
-      skippedDuplicates.push({tx, proj});
-      continue;
-    }
-
     const fp = txFingerprint(tx);
     proj.releases.push({
       id: uid(),
@@ -739,17 +797,18 @@ async function matchAndImport(transactions){
       source: 'tally',
       _fp: fp
     });
-    await saveProjectDB(proj, {
-      type: tx.txType||'payment',
-      amount: tx.amount,
-      ref: tx.vchNo,
-      meta: { costCentre: tx.costCentre, narration: tx.narration, vchType: tx.vchType, source:'tally' }
-    });
+    projectsTouched.add(proj.id);
     logFundRelease(proj, tx.amount, tx.vchNo, tx.txType||'payment');
     if(tx.txType==='receipt') matchedReceipts++; else matchedPayments++;
   }
 
-  if(matchedPayments+matchedReceipts+unmatchedCount>0){
+  // Batch-save every project touched (new transactions, corrections, reassignments)
+  for(const pid of projectsTouched){
+    const p = D.projects.find(x=>x.id===pid);
+    if(p) await saveProjectDB(p, { type:'tally_reimport', amount:0, ref:null, meta:{source:'tally'} });
+  }
+
+  if(matchedPayments+matchedReceipts+unmatchedCount+corrected+reassigned>0){
     const importedDates=new Set(transactions.map(t=>t.date).filter(Boolean));
     importedDates.forEach(d=>recordDaybookUpload(d));
   }
@@ -759,15 +818,37 @@ async function matchAndImport(transactions){
   const parts=[];
   if(matchedPayments) parts.push(`${matchedPayments} payments`);
   if(matchedReceipts) parts.push(`${matchedReceipts} receipts`);
+  if(corrected) parts.push(`${corrected} corrected`);
+  if(reassigned) parts.push(`${reassigned} reassigned`);
   if(unmatchedCount) parts.push(`${unmatchedCount} unmatched`);
   if(skipped) parts.push(`${skipped} duplicates skipped`);
   toast(`✅ Imported: ${parts.join(' · ')}`,'ok',5000);
   renderFunds();
   updateOfflineQueueBadge();
-  // Show duplicate review if any were skipped
-  if(skippedDuplicates.length > 0){
+
+  // Show correction/reassignment summary if anything changed
+  if(correctionLog.length > 0){
+    setTimeout(()=>showCorrectionSummaryModal(correctionLog), 500);
+  } else if(skippedDuplicates.length > 0){
     setTimeout(()=>showDuplicateReviewModal(skippedDuplicates), 500);
   }
+}
+
+// ─── CORRECTION/REASSIGNMENT SUMMARY MODAL ────────────
+function showCorrectionSummaryModal(log){
+  let modal = document.getElementById('modal-correction-summary');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-correction-summary'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="mbox" style="max-width:520px">
+    <div class="mhdr"><h2>🔄 Transactions Updated</h2><button class="mx" onclick="CM('modal-correction-summary')">✕</button></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">This re-import detected ${log.length} transaction${log.length>1?'s':''} that already existed but changed — either the amount was corrected in Tally, or the cost centre was reassigned. These were updated in place, not duplicated.</div>
+    <div style="max-height:300px;overflow-y:auto">
+      ${log.map(l=>`<div style="padding:8px 10px;background:var(--surface2);border-radius:var(--rs);margin-bottom:6px;font-size:12px">${l}</div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-navy" onclick="CM('modal-correction-summary')">Got it</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
 }
 
 // ─── DUPLICATE REVIEW MODAL ───────────────────────────
