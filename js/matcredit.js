@@ -43,6 +43,25 @@ function getAllSuppliers(){
   return Array.from(suppliers.values()).sort((a,b)=>b.totalPending-a.totalPending);
 }
 
+function getAllContractorsWithMaterial(){
+  const contractors = new Map();
+  getAllMaterialCredits().forEach(m=>{
+    const key = m.contractorId || '—';
+    if(!contractors.has(key)){
+      contractors.set(key, {
+        contractorId: m.contractorId, name: m.contractorName||'Unassigned',
+        entries:[], totalPending:0, totalCleared:0
+      });
+    }
+    const c = contractors.get(key);
+    c.entries.push(m);
+    const pending = (m.invoiceAmount||0) - (m.clearedAmount||0);
+    c.totalPending += Math.max(0, pending);
+    c.totalCleared += m.clearedAmount||0;
+  });
+  return Array.from(contractors.values()).sort((a,b)=>b.totalPending-a.totalPending);
+}
+
 function getProjectMaterialSummary(p){
   const entries = (p.materialCredits||[]).filter(m=>!isArchived(m));
   const total = entries.reduce((s,m)=>s+(m.invoiceAmount||0),0);
@@ -96,6 +115,7 @@ function renderMatCredit(){
       <div class="view-toggle">
         <button id="mcv-supplier" class="${matView==='supplier'?'active':''}" onclick="setMatView('supplier')">🏭 By Supplier</button>
         <button id="mcv-project" class="${matView==='project'?'active':''}" onclick="setMatView('project')">🏗️ By Project</button>
+        <button id="mcv-contractor" class="${matView==='contractor'?'active':''}" onclick="setMatView('contractor')">👷 By Contractor</button>
       </div>
       <div style="display:flex;gap:6px">
         ${['pending','cleared','all'].map(f=>`<button onclick="setMatFilter('${f}')" style="padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${matFilter===f?'var(--navy)':'var(--border)'};background:${matFilter===f?'var(--navy)':'#fff'};color:${matFilter===f?'#fff':'var(--text2)'}">${f==='pending'?'⏳ Pending':f==='cleared'?'✅ Cleared':'All'}</button>`).join('')}
@@ -117,6 +137,8 @@ function renderMatCreditBody(){
 
   if(matView === 'supplier'){
     renderMatBySupplier(el);
+  } else if(matView === 'contractor'){
+    renderMatByContractor(el);
   } else {
     renderMatByProject(el);
   }
@@ -217,6 +239,38 @@ function renderMatEntry(e, showProject){
       <button onclick="deleteMatCredit('${e.projectId}','${e.id}')" style="background:none;border:1px solid var(--border);border-radius:var(--rs);padding:4px 10px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--red)">🗑️</button>
     </div>`:`<div style="font-size:11px;color:var(--text3);margin-top:6px">Cleared: ${e.clearedDate||''} · ${e.clearedNotes||''}</div>`}
   </div>`;
+}
+
+function renderMatByContractor(el){
+  const contractors = getAllContractorsWithMaterial();
+  if(!contractors.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">👷</div><div class="empty-text">No material credit entries yet.<br>Click "+ Add Credit Entry" to start tracking.</div></div>';
+    return;
+  }
+
+  el.innerHTML = contractors.map(c=>{
+    let entries = c.entries;
+    if(matFilter==='pending') entries = entries.filter(e=>(e.invoiceAmount||0)>(e.clearedAmount||0));
+    if(matFilter==='cleared') entries = entries.filter(e=>(e.clearedAmount||0)>=(e.invoiceAmount||0)&&e.invoiceAmount>0);
+    if(!entries.length) return '';
+
+    const supplierCount = new Set(c.entries.map(e=>e.supplierName)).size;
+    const projectCount = new Set(c.entries.map(e=>e.projectId)).size;
+
+    return `<div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--navy);${c.contractorId?'cursor:pointer;text-decoration:underline':''}" ${c.contractorId?`onclick="ownerTab(2)"`:''}>${c.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${c.entries.length} invoice${c.entries.length!==1?'s':''} · ${supplierCount} supplier${supplierCount!==1?'s':''} · ${projectCount} project${projectCount!==1?'s':''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:800;color:${c.totalPending>0?'var(--red)':'var(--green)'}">${fmt(c.totalPending)} pending</div>
+          <div style="font-size:11px;color:var(--text3)">${fmt(c.totalCleared)} cleared</div>
+        </div>
+      </div>
+      ${entries.map(e=>renderMatEntry(e, true)).join('')}
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No entries in this filter.</div></div>';
 }
 
 // ─── PROJECT INLINE SECTION ───────────────────────────

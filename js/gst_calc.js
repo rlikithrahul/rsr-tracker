@@ -86,13 +86,40 @@ function renderGSTCalc(){
   el.innerHTML = `<div class="wrap">
     <div class="pg-hdr">
       <div>
-        <div class="pg-title">🧮 GST Settlement Calculator
+        <div class="pg-title">🧮 GST Tools
           <span style="font-size:11px;background:#7c3aed;color:#fff;padding:2px 10px;border-radius:8px;font-weight:700;vertical-align:middle;margin-left:8px">SUPER ADMIN ONLY</span>
         </div>
-        <div style="font-size:12px;color:var(--text3)">Manual calculator — enter values yourself. No links to any project data.</div>
+        <div style="font-size:12px;color:var(--text3)">Manual tools — you enter everything yourself. Nothing here links to project data automatically.</div>
       </div>
     </div>
 
+    <!-- Sub-tab toggle -->
+    <div class="view-toggle" style="margin-bottom:16px">
+      <button id="gcv-settle" class="${_gcTab==='settle'?'active':''}" onclick="setGCTab('settle')">🧮 Settlement Calculator</button>
+      <button id="gcv-input" class="${_gcTab==='input'?'active':''}" onclick="setGCTab('input')">👷 Contractor Input Tracker</button>
+    </div>
+
+    <div id="gc-tab-body"></div>
+  </div>`;
+
+  renderGCTabBody();
+}
+
+let _gcTab = 'settle';
+function setGCTab(t){ _gcTab=t; renderGCTabBody(); }
+
+function renderGCTabBody(){
+  const el = document.getElementById('gc-tab-body');
+  if(!el) return;
+  if(_gcTab === 'input'){
+    renderGCContractorInput(el);
+  } else {
+    renderGCSettlementCalc(el);
+  }
+}
+
+function renderGCSettlementCalc(el){
+  el.innerHTML = `
     <!-- Settings -->
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Settings</div>
@@ -139,7 +166,7 @@ function renderGSTCalc(){
 
     <!-- Results -->
     <div id="gc-results"></div>
-  </div>`;
+  `;
 
   gcRenderRows();
   if(_calcRows.length>0) gcCalculate();
@@ -343,4 +370,212 @@ function gcClear(){
   _calcRows = [];
   _calcRowId = 0;
   renderGSTCalc();
+}
+
+// ═══════════════════════════════════════════════════════
+// CONTRACTOR INPUT TRACKER
+// Tracks: GST input RSR received via material billed on
+// RSR's name (for a contractor's work), and how RSR returned
+// the value to the contractor — either commission cash or
+// equivalent bills written on the contractor's own GST number.
+// FULLY MANUAL — no links to Material Credit or project data.
+// ═══════════════════════════════════════════════════════
+
+let _giRows = []; // [{id, contractor, supplier, firm, invoiceAmount, returnType, returnAmount, notes}]
+let _giRowId = 0;
+
+function renderGCContractorInput(el){
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">
+        When a supplier bills materials on RSR's GST name for a contractor's work, RSR receives the GST input. Track that input here, and how it was returned to the contractor — either as commission cash, or as equivalent bills written on their own GST number.
+      </div>
+    </div>
+
+    <!-- Entry rows -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Input Entries</div>
+        <button onclick="giAddRow()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">+ Add Entry</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr 1fr 1fr 1fr 40px;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">
+        <div>Contractor</div>
+        <div>Supplier</div>
+        <div>Firm Billed On</div>
+        <div>Invoice Amt (₹)</div>
+        <div>Return Method</div>
+        <div>Return Amt (₹)</div>
+        <div></div>
+      </div>
+      <div id="gi-rows">
+        ${_giRows.length===0?'<div style="font-size:13px;color:var(--text3);padding:16px 0;text-align:center">No entries yet. Click + Add Entry.</div>':''}
+      </div>
+    </div>
+
+    <div id="gi-results"></div>
+  `;
+  giRenderRows();
+  if(_giRows.length>0) giCalculate();
+}
+
+function giAddRow(){
+  _giRowId++;
+  _giRows.push({ id:_giRowId, contractor:'', supplier:'', firm:'RSR Constructions', invoiceAmount:0, returnType:'commission', returnAmount:0, notes:'' });
+  giRenderRows();
+}
+
+function giRemoveRow(id){
+  _giRows = _giRows.filter(r=>r.id!==id);
+  giRenderRows();
+  if(_giRows.length>0) giCalculate();
+  else document.getElementById('gi-results').innerHTML='';
+}
+
+function giRenderRows(){
+  const el = document.getElementById('gi-rows');
+  if(!el) return;
+  if(_giRows.length===0){
+    el.innerHTML='<div style="font-size:13px;color:var(--text3);padding:16px 0;text-align:center">No entries yet. Click + Add Entry.</div>';
+    return;
+  }
+  el.innerHTML = _giRows.map(r=>`
+    <div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr 1fr 1fr 1fr 40px;gap:8px;padding:8px 0;border-bottom:1px solid var(--surface2);align-items:center">
+      <input type="text" placeholder="Contractor name" value="${r.contractor}"
+        onchange="giUpdateRow(${r.id},'contractor',this.value)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box">
+      <input type="text" placeholder="Supplier name" value="${r.supplier}"
+        onchange="giUpdateRow(${r.id},'supplier',this.value)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box">
+      <select onchange="giUpdateRow(${r.id},'firm',this.value)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box">
+        ${['RSR Constructions','R Sadhu Rao','R Likith Rahul'].map(f=>`<option value="${f}" ${r.firm===f?'selected':''}>${f}</option>`).join('')}
+      </select>
+      <input type="number" placeholder="0" value="${r.invoiceAmount||''}"
+        onchange="giUpdateRow(${r.id},'invoiceAmount',parseFloat(this.value)||0)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box;text-align:right">
+      <select onchange="giUpdateRow(${r.id},'returnType',this.value)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box">
+        <option value="commission" ${r.returnType==='commission'?'selected':''}>💵 Commission Cash</option>
+        <option value="bills" ${r.returnType==='bills'?'selected':''}>📄 Bills Returned</option>
+        <option value="pending" ${r.returnType==='pending'?'selected':''}>⏳ Not Yet Returned</option>
+      </select>
+      <input type="number" placeholder="0" value="${r.returnAmount||''}"
+        onchange="giUpdateRow(${r.id},'returnAmount',parseFloat(this.value)||0)"
+        style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px;width:100%;box-sizing:border-box;text-align:right">
+      <button onclick="giRemoveRow(${r.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
+    </div>`).join('');
+}
+
+function giUpdateRow(id, field, val){
+  const row = _giRows.find(r=>r.id===id);
+  if(row) row[field]=val;
+}
+
+function giCalculate(){
+  const el = document.getElementById('gi-results');
+  if(!el) return;
+
+  const rows = _giRows.filter(r=>r.invoiceAmount>0);
+  if(!rows.length){
+    el.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Enter invoice amounts to see the summary.</div>';
+    return;
+  }
+
+  const totalInvoice = rows.reduce((s,r)=>s+r.invoiceAmount,0);
+  const totalReturned = rows.filter(r=>r.returnType!=='pending').reduce((s,r)=>s+(r.returnAmount||0),0);
+  const totalPending = rows.filter(r=>r.returnType==='pending').reduce((s,r)=>s+r.invoiceAmount,0);
+  const totalCommission = rows.filter(r=>r.returnType==='commission').reduce((s,r)=>s+(r.returnAmount||0),0);
+  const totalBillsValue = rows.filter(r=>r.returnType==='bills').reduce((s,r)=>s+(r.returnAmount||0),0);
+
+  // Group by contractor
+  const byContractor = new Map();
+  rows.forEach(r=>{
+    const key = r.contractor||'Unnamed';
+    if(!byContractor.has(key)) byContractor.set(key, { name:key, invoice:0, returned:0, pending:0 });
+    const c = byContractor.get(key);
+    c.invoice += r.invoiceAmount;
+    if(r.returnType==='pending') c.pending += r.invoiceAmount;
+    else c.returned += (r.returnAmount||0);
+  });
+  const contractorList = Array.from(byContractor.values()).sort((a,b)=>b.invoice-a.invoice);
+
+  el.innerHTML = `
+  <!-- Summary -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+    ${[
+      {l:'Total Invoice (Input)',v:fmt(totalInvoice),c:'var(--navy)'},
+      {l:'Returned to Contractors',v:fmt(totalReturned),c:'var(--green)'},
+      {l:'Pending Return',v:fmt(totalPending),c:'var(--red)'},
+      {l:'Commission Cash Paid',v:fmt(totalCommission),c:'var(--amber)'},
+      {l:'Bills Returned (value)',v:fmt(totalBillsValue),c:'#7c3aed'},
+    ].map(x=>`<div class="card" style="text-align:center;padding:12px;border-top:3px solid ${x.c}">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;font-weight:700">${x.l}</div>
+      <div style="font-size:16px;font-weight:800;color:${x.c}">${x.v}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- By contractor -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">By Contractor</div>
+    ${contractorList.map(c=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${c.name}</div>
+        <div style="display:flex;gap:14px;font-size:12px">
+          <span style="color:var(--text2)">Input: <strong>${fmt(c.invoice)}</strong></span>
+          <span style="color:var(--green)">Returned: <strong>${fmt(c.returned)}</strong></span>
+          ${c.pending>0?`<span style="color:var(--red)">Pending: <strong>${fmt(c.pending)}</strong></span>`:''}
+        </div>
+      </div>`).join('')}
+  </div>
+
+  <!-- Full table -->
+  <div class="card">
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Full Entry Log</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
+        <thead>
+          <tr style="background:var(--navy);color:#fff">
+            <th style="padding:8px 10px;text-align:left">Contractor</th>
+            <th style="padding:8px 10px;text-align:left">Supplier</th>
+            <th style="padding:8px 10px;text-align:left">Firm</th>
+            <th style="padding:8px 10px;text-align:right">Invoice (Input)</th>
+            <th style="padding:8px 10px;text-align:left">Return Method</th>
+            <th style="padding:8px 10px;text-align:right">Return Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i)=>`<tr style="background:${i%2?'var(--surface2)':'#fff'}">
+            <td style="padding:7px 10px">${r.contractor||'—'}</td>
+            <td style="padding:7px 10px">${r.supplier||'—'}</td>
+            <td style="padding:7px 10px;font-size:11px;color:var(--text3)">${r.firm}</td>
+            <td style="padding:7px 10px;text-align:right;font-weight:700">${fmt(r.invoiceAmount)}</td>
+            <td style="padding:7px 10px">
+              <span style="font-size:10px;padding:2px 8px;border-radius:8px;font-weight:700;background:${r.returnType==='commission'?'var(--amber)':r.returnType==='bills'?'#7c3aed':'var(--red)'};color:#fff">
+                ${r.returnType==='commission'?'💵 Commission':r.returnType==='bills'?'📄 Bills':'⏳ Pending'}
+              </span>
+            </td>
+            <td style="padding:7px 10px;text-align:right;font-weight:700;color:${r.returnType==='pending'?'var(--red)':'var(--green)'}">${r.returnType==='pending'?'—':fmt(r.returnAmount)}</td>
+          </tr>`).join('')}
+          <tr style="background:var(--navy);color:#fff;font-weight:700">
+            <td colspan="3" style="padding:8px 10px">TOTAL</td>
+            <td style="padding:8px 10px;text-align:right">${fmt(totalInvoice)}</td>
+            <td></td>
+            <td style="padding:8px 10px;text-align:right">${fmt(totalReturned)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:14px;text-align:center">
+    <button onclick="giCalculate()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:10px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🔄 Recalculate</button>
+    <button onclick="giClear()" style="background:none;border:1px solid var(--border);border-radius:var(--rs);padding:10px 20px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--text3);margin-left:8px">Clear All</button>
+  </div>`;
+}
+
+function giClear(){
+  _giRows = [];
+  _giRowId = 0;
+  renderGCTabBody();
 }

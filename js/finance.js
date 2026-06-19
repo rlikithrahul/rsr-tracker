@@ -554,7 +554,7 @@ function parseRowsByType(rows, type){
       if(ccEntries.length === 0){
         // No cost centre found — use header or blank
         transactions.push({
-          date, ledger, vchType, vchNo, txType,
+          date: dateStr, ledger, vchType, vchNo, txType,
           amount: totalAmount,
           costCentre: (headerCC||'').toUpperCase(),
           narration
@@ -562,7 +562,7 @@ function parseRowsByType(rows, type){
       } else if(ccEntries.length === 1){
         // Single cost centre — normal case
         transactions.push({
-          date, ledger, vchType, vchNo, txType,
+          date: dateStr, ledger, vchType, vchNo, txType,
           amount: ccEntries[0].amount > 0 ? ccEntries[0].amount : totalAmount,
           costCentre: ccEntries[0].cc,
           narration
@@ -574,7 +574,7 @@ function parseRowsByType(rows, type){
         ccEntries.forEach(entry=>{
           const amt = entry.amount > 0 ? entry.amount : totalAmount * (1/ccEntries.length);
           transactions.push({
-            date, ledger, vchType, vchNo, txType,
+            date: dateStr, ledger, vchType, vchNo, txType,
             amount: Math.round(amt * 100) / 100,
             costCentre: entry.cc,
             narration,
