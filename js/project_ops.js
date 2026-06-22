@@ -340,6 +340,9 @@ function openEditRelease(pid, rid){
   document.getElementById('er-meth').value=r.method||'NEFT';
   document.getElementById('er-ref').value=r.ref||'';
   document.getElementById('er-notes').value=r.notes||'';
+  // Show/hide Tally warning banner
+  const tallyBanner = document.getElementById('er-tally-warning');
+  if(tallyBanner) tallyBanner.style.display = (r.source==='tally'||r.source==='tally-manual') ? 'block' : 'none';
   document.getElementById('modal-edit-release').classList.add('open');
 }
 async function saveEditRelease(){

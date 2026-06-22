@@ -60,7 +60,7 @@ function ownerTabSilent(i){
   updateSidebarActive(i);
   if(i===0) renderDash();
   else if(i===1) renderProjects();
-  else if(i===2){ renderConts(); renderContractorPerformance(); }
+  else if(i===2){ renderConts(); }
   else if(i===3) loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
   else if(i===4) renderInterest();
   else if(i===5) renderEMI();

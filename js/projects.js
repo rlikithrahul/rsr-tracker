@@ -129,7 +129,7 @@ function renderDetail(id){
       </span>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="fv">${fmt(r.amount)}</span>
-        ${r.source!=='tally'?`<div class="amenu-wrap">
+        ${(r.source!=='tally' || (CU && CU.isSuperAdmin))?`<div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('rm-${r.id}')">⋮</button>
           <div class="amenu" id="rm-${r.id}">
             <button class="amenu-item" onclick="openEditRelease('${id}','${r.id}')">✏️ Edit</button>

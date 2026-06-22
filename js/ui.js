@@ -805,7 +805,7 @@ function ownerTab(i){
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
   if(i===0) renderDash();
   if(i===1) renderProjects();
-  if(i===2){ renderConts(); renderContractorPerformance(); }
+  if(i===2){ renderConts(); }
   if(i===3){
     loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
   }
@@ -887,7 +887,7 @@ function goBack(){
       window.scrollTo(0, navHistory.scrollY);
     });
   } else if(targetTab === 0){ renderDash(); }
-  else if(targetTab === 2){ renderConts(); renderContractorPerformance(); }
+  else if(targetTab === 2){ renderConts(); }
   else if(targetTab === 4){ renderInterest(); }
   else if(targetTab === 5){ renderEMI(); }
   else if(targetTab === 7){ renderGST(); }

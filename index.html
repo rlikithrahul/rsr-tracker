@@ -266,11 +266,6 @@
       <div class="pg-hdr"><div class="pg-title">Contractors</div>
         <button class="btn btn-gold" onclick="OM('modal-nc')">+ New Contractor</button>
       </div>
-      <div class="card" style="border-top:3px solid var(--navy);margin-bottom:0">
-        <div class="st" style="margin-bottom:10px">📊 Contractor Performance</div>
-        <div id="contractor-perf-section"></div>
-      </div>
-      <div style="margin-top:16px"><div class="st">All Contractors</div></div>
       <div id="cont-list"></div>
       <div id="cont-profile" class="hidden"></div>
     </div>
@@ -588,6 +583,9 @@
 <div class="mov" id="modal-edit-release">
 <div class="mbox" style="max-width:460px">
   <div class="mhdr"><h2>✏️ Edit Fund Release</h2><button class="mx" onclick="CM('modal-edit-release')">✕</button></div>
+  <div id="er-tally-warning" style="display:none;background:#fff8e1;border:1px solid var(--amber);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e">
+    ⚠️ <strong>Tally-imported transaction.</strong> Changes here will override the Tally data locally. If you re-import the same daybook, the correction/reassignment logic will handle this entry by voucher number.
+  </div>
   <div class="fg"><label>Amount (₹)</label><input type="number" id="er-amt"></div>
   <div class="frow">
     <div class="fg"><label>Date</label><input type="date" id="er-date"></div>
