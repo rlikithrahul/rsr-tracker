@@ -319,6 +319,10 @@ async function deleteContractor(cid){
   try {
     await sbReq(`contractors?id=eq.${cid}`, 'DELETE');
     D.contractors = D.contractors.filter(c=>c.id!==cid);
+    const profileEl = document.getElementById('cont-profile');
+    if(profileEl) profileEl.classList.add('hidden');
+    const listEl = document.getElementById('cont-list');
+    if(listEl) listEl.classList.remove('hidden');
     renderConts();
     toast('Contractor deleted','ok');
   } catch(e){ toast('Delete failed: '+e.message,'error'); }

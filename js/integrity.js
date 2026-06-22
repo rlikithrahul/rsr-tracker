@@ -22,10 +22,10 @@ async function runSystemChecks(){
     { id:'r2doc', label:'R2 document storage reachable',fn: checkR2Docs },
     { id:'cap',   label:'70% cap calculation correct',  fn: checkCapCalc },
     { id:'intr',  label:'Interest calculation correct', fn: checkInterestCalc },
-    { id:'cc',    label:'All active projects have Cost Centre set', fn: checkCostCentres },
+    { id:'cc',    label:'Active projects have Cost Centre set', fn: checkCostCentres },
     { id:'dup',   label:'No duplicate voucher numbers in Tally imports', fn: checkDuplicates },
     { id:'queue', label:'Offline queue empty or syncable', fn: checkOfflineQueue2 },
-    { id:'data',  label:'All projects have contractor assigned', fn: checkProjectIntegrity },
+    { id:'data',  label:'Active projects have contractor + BOQ set', fn: checkProjectIntegrity },
   ];
 
   const results = [];
@@ -37,6 +37,10 @@ async function runSystemChecks(){
       const r = await check.fn();
       result.status = r.pass ? 'pass' : 'warn';
       result.detail = r.detail || '';
+      result.clickable = r.clickable || false;
+      result.clickAction = r.clickAction || null;
+      result.clickIds = r.clickIds || [];
+      result.dupeDetail = r.dupeDetail || null;
     } catch(e){
       result.status = 'fail';
       result.detail = e.message;
@@ -63,14 +67,15 @@ async function runSystemChecks(){
 function renderHealthResults(results, container){
   const icons = { pass:'✅', warn:'⚠️', fail:'❌', running:'⏳' };
   const colors = { pass:'var(--green)', warn:'var(--amber)', fail:'var(--red)', running:'var(--text3)' };
+  window._lastHealthResults = results; // for click handler lookup
   container.innerHTML = `
     <div id="health-summary"></div>
-    ${results.map(r=>`
+    ${results.map((r,i)=>`
       <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
         <span style="font-size:18px;flex-shrink:0">${icons[r.status]}</span>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:${colors[r.status]}">${r.label}</div>
-          ${r.detail?`<div style="font-size:12px;color:var(--text3);margin-top:2px">${r.detail}</div>`:''}
+          ${r.detail?`<div style="font-size:12px;color:var(--text3);margin-top:2px;${r.clickable?'cursor:pointer;text-decoration:underline;color:var(--navy)':''}" ${r.clickable?`onclick="handleHealthCheckClick(${i})"`:''}>${r.detail}${r.clickable?' <span style="font-size:10px">→ click to view</span>':''}</div>`:''}
         </div>
       </div>`).join('')}`;
   // Re-attach summary after re-render
@@ -148,23 +153,62 @@ async function checkCostCentres(){
   const active = D.projects.filter(p=>projStatus(p)==='active');
   const missing = active.filter(p=>!p.costCentre || !p.costCentre.trim());
   if(missing.length===0) return { pass:true, detail:`All ${active.length} active projects have Cost Centre set` };
-  return { pass:false, detail:`${missing.length} active project(s) missing Cost Centre: ${missing.map(p=>p.name).join(', ')}` };
+  return { pass:false, detail:`${missing.length} active project(s) missing Cost Centre: ${missing.map(p=>p.name).join(', ')}`, clickable:true, clickAction:'missingCostCentre', clickIds: missing.map(p=>p.id) };
 }
 
 async function checkDuplicates(){
   const vchNos = {};
-  let dupCount = 0;
+  const dupes = [];
   D.projects.forEach(p=>{
     (p.releases||[]).filter(r=>r.source==='tally').forEach(r=>{
       const key = r.ref + '_' + r.amount + '_' + r.date;
       if(key && key !== '__') {
-        if(vchNos[key]) dupCount++;
-        else vchNos[key] = p.name;
+        if(vchNos[key]){
+          dupes.push({ vchNo:r.ref, amount:r.amount, date:r.date, projectId:p.id, projectName:p.name, firstSeenIn:vchNos[key].projectName });
+        } else {
+          vchNos[key] = { projectName:p.name, projectId:p.id };
+        }
       }
     });
   });
-  if(dupCount===0) return { pass:true, detail:'No duplicate Tally voucher entries found' };
-  return { pass:false, detail:`${dupCount} possible duplicate Tally entries detected` };
+  if(dupes.length===0) return { pass:true, detail:'No duplicate Tally voucher entries found' };
+  const summary = dupes.map(d=>`Vch #${d.vchNo} (₹${fmt(d.amount)}, ${d.date}) in "${d.projectName}"`).join('; ');
+  return { pass:false, detail:`${dupes.length} possible duplicate Tally entr${dupes.length===1?'y':'ies'} detected: ${summary}`, clickable:true, clickAction:'duplicateVoucher', clickIds: dupes.map(d=>d.projectId), dupeDetail: dupes };
+}
+
+function handleHealthCheckClick(resultIdx){
+  const r = (window._lastHealthResults||[])[resultIdx];
+  if(!r || !r.clickIds || !r.clickIds.length) return;
+
+  if(r.clickIds.length === 1){
+    CM('modal-health');
+    openDetail(r.clickIds[0]);
+    return;
+  }
+
+  // Multiple projects — show a quick picker
+  let modal = document.getElementById('modal-health-picker');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-health-picker'; document.body.appendChild(modal); }
+
+  const items = r.clickIds.map(id=>{
+    const p = GP(id);
+    if(!p) return null;
+    const dupe = r.dupeDetail ? r.dupeDetail.find(d=>d.projectId===id) : null;
+    return { p, dupe };
+  }).filter(Boolean);
+
+  modal.innerHTML = `<div class="mbox" style="max-width:480px">
+    <div class="mhdr"><h2>🔍 ${items.length} Project${items.length>1?'s':''} Found</h2><button class="mx" onclick="CM('modal-health-picker')">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto">
+      ${items.map(({p,dupe})=>`
+        <div onclick="CM('modal-health-picker');CM('modal-health');openDetail('${p.id}')" style="padding:10px 12px;background:var(--surface2);border-radius:var(--rs);cursor:pointer" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='var(--surface2)'">
+          <div style="font-size:13px;font-weight:700;color:var(--navy)">${p.name}</div>
+          ${dupe?`<div style="font-size:11px;color:var(--red);margin-top:2px">Vch #${dupe.vchNo} · ₹${fmt(dupe.amount)} · ${dupe.date} — also seen in "${dupe.firstSeenIn}"</div>`:''}
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Tap to open →</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+  modal.classList.add('open');
 }
 
 async function checkOfflineQueue2(){
@@ -174,13 +218,16 @@ async function checkOfflineQueue2(){
 }
 
 async function checkProjectIntegrity(){
-  const noContractor = D.projects.filter(p=>!p.contractorId);
-  const noBoq = D.projects.filter(p=>(!p.boq||p.boq.length===0));
+  // Completed projects don't need a contractor assignment check or BOQ —
+  // work is done, there's nothing left to track against the BOQ.
+  const activeProjects = D.projects.filter(p=>!isArchived(p) && p.status!=='completed');
+  const noContractor = activeProjects.filter(p=>!p.contractorId);
+  const noBoq = activeProjects.filter(p=>(!p.boq||p.boq.length===0));
   const issues = [];
   if(noContractor.length) issues.push(`${noContractor.length} project(s) have no contractor`);
   if(noBoq.length) issues.push(`${noBoq.length} project(s) have no BOQ items`);
-  if(!issues.length) return { pass:true, detail:`All ${D.projects.length} projects have contractor and BOQ set` };
-  return { pass:false, detail: issues.join('. ') };
+  if(!issues.length) return { pass:true, detail:`All ${activeProjects.length} active projects have contractor and BOQ set` };
+  return { pass:false, detail: issues.join('. '), clickable:true, clickAction:'noBoqOrContractor', clickIds: [...new Set([...noContractor,...noBoq])].map(p=>p.id) };
 }
 
 // ─── 2. ANOMALY DETECTION ─────────────────────────────

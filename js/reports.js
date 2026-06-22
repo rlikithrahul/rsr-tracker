@@ -185,7 +185,7 @@ function buildRunningWorks(){
 
   const headers = [
     'Sl No','Firm','Project Name','Tender ID','Contractor',
-    'Agreement Date','Agreement Amount','Bid %',
+    'Agreement Date','Estimated BOQ Value','Agreement Amount','Bid %',
     'Max Fundable (70%)','Total Deployed','Cap Used %','Status'
   ];
 
@@ -202,6 +202,7 @@ function buildRunningWorks(){
       p.tender||'—',
       c?c.name:'—',
       fmtDate(p.agreeDate),
+      p.estimated||0,
       agAmt||0,
       `${p.bidPct||0}%`,
       max||0,
@@ -547,7 +548,7 @@ function getReportData(type, fy){
   switch(type){
     case 'running':
       title = 'Running Works';
-      headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Agreement Date','Agreement Amount','Bid %','Max Fundable (70%)','Total Deployed','Cap Used %','Status'];
+      headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Agreement Date','Estimated BOQ Value','Agreement Amount','Bid %','Max Fundable (70%)','Total Deployed','Cap Used %','Status'];
       rows = D.projects.filter(p=>!isArchived(p)&&!p.jvDate)
         .sort((a,b)=>{
           if(!a.agreeDate && !b.agreeDate) return (a.createdAt||'').localeCompare(b.createdAt||'');
@@ -557,7 +558,7 @@ function getReportData(type, fy){
         })
         .map((p,i)=>{
           const c=GC(p.contractorId),rel=totRel(p),max=maxF(p);
-          return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',fmtDate(p.agreeDate),agAmt_calc(p)||0,`${p.bidPct||0}%`,max||0,rel||0,max>0?`${Math.round(rel/max*100)}%`:'0%',(p.status||'active').toUpperCase()];
+          return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',fmtDate(p.agreeDate),p.estimated||0,agAmt_calc(p)||0,`${p.bidPct||0}%`,max||0,rel||0,max>0?`${Math.round(rel/max*100)}%`:'0%',(p.status||'active').toUpperCase()];
         });
       break;
 
