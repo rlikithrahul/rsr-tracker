@@ -122,8 +122,14 @@ function openPersonalProject(pid){
   detail.innerHTML = `
     <div style="margin-bottom:14px">
       <button class="btn btn-sm" onclick="cBackToPersonalList()" style="margin-bottom:10px">← Back</button>
-      <div style="font-size:18px;font-weight:800;color:var(--navy)">${p.name}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.clientName?'For: '+p.clientName:''}${p.location?' · 📍 '+p.location:''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:18px;font-weight:800;color:var(--navy)">${p.name}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.clientName?'For: '+p.clientName:''}${p.location?' · 📍 '+p.location:''}</div>
+          ${p.description?`<div style="font-size:12px;color:var(--text2);margin-top:4px">${p.description}</div>`:''}
+        </div>
+        <button onclick="openEditPersonalProject('${pid}')" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;flex-shrink:0">✏️ Edit</button>
+      </div>
     </div>
 
     <!-- BOQ Document -->
@@ -175,6 +181,45 @@ function cBackToPersonalList(){
   if(detail) detail.classList.add('hidden');
   document.getElementById('cp-personal').classList.remove('hidden');
   renderPersonalProjectsTab();
+}
+
+function openEditPersonalProject(pid){
+  const p = GP(pid); if(!p) return;
+  let modal = document.getElementById('modal-edit-pp');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-edit-pp'; document.body.appendChild(modal); }
+
+  modal.innerHTML = `<div class="mbox" style="max-width:420px">
+    <div class="mhdr"><h2>✏️ Edit Project</h2><button class="mx" onclick="CM('modal-edit-pp')">✕</button></div>
+    <div class="fg"><label>Project Name *</label><input type="text" id="epp-name" value="${p.name.replace(/"/g,'&quot;')}"></div>
+    <div class="fg"><label>Client / Firm Name</label><input type="text" id="epp-client" value="${(p.clientName||'').replace(/"/g,'&quot;')}"></div>
+    <div class="fg"><label>Location</label><input type="text" id="epp-location" value="${(p.location||'').replace(/"/g,'&quot;')}"></div>
+    <div class="fg"><label>Notes / Description</label><textarea id="epp-desc" rows="2">${p.description||''}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="CM('modal-edit-pp')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveEditPersonalProject('${pid}')">✓ Save Changes</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function saveEditPersonalProject(pid){
+  const p = GP(pid); if(!p) return;
+  const name = document.getElementById('epp-name')?.value?.trim();
+  if(!name){ toast('Project name is required','error'); return; }
+
+  p.name = name;
+  p.clientName = document.getElementById('epp-client')?.value?.trim()||'';
+  p.location = document.getElementById('epp-location')?.value?.trim()||'';
+  p.description = document.getElementById('epp-desc')?.value?.trim()||'';
+
+  try{
+    await saveProjectDB(p);
+    logActivity({category:'contractor',action:'personal_project_edited',projectId:pid,projectName:p.name,description:(CU?CU.name:'Contractor')+' edited personal project: '+p.name});
+    CM('modal-edit-pp');
+    openPersonalProject(pid); // refresh the detail view with new data
+    toast('✓ Project updated','ok');
+    if(typeof haptic==='function') haptic('success');
+  }catch(e){ toast('Save failed — try again','error'); }
 }
 
 // ─── BOQ DOCUMENT (file upload — PDF/Excel/image) ────
