@@ -205,6 +205,15 @@ function renderDetail(id){
       </div>
     </div>` : ''}
 
+    ${(p.jvDate && (!p.jvNumber || !p.jvAmount)) ? `<div style="background:#fffbeb;border:1.5px solid var(--amber);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:16px;line-height:1">⚠️</div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#92400e;font-size:12px;margin-bottom:4px">JV Details Incomplete</div>
+        <div style="font-size:11px;color:#92400e;margin-bottom:6px">JV received on ${fmtDate(p.jvDate)} but ${[!p.jvNumber?'JV Number':null,!p.jvAmount?'JV Amount':null].filter(Boolean).join(' and ')} not yet filled in.</div>
+        <button onclick="openJVDetailsUpdate('${p.id}')" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Fill in JV Details →</button>
+      </div>
+    </div>` : ''}
+
     <!-- NEW HEADER: compact back + meta + project name -->
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">

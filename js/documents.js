@@ -149,16 +149,26 @@ async function handleDocUpload(evt, pid, slotId) {
 async function confirmJVDate(){
   const jvDate = document.getElementById('jv-date-input')?.value;
   if(!jvDate){ toast('Please select the JV date','error'); return; }
+
+  const jvDetails = {
+    jvDate,
+    jvNumber: document.getElementById('jv-number-input')?.value?.trim()||'',
+    jvAmount: parseFloat(document.getElementById('jv-amount-input')?.value)||0,
+    emd: parseFloat(document.getElementById('jv-emd-input')?.value)||0,
+    fsd: parseFloat(document.getElementById('jv-fsd-input')?.value)||0,
+    jvNotes: document.getElementById('jv-notes-input')?.value?.trim()||''
+  };
+
   CM('modal-jv-date');
   const file = window._pendingJVFile;
   const pid = window._pendingJVPid;
   window._pendingJVFile = null;
   window._pendingJVPid = null;
   if(!file || !pid){ toast('Upload error — please try again','error'); return; }
-  await _doDocUpload(file, pid, 'jv', jvDate);
+  await _doDocUpload(file, pid, 'jv', jvDetails);
 }
 
-async function _doDocUpload(file, pid, slotId, jvDate){
+async function _doDocUpload(file, pid, slotId, jvDetails){
   setBusy(true, `Uploading ${file.name}…`);
   try {
     const url = await uploadDocument(file, pid, slotId);
@@ -169,8 +179,14 @@ async function _doDocUpload(file, pid, slotId, jvDate){
       uploadedAt: new Date().toISOString(),
       uploadedBy: CU.name
     };
-    if(slotId === 'jv' && jvDate){
-      p.jvDate = jvDate;
+    if(slotId === 'jv' && jvDetails){
+      const d = typeof jvDetails === 'object' ? jvDetails : { jvDate: jvDetails };
+      p.jvDate = d.jvDate || jvDetails;
+      if(d.jvNumber) p.jvNumber = d.jvNumber;
+      if(d.jvAmount) p.jvAmount = d.jvAmount;
+      if(d.emd) p.emd = d.emd;
+      if(d.fsd) p.fsd = d.fsd;
+      if(d.jvNotes) p.jvNotes = d.jvNotes;
       if(!p.status || p.status === 'active'){
         p.status = 'completed';
         toast('✅ JV uploaded — project marked as Completed','ok',4000);
@@ -251,4 +267,54 @@ async function deleteDocument(pid, slotId) {
     if (vaultEl) vaultEl.outerHTML = renderDocVault(p, true);
     else renderDetail(pid);
   } catch(e) { toast('Delete failed', 'error'); }
+}
+
+// ─── UPDATE JV DETAILS (after initial upload) ─────────
+// Shown via the yellow "JV Details Incomplete" banner
+function openJVDetailsUpdate(pid){
+  const p = GP(pid); if(!p) return;
+  let modal = document.getElementById('modal-jv-details-update');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-jv-details-update'; document.body.appendChild(modal); }
+
+  modal.innerHTML = `<div class="mbox" style="max-width:420px">
+    <div class="mhdr"><h2>📋 Update JV Details</h2><button class="mx" onclick="CM('modal-jv-details-update')">✕</button></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">JV date: <strong>${fmtDate(p.jvDate)}</strong> — fill in the remaining details from the document.</div>
+    <div class="frow">
+      <div class="fg"><label>JV Number</label><input type="text" id="jvupd-number" value="${p.jvNumber||''}" placeholder="e.g. JV/2026/001"></div>
+      <div class="fg"><label>JV Amount (₹)</label><input type="number" id="jvupd-amount" value="${p.jvAmount||''}" placeholder="Total sanctioned"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label>EMD Amount (₹)</label><input type="number" id="jvupd-emd" value="${p.emd||''}" placeholder="0"></div>
+      <div class="fg"><label>FSD Amount (₹)</label><input type="number" id="jvupd-fsd" value="${p.fsd||''}" placeholder="0"></div>
+    </div>
+    <div class="fg"><label>Remarks / Notes</label><input type="text" id="jvupd-notes" value="${p.jvNotes||''}" placeholder="Any notes about this JV"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="CM('modal-jv-details-update')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveJVDetailsUpdate('${pid}')">✓ Save Details</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function saveJVDetailsUpdate(pid){
+  const p = GP(pid); if(!p) return;
+  const num = document.getElementById('jvupd-number')?.value?.trim();
+  const amt = parseFloat(document.getElementById('jvupd-amount')?.value)||0;
+  const emd = parseFloat(document.getElementById('jvupd-emd')?.value)||0;
+  const fsd = parseFloat(document.getElementById('jvupd-fsd')?.value)||0;
+  const notes = document.getElementById('jvupd-notes')?.value?.trim()||'';
+
+  if(num) p.jvNumber = num;
+  if(amt) p.jvAmount = amt;
+  if(emd) p.emd = emd;
+  if(fsd) p.fsd = fsd;
+  if(notes) p.jvNotes = notes;
+
+  try{
+    await saveProjectDB(p);
+    logActivity({category:'project',action:'jv_details_updated',projectId:pid,projectName:p.name,description:`JV details updated: JV #${num||p.jvNumber||'—'}, Amount ₹${fmt(amt||p.jvAmount||0)}`});
+    CM('modal-jv-details-update');
+    renderDetail(pid);
+    toast('✓ JV details saved','ok');
+  }catch(e){ toast('Save failed — try again','error'); }
 }

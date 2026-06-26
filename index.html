@@ -659,13 +659,42 @@
 
 <!-- JV Date Picker Modal -->
 <div class="mov" id="modal-jv-date" style="z-index:999998">
-<div class="mbox" style="max-width:360px;width:95vw">
-  <div class="mhdr"><h2>📋 JV Upload — Enter Date</h2><button class="mx" onclick="CM('modal-jv-date')">✕</button></div>
-  <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Select the date printed on the Journal Voucher document.</div>
+<div class="mbox" style="max-width:420px;width:95vw">
+  <div class="mhdr"><h2>📋 JV Received — Enter Details</h2><button class="mx" onclick="CM('modal-jv-date')">✕</button></div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Enter the details from the Journal Voucher document. JV Date is required — the rest can be filled in now or later.</div>
+
   <div class="fg">
-    <label>JV Date *</label>
+    <label>JV Date * <span style="font-size:11px;color:var(--text3)">(date printed on the JV)</span></label>
     <input type="date" id="jv-date-input" style="font-size:15px;padding:10px">
   </div>
+
+  <div class="frow">
+    <div class="fg">
+      <label>JV Number</label>
+      <input type="text" id="jv-number-input" placeholder="e.g. JV/2026/001">
+    </div>
+    <div class="fg">
+      <label>JV Amount (₹)</label>
+      <input type="number" id="jv-amount-input" placeholder="Total sanctioned amount">
+    </div>
+  </div>
+
+  <div class="frow">
+    <div class="fg">
+      <label>EMD Amount (₹)</label>
+      <input type="number" id="jv-emd-input" placeholder="0">
+    </div>
+    <div class="fg">
+      <label>FSD Amount (₹)</label>
+      <input type="number" id="jv-fsd-input" placeholder="0">
+    </div>
+  </div>
+
+  <div class="fg">
+    <label>Remarks / Notes</label>
+    <input type="text" id="jv-notes-input" placeholder="Any notes about this JV">
+  </div>
+
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
     <button class="btn" onclick="CM('modal-jv-date')">Cancel</button>
     <button class="btn btn-navy" onclick="confirmJVDate()">✓ Confirm & Upload</button>
