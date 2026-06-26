@@ -35,12 +35,16 @@ function renderTypeChips(containerId, selectedTypes){
   if(!el) return;
 
   el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="'+containerId+'-chips">'
-    +all.map(t=>'<button type="button" onclick="toggleTypeChip(\''+containerId+'\',\''+t+'\')" '
-      +'id="chip-'+containerId+'-'+t.replace(/\s/g,'_')+'" '
-      +'style="padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '
-      +(sel.includes(t)?'var(--navy)':'var(--border)')+';background:'
-      +(sel.includes(t)?'var(--navy)':'#fff')+';color:'
-      +(sel.includes(t)?'#fff':'var(--text2)'+';transition:all .15s')+'">'+t+'</button>').join('')
+    +all.map(t=>{
+      const isSel = sel.includes(t);
+      return '<button type="button" onclick="toggleTypeChip(\''+containerId+'\',\''+t+'\')" '
+        +'id="chip-'+containerId+'-'+t.replace(/\s/g,'_')+'" '
+        +(isSel?'data-sel="1" ':'')
+        +'style="padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;border:1.5px solid '
+        +(isSel?'var(--navy)':'var(--border)')+';background:'
+        +(isSel?'var(--navy)':'#fff')+';color:'
+        +(isSel?'#fff':'var(--text2)')+';transition:all .15s">'+t+'</button>';
+    }).join('')
     +'</div>'
     +'<div style="display:flex;gap:8px;align-items:center">'
     +'<input type="text" id="'+containerId+'-custom-input" placeholder="+ Add custom type" '
