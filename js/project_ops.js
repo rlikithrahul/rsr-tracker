@@ -597,6 +597,7 @@ async function confirmSettle(){
   const tallyRef=sel&&sel.value!==''?ref:null;
 
   if(!p.settlements) p.settlements=[];
+  const billType = document.getElementById('settle-bill-type')?.value||'Final Bill';
   p.settlements.push({
     id:uid(),
     amount:amt,
@@ -604,6 +605,7 @@ async function confirmSettle(){
     mode:document.getElementById('settle-mode').value,
     ref,
     tallyRef,
+    billType,
     notes:document.getElementById('settle-notes').value,
     recordedAt:new Date().toISOString()
   });

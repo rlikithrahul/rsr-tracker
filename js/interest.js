@@ -103,11 +103,12 @@ function calcProjectInterest(p){
     else if(ev.type==='receipt') balance = Math.max(0, balance - ev.amount);
     else if(ev.type==='settlement'){
       totalSettled += ev.amount;
-      balance = Math.max(0, balance - ev.amount);
-      // Check if fully settled (balance at zero)
+      balance -= ev.amount;
+      // When balance hits zero or goes negative, interest stops.
+      // Negative balance = RSR received more than deployed (excess with RSR)
       if(balance <= 0){
         isFullySettled = true;
-        balance = 0;
+        // Don't clamp to 0 — preserve the negative to show excess amount
       }
     }
     prevDate = currentDate;
@@ -116,6 +117,7 @@ function calcProjectInterest(p){
   return {
     interest: Math.round(interest * 100) / 100,
     outstanding: Math.max(0, balance),
+    excessWithRSR: balance < 0 ? Math.abs(balance) : 0,
     settled: totalSettled,
     isFullySettled,
     breakdown
@@ -305,11 +307,13 @@ function renderInterest(){
     // Per-project reference rows
     const projRows = projects.map(p=>{
       const pi = calcProjectInterest(p);
-      const statusLabel = pi.isFullySettled
-        ? '<span style="color:var(--green);font-size:10px;font-weight:700">✓ SETTLED</span>'
-        : pi.outstanding<=0
-          ? '<span style="color:var(--green);font-size:10px">Zero balance</span>'
-          : `<span style="color:var(--red);font-size:10px">${fmt(pi.outstanding)} outstanding</span>`;
+      const statusLabel = pi.excessWithRSR > 0
+        ? `<span style="color:#7c3aed;font-size:10px;font-weight:700">RSR holds ${fmt(pi.excessWithRSR)} excess</span>`
+        : pi.isFullySettled
+          ? '<span style="color:var(--green);font-size:10px;font-weight:700">✓ SETTLED</span>'
+          : pi.outstanding<=0
+            ? '<span style="color:var(--green);font-size:10px">Zero balance</span>'
+            : `<span style="color:var(--red);font-size:10px">${fmt(pi.outstanding)} outstanding</span>`;
       return `<tr>
         <td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:600">${p.name}</a></td>
         <td style="text-align:right">${fmt(totPayments(p))}</td>

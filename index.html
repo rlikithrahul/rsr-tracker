@@ -571,8 +571,20 @@
       <select id="settle-mode"><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Cash</option></select>
     </div>
   </div>
-  <div class="fg"><label>Reference / Vch No.</label><input type="text" id="settle-ref" placeholder="Auto-filled from Tally or enter manually"></div>
-  <div class="fg"><label>Notes</label><input type="text" id="settle-notes" placeholder="e.g. RA Bill 3, Final Bill"></div>
+  <div class="frow">
+    <div class="fg"><label>Bill Type</label>
+      <select id="settle-bill-type">
+        <option value="Final Bill">Final Bill (complete payment)</option>
+        <option value="Part Bill 1">Part Bill 1 (first installment)</option>
+        <option value="Part Bill 2">Part Bill 2</option>
+        <option value="Part Bill 3">Part Bill 3</option>
+        <option value="RA Bill">RA Bill (Running Account)</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="fg"><label>Reference / Vch No.</label><input type="text" id="settle-ref" placeholder="Auto-filled from Tally or enter manually"></div>
+  </div>
+  <div class="fg"><label>Notes</label><input type="text" id="settle-notes" placeholder="Any notes about this payment"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end">
     <button class="btn" onclick="CM('modal-settle')">Cancel</button>
     <button class="btn btn-green" onclick="confirmSettle()">✓ Record Settlement</button>
