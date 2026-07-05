@@ -264,18 +264,28 @@ function renderPipeline(){
       // Action banner
       +'<div style="background:'+def.bg+';border-radius:var(--rs);padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:'+def.color+'">'
       +'👉 '+def.action
-      +'</div>'
+      +'</div>';
 
-      // Project list
-      +'<div style="display:flex;flex-direction:column;gap:8px">'
-      +list.map(p=>{
+      // Project list — sorted by JV date ascending (earliest JV = most urgent = top)
+      const sortedList = [...list].sort((a,b)=>{
+        if(!a.jvDate && !b.jvDate) return 0;
+        if(!a.jvDate) return 1;
+        if(!b.jvDate) return -1;
+        return a.jvDate.localeCompare(b.jvDate);
+      });
+
+      html += '<div style="display:flex;flex-direction:column;gap:8px">'
+      +sortedList.map(p=>{
         const c = GC(p.contractorId);
         const firmShort = (p.firm||'RSR')==='RSR Constructions'?'RSR':(p.firm||'RSR')==='R Sadhu Rao'?'RS Rao':'RLR';
         const firmBg = (p.firm||'RSR')==='RSR Constructions'?'var(--navy)':(p.firm||'RSR')==='R Sadhu Rao'?'#7b3f00':'#1b5e20';
 
         // Stage-specific detail line
         let detail = '';
-        if(def.key==='ea_pending' && p.jvDate) detail = 'JV: '+fmtDate(p.jvDate);
+        if(def.key==='ea_pending' && p.jvDate){
+          const daysSinceJV = Math.round((today-new Date(p.jvDate))/86400000);
+          detail = 'JV: '+fmtDate(p.jvDate)+' · Waiting '+daysSinceJV+'d for EA';
+        }
         if(def.key==='asd_to_apply') detail = 'ASD: '+fmt(p.asd||0)+' · EA: '+(p.eaNumber||(p.docVault&&p.docVault.ea)||'—');
         if(def.key==='wec_to_apply'||def.key==='wec_applied') detail = 'EA: '+(p.eaNumber||(p.docVault&&p.docVault.ea)||'—')+(p.wecAppliedDate?' · Applied: '+fmtDate(p.wecAppliedDate):'');
         if(def.key==='payment_pending') detail = 'WEC received: '+(p.wecReceivedDate?fmtDate(p.wecReceivedDate):'—');

@@ -140,7 +140,12 @@ function renderDetail(id){
     </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No transactions yet. Import from Tally to populate.</div>';
 
   const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
-  const settleLog=(p.settlements||[]).filter(s=>!isArchived(s)).slice().reverse().map(s=>`<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} · ${s.notes||''}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`).join('');
+  const settleLog=(p.settlements||[]).filter(s=>!isArchived(s)).slice().reverse().map(s=>{
+    const billBadge = s.billType && s.billType!=='Final Bill'
+      ? `<span style="font-size:10px;background:#7c3aed;color:#fff;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:4px">${s.billType}</span>`
+      : '';
+    return `<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} ${s.notes?'· '+s.notes:''} ${billBadge}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`;
+  }).join('');
 
   const verLog=(p.verifications||[]).slice().reverse().map(v=>`
     <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -261,14 +266,20 @@ function renderDetail(id){
             ['Bid %', (p.bidPct||0)+'%'],
             ['Agreement Amount', fmt(agAmt(p))],
             ['Max Fundable (70%)', fmt(max)],
-            ['Total Deployed', fmt(rel), rel>max?'color:var(--red)':''],
+            null, // separator
+            ['Paid to Contractor', fmt(totPayments(p)), 'color:var(--navy)'],
+            ...(totReceipts(p)>0 ? [['Received from Govt (Tally)', '− '+fmt(totReceipts(p)), 'color:var(--green);font-weight:700']] : []),
+            ['Net Deployed (at risk)', fmt(rel), rel>max?'color:var(--red);font-weight:800':'color:var(--navy);font-weight:800'],
             ['Cap Used', Math.round(rel/Math.max(max,1)*100)+'%', rel/Math.max(max,1)>=0.85?'color:var(--red);font-weight:800':''],
-            ['Total Settled', fmt((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)), 'color:var(--green)'],
+            null, // separator
+            ['Settled (govt payment)', fmt((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)), 'color:var(--green)'],
             ['Outstanding', fmt(Math.max(0,rel-((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)))), 'color:var(--red)'],
             ['Eligible (verified)', fmt(el)],
-          ].map(([lbl,val,style])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--surface2)">
-            <span style="font-size:12px;color:var(--text2)">${lbl}</span>
-            <span style="font-size:13px;font-weight:700;${style||'color:var(--navy)'}">${val}</span>
+          ].filter(x=>x!==undefined).map(row=>row===null
+            ? `<div style="border-top:1px solid var(--border);margin:4px 0"></div>`
+            : `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--surface2)">
+            <span style="font-size:12px;color:var(--text2)">${row[0]}</span>
+            <span style="font-size:13px;font-weight:700;${row[2]||'color:var(--navy)'}">${row[1]}</span>
           </div>`).join('')}
           <div style="font-size:11px;color:var(--text3);margin-top:6px">
             <a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a>
