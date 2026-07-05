@@ -70,8 +70,10 @@ function renderContractorProfile(cid){
   const onHold = projects.filter(p=>projStatus(p)==='onhold');
   const completed = projects.filter(p=>projStatus(p)==='completed');
   const expectedJVs = projects.filter(p=>p.expectedJVMonth && !p.jvDate);
-  const totalDeployed = projects.reduce((s,p)=>s+totRel(p),0);
-  const totalSettled = projects.reduce((s,p)=>s+(p.settlements||[]).filter(s2=>!isArchived(s2)).reduce((s3,s2)=>s3+s2.amount,0),0);
+  const totalDeployed  = projects.reduce((s,p)=>s+totRel(p),0);
+  const totalJVsValue  = projects.reduce((s,p)=>s+(p.jvAmount||0),0);
+  const totalChecksRcv = projects.reduce((s,p)=>s+(p.settlements||[]).filter(s2=>!isArchived(s2)).reduce((s3,s2)=>s3+s2.amount,0),0);
+  const outstanding    = Math.max(0, totalDeployed - totalChecksRcv);
   const ledger = typeof calcContractorLedger==='function' ? calcContractorLedger(c) : {currentOutstanding:0, currentFYInterest:0};
 
   el.innerHTML = `
@@ -120,16 +122,23 @@ function renderContractorProfile(cid){
       </div>
     </div>`:''}
 
-    <!-- Financial Summary -->
+    <!-- Financial Summary — 3 key figures + outstanding + interest -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
       ${[
-        {l:'Total Deployed',v:fmt(totalDeployed),c:'var(--navy)'},
-        {l:'Total Settled',v:fmt(totalSettled),c:'var(--green)'},
-        {l:'Outstanding',v:fmt(ledger.currentOutstanding||0),c:'var(--red)'},
-        {l:'Interest (this FY)',v:fmt(ledger.currentFYInterest||0),c:'var(--amber)'},
+        {l:'💰 Deployed to Contractor',v:fmt(totalDeployed),c:'var(--navy)',
+          sub:'Total funds released so far'},
+        {l:'📋 JVs Received (value)',v:totalJVsValue?fmt(totalJVsValue):'—',c:'#7c3aed',
+          sub:'Sum of all JV amounts'},
+        {l:'✅ Checks Received',v:totalChecksRcv?fmt(totalChecksRcv):'—',c:'var(--green)',
+          sub:'Total payment received'},
+        {l:'⏳ Outstanding',v:fmt(outstanding),c:outstanding>0?'var(--red)':'var(--green)',
+          sub:'Deployed minus checks received'},
+        {l:'📈 Interest (this FY)',v:fmt(ledger.currentFYInterest||0),c:'var(--amber)',
+          sub:'Accrued this financial year'},
       ].map(x=>`<div class="card" style="text-align:center;padding:12px;border-top:3px solid ${x.c}">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:700;margin-bottom:4px">${x.l}</div>
         <div style="font-size:16px;font-weight:800;color:${x.c}">${x.v}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">${x.sub}</div>
       </div>`).join('')}
     </div>
 

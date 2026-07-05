@@ -380,14 +380,24 @@ function buildToBeAgreement(){
     .sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
 
   const headers = [
-    'Sl No','Firm','Project Name','Tender ID','Contractor','Status','Created Date'
+    'Sl No','Firm','Project Name','Tender ID','Contractor','Status',
+    'Est. BOQ Value (₹)','Bid %','Agreement Amount (₹)',
+    'EMD (1.5%) (₹)','ASD Required?','ASD Amount (₹)','Created Date'
   ];
 
   const rows = projects.map((p,i)=>{
     const c = GC(p.contractorId);
+    const estimated = p.estimated||0;
+    const bidPct = p.bidPct||0;
+    const agreeAmt = estimated * (1 + bidPct/100);
+    const emd = Math.round(agreeAmt * 0.015);
+    const asdRequired = bidPct > 25;
+    const asdAmt = asdRequired ? Math.round(estimated * ((bidPct-25)/100)) : 0;
     return [
       i+1, getProjectFirm(p), p.name||'—', p.tender||'—',
       c?c.name:'—', (p.status||'active').toUpperCase(),
+      estimated, `${bidPct}%`, Math.round(agreeAmt),
+      emd, asdRequired?'YES':'No', asdAmt||'—',
       fmtDate(p.createdAt)
     ];
   });
@@ -586,12 +596,19 @@ function getReportData(type, fy){
 
     case 'tobeagreement':
       title = 'To Be Agreement';
-      headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Status','Created Date'];
+      headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Est. BOQ Value','Bid %','Agreement Amount','EMD (1.5%)','ASD?','ASD Amount','Status','Created Date'];
       rows = D.projects.filter(p=>!isArchived(p)&&!p.agreeDate&&p.status!=='completed')
         .sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''))
         .map((p,i)=>{
           const c=GC(p.contractorId);
-          return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',(p.status||'active').toUpperCase(),fmtDate(p.createdAt)];
+          const est=p.estimated||0, bid=p.bidPct||0;
+          const agAmt=Math.round(est*(1+bid/100));
+          const emd=Math.round(agAmt*0.015);
+          const asd=bid>25, asdAmt=asd?Math.round(est*((bid-25)/100)):0;
+          return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',
+            est?fmt(est):'—',`${bid}%`,agAmt?fmt(agAmt):'—',
+            emd?fmt(emd):'—',asd?'YES ⚠️':'No',asd?fmt(asdAmt):'—',
+            (p.status||'active').toUpperCase(),fmtDate(p.createdAt)];
         });
       break;
 
