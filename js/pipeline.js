@@ -214,6 +214,10 @@ function renderPipeline(){
     +'<div class="pg-title">⚡ Action Centre</div>'
     +'<div style="font-size:12px;color:var(--text3)">All pending project actions in one place — sorted by urgency</div>'
     +'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="exportActionCentre(\'excel\')" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📊 Export Excel</button>'
+    +'<button onclick="exportActionCentre(\'print\')" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">🖨️ Print / PDF</button>'
+    +'</div>'
     +'</div>';
 
   // Summary bar
@@ -354,6 +358,166 @@ function renderPipeline(){
   html += '</div>';
   el.innerHTML = html;
   if(typeof applyToggleStates==='function') applyToggleStates();
+}
+
+// ─── EXPORT ACTION CENTRE ─────────────────────────────
+async function exportActionCentre(format){
+  const today = new Date();
+  const projects = D.projects.filter(p=>!isArchived(p));
+
+  // Rebuild stage data (same logic as renderPipeline)
+  const stageDefs = [
+    {key:'ea_pending',    label:'Awaiting EA Number',          priority:'🔴 Urgent'},
+    {key:'asd_to_apply',  label:'ASD Refund — Apply Now',      priority:'🔴 Urgent'},
+    {key:'wec_to_apply',  label:'Apply for WEC',               priority:'🟡 Action Needed'},
+    {key:'wec_applied',   label:'WEC Applied — Awaiting',      priority:'🟡 Action Needed'},
+    {key:'payment_pending',label:'Awaiting GVMC Payment',      priority:'🟡 Action Needed'},
+    {key:'gst_pending',   label:'GST Filing Pending',          priority:'🟡 Action Needed'},
+    {key:'emd_overdue',   label:'EMD/FSD Refund OVERDUE',      priority:'🔴 Urgent'},
+    {key:'emd_to_apply',  label:'EMD/FSD Refund — Apply Soon', priority:'🟡 Action Needed'},
+    {key:'emd_applied',   label:'EMD/FSD Applied — Awaiting',  priority:'🔵 Pending'},
+  ];
+
+  const stages = {};
+  stageDefs.forEach(d=>stages[d.key]=[]);
+
+  projects.forEach(p=>{
+    const hasJV=!!p.jvDate;
+    const hasEA=!!(p.eaNumber||(p.docVault&&p.docVault.ea));
+    const hasPayment=(p.settlements||[]).filter(s=>!isArchived(s)).length>0;
+    const asdAmt=p.asd||0;
+    let daysTo2yr=null;
+    if(p.jvDate){const t=new Date(p.jvDate);t.setFullYear(t.getFullYear()+2);daysTo2yr=Math.round((t-today)/86400000);}
+    if(!hasJV) return;
+    if(!hasEA) stages.ea_pending.push(p);
+    else if(asdAmt>0&&!p.asdRefundApplied&&!p.asdRefundReceived) stages.asd_to_apply.push(p);
+    else if(!p.wecApplied&&!p.wecReceived) stages.wec_to_apply.push(p);
+    else if(p.wecApplied&&!p.wecReceived) stages.wec_applied.push(p);
+    else if(p.wecReceived&&!hasPayment&&!p.gstFiled) stages.payment_pending.push(p);
+    else if(hasPayment&&!p.gstFiled) stages.gst_pending.push(p);
+    else if(daysTo2yr!==null&&daysTo2yr<=0&&!p.refundReceived&&!p.refundApplied) stages.emd_overdue.push(p);
+    else if(daysTo2yr!==null&&daysTo2yr<=90&&daysTo2yr>0&&!p.refundReceived&&!p.refundApplied) stages.emd_to_apply.push(p);
+    else if(p.refundApplied&&!p.refundReceived) stages.emd_applied.push(p);
+  });
+
+  if(format==='excel'){
+    if(!window.XLSX){
+      try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}
+      catch(e){toast('Could not load Excel library','error');return;}
+    }
+    const wb=window.XLSX.utils.book_new();
+    const rows=[['Action Centre Export — '+new Date().toLocaleDateString('en-IN'),'','','',''],['','','','','']];
+    rows.push(['Priority','Stage','Project Name','Contractor','JV Date','JV Amount (₹)','Days Waiting','Firm']);
+    stageDefs.forEach(def=>{
+      const list=stages[def.key];
+      if(!list.length) return;
+      list.sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||'')).forEach(p=>{
+        const c=GC(p.contractorId);
+        const daysSinceJV=p.jvDate?Math.round((today-new Date(p.jvDate))/86400000):null;
+        rows.push([
+          def.priority, def.label,
+          p.name, c?c.name:'—',
+          fmtDate(p.jvDate), p.jvAmount||0,
+          daysSinceJV?daysSinceJV+'d':'—',
+          p.firm||'RSR Constructions'
+        ]);
+      });
+      rows.push(['','','','','','','','']);
+    });
+    const ws=window.XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:28},{wch:55},{wch:22},{wch:14},{wch:16},{wch:14},{wch:18}];
+    window.XLSX.utils.book_append_sheet(wb,ws,'Action Centre');
+    window.XLSX.writeFile(wb,'RSR_Action_Centre_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('✓ Excel exported','ok');
+
+  } else {
+    // Print / PDF — open a clean printable HTML in a new window
+    const dateStr=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
+    const totalActions=stageDefs.reduce((s,d)=>s+stages[d.key].length,0);
+
+    let body='';
+    stageDefs.forEach(def=>{
+      const list=stages[def.key];
+      if(!list.length) return;
+      const sorted=list.slice().sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||''));
+      const isUrgent=def.priority.includes('🔴');
+      body+=`<div class="stage-block">
+        <div class="stage-header ${isUrgent?'urgent':''}">
+          ${def.priority} &nbsp; ${def.label} &nbsp;
+          <span class="count">${list.length} project${list.length>1?'s':''}</span>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Project Name</th><th>Contractor</th><th>Firm</th><th>JV Date</th><th>JV Amount</th><th>Days Since JV</th></tr></thead>
+          <tbody>
+            ${sorted.map((p,i)=>{
+              const c=GC(p.contractorId);
+              const days=p.jvDate?Math.round((today-new Date(p.jvDate))/86400000):null;
+              return `<tr>
+                <td>${i+1}</td>
+                <td class="project-name">${p.name}</td>
+                <td>${c?c.name:'—'}</td>
+                <td>${p.firm||'RSR'}</td>
+                <td>${fmtDate(p.jvDate)||'—'}</td>
+                <td class="amount">₹${fmt(p.jvAmount||0)}</td>
+                <td class="${days&&days>90?'overdue':''}">${days?days+'d':'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    });
+
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Action Centre — ${dateStr}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1a2744}
+      .header-left h1{font-size:18px;font-weight:800;color:#1a2744}
+      .header-left p{font-size:11px;color:#666;margin-top:2px}
+      .header-right{text-align:right;font-size:11px;color:#666}
+      .summary{display:flex;gap:20px;margin-bottom:20px;padding:10px 14px;background:#f8f9fa;border-radius:6px;border:1px solid #e0e0e0}
+      .summary-item{text-align:center}
+      .summary-item .num{font-size:18px;font-weight:800;color:#1a2744}
+      .summary-item .lbl{font-size:10px;color:#666;text-transform:uppercase}
+      .stage-block{margin-bottom:18px;page-break-inside:avoid}
+      .stage-header{font-size:12px;font-weight:700;padding:6px 10px;background:#e8edf8;border-left:4px solid #1a2744;margin-bottom:0;border-radius:4px 4px 0 0}
+      .stage-header.urgent{background:#fef2f2;border-left-color:#dc2626;color:#dc2626}
+      .count{font-size:10px;font-weight:600;background:rgba(0,0,0,.1);padding:1px 7px;border-radius:8px;margin-left:6px}
+      table{width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid #e0e0e0}
+      thead tr{background:#1a2744;color:#fff}
+      th{padding:5px 8px;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.03em}
+      td{padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+      tr:nth-child(even) td{background:#fafafa}
+      .project-name{font-weight:600;max-width:280px}
+      .amount{text-align:right;font-weight:600}
+      .overdue{color:#dc2626;font-weight:700}
+      @media print{body{padding:10px}@page{margin:1.5cm;size:A4}}
+    </style>
+    </head><body>
+    <div class="header">
+      <div class="header-left">
+        <h1>⚡ Action Centre</h1>
+        <p>RSR Constructions · Pending project actions requiring follow-up</p>
+      </div>
+      <div class="header-right">
+        <div style="font-weight:700;color:#1a2744">${dateStr}</div>
+        <div>${totalActions} pending action${totalActions!==1?'s':''}</div>
+      </div>
+    </div>
+    ${body}
+    <div style="margin-top:24px;padding-top:10px;border-top:1px solid #e0e0e0;font-size:10px;color:#999;text-align:center">
+      RSR Constructions Tracker · Exported ${dateStr} · For internal use only
+    </div>
+    </body></html>`;
+
+    const win=window.open('','_blank');
+    if(win){
+      win.document.write(html);
+      win.document.close();
+      setTimeout(()=>win.print(),600);
+    }
+  }
 }
 
 // ─── DASHBOARD ALERT ─────────────────────────────────
