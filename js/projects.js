@@ -328,6 +328,8 @@ function renderDetail(id){
     <!-- Document Vault -->
     <div id="doc-vault-${id}">${typeof renderDocVault==='function'?renderDocVault(p,true):''}</div>
 
+    ${p.jvDate && typeof renderProjectWEXSection==='function' ? renderProjectWEXSection(p) : ''}
+
     <!-- Work Progress Photo Timeline (all contractor updates with dates + photos) -->
     ${(p.contractorUpdates&&p.contractorUpdates.filter(u=>!isArchived(u)).length>0)?`
     <div class="card" style="margin-bottom:14px">
