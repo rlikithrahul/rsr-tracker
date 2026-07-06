@@ -445,40 +445,88 @@ async function deleteWEXEntry(wexId,pid){
 }
 
 // ─── TAB VIEW ─────────────────────────────────────────
+let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar'
+
 async function renderWEX(){
   const el=document.getElementById('sec-wex'); if(!el) return;
   if(!CU||!CU.isSuperAdmin){el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div></div></div>';return;}
   el.innerHTML='<div class="wrap"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>';
   await loadWEXData(); await loadWEXCustomTypes();
+  _renderWEXTab(el);
+}
+
+function _renderWEXTab(el){
   const allItems=getAllWEXItems();
   const records=D.wexData.records||[];
   const fys=[...new Set(records.map(r=>r.fy).filter(Boolean))].sort();
   const firms=[...new Set(records.map(r=>r.firm).filter(Boolean))].sort();
+
   const byFY={};
+  const byFYWorkType={};
+
   records.forEach(r=>{
-    const fy=r.fy||'Unknown',firm=r.firm||'Unknown';
-    if(!byFY[fy]) byFY[fy]={firms:{},count:0,value:0};
+    const fy=r.fy||'Unknown', firm=r.firm||'Unknown';
+    if(!byFY[fy]) byFY[fy]={firms:{},count:0,value:0,qtys:{}};
     if(!byFY[fy].firms[firm]) byFY[fy].firms[firm]={qtys:{},count:0,value:0};
-    byFY[fy].firms[firm].count++;byFY[fy].firms[firm].value+=r.workValue||0;
-    byFY[fy].count++;byFY[fy].value+=r.workValue||0;
-    Object.entries(r.quantities||{}).forEach(([k,v])=>{byFY[fy].firms[firm].qtys[k]=(byFY[fy].firms[firm].qtys[k]||0)+v;});
+    byFY[fy].firms[firm].count++;
+    byFY[fy].firms[firm].value+=r.workValue||0;
+    byFY[fy].count++; byFY[fy].value+=r.workValue||0;
+    Object.entries(r.quantities||{}).forEach(([k,v])=>{
+      byFY[fy].firms[firm].qtys[k]=(byFY[fy].firms[firm].qtys[k]||0)+v;
+      byFY[fy].qtys[k]=(byFY[fy].qtys[k]||0)+v;
+    });
+
+    // Work type — use record workType first, then pull from linked project
+    const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
+    let workTypes=[];
+    if(r.workType&&r.workType.trim()) workTypes=[r.workType.trim()];
+    else if(p&&p.types&&p.types.length) workTypes=[...p.types];
+    else if(p&&p.type) workTypes=p.type.split(',').map(t=>t.trim()).filter(Boolean);
+    if(!workTypes.length) workTypes=['Other'];
+
+    if(!byFYWorkType[fy]) byFYWorkType[fy]={};
+    workTypes.forEach(wt=>{
+      if(!byFYWorkType[fy][wt]) byFYWorkType[fy][wt]={value:0,count:0};
+      byFYWorkType[fy][wt].value+=r.workValue||0;
+      byFYWorkType[fy][wt].count++;
+    });
   });
+
+  // Find peak FY per quantity
+  const peakFY={};
+  allItems.forEach(item=>{
+    let best={fy:null,value:0};
+    Object.entries(byFY).forEach(([fy,d])=>{const v=d.qtys[item.key]||0;if(v>best.value) best={fy,value:v};});
+    if(best.fy) peakFY[item.key]=best;
+  });
+
+  // Find peak FY per work type
+  const allWorkTypes=[...new Set(Object.values(byFYWorkType).flatMap(d=>Object.keys(d)))].sort();
+  const peakWorkTypeFY={};
+  allWorkTypes.forEach(wt=>{
+    let best={fy:null,value:0};
+    Object.entries(byFYWorkType).forEach(([fy,d])=>{const v=d[wt]?.value||0;if(v>best.value) best={fy,value:v};});
+    if(best.fy) peakWorkTypeFY[wt]=best;
+  });
+
+  // ─── ANNUAL SUMMARY ───────────────────────────────────
   const summaryHTML=Object.keys(byFY).sort().reverse().map(fy=>{
     const d=byFY[fy];
-    const merged={};
-    Object.values(d.firms).forEach(fd=>Object.entries(fd.qtys).forEach(([k,v])=>{merged[k]=(merged[k]||0)+v;}));
-    const qRows=allItems.filter(i=>merged[i.key]>0).map(i=>`<tr>
-      <td style="padding:6px 10px;font-size:12px">${i.label}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${i.unit}</td>
-      ${firms.map(firm=>{const v=byFY[fy].firms[firm]?.qtys[i.key];return `<td style="padding:6px 10px;text-align:right;font-size:12px;font-weight:600">${v?v.toFixed(2):'—'}</td>`;}).join('')}
-      <td style="padding:6px 10px;text-align:right;font-size:13px;font-weight:800;color:var(--navy)">${merged[i.key].toFixed(2)}</td>
-    </tr>`).join('');
+    const qRows=allItems.filter(i=>(d.qtys[i.key]||0)>0).map(i=>{
+      const isPeak=peakFY[i.key]?.fy===fy;
+      return `<tr style="${isPeak?'background:#fef9c3':''}">
+        <td style="padding:6px 10px;font-size:12px">${i.label}${isPeak?'<span style="font-size:10px;background:#facc15;color:#713f12;padding:1px 7px;border-radius:8px;margin-left:6px;font-weight:700">★ Best</span>':''}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${i.unit}</td>
+        ${firms.map(firm=>{const v=byFY[fy].firms[firm]?.qtys[i.key];return `<td style="padding:6px 10px;text-align:right;font-size:12px;font-weight:600">${v?v.toFixed(2):'—'}</td>`;}).join('')}
+        <td style="padding:6px 10px;text-align:right;font-size:${isPeak?'14':'13'}px;font-weight:800;color:${isPeak?'#b45309':'var(--navy)'}">${(d.qtys[i.key]||0).toFixed(2)}</td>
+      </tr>`;
+    }).join('');
     return `<div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div><div style="font-size:16px;font-weight:800;color:var(--navy)">FY ${fy}</div>
           <div style="font-size:12px;color:var(--text3)">${d.count} project${d.count>1?'s':''} · <strong>${fmt(d.value)}</strong></div></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${Object.entries(d.firms).map(([fname,fd])=>`<span style="font-size:11px;padding:3px 10px;background:var(--surface2);border-radius:8px">${fname.replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao')}: ${fd.count}</span>`).join('')}
+          ${firms.map(f=>`<span style="font-size:11px;padding:3px 10px;background:var(--surface2);border-radius:8px">${f.replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao')}: ${byFY[fy].firms[f]?.count||0}</span>`).join('')}
         </div>
       </div>
       ${qRows?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px">
@@ -491,17 +539,89 @@ async function renderWEX(){
       </table></div>`:'<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No quantities.</div>'}
     </div>`;
   }).join('');
+
+  // ─── PEAK YEAR VIEW ───────────────────────────────────
+  const peakHTML=`<div class="card" style="margin-bottom:14px;border-top:3px solid #facc15">
+    <div style="font-size:13px;color:#713f12;margin-bottom:14px;padding:10px 12px;background:#fef9c3;border-radius:var(--rs)">
+      ★ <strong>Best Financial Year per Quantity</strong> — when a tender asks "minimum X in any one financial year", find your quantity below and use the highlighted FY as your reference.
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
+      <thead><tr style="background:var(--navy);color:#fff">
+        <th style="padding:8px 12px;text-align:left;font-size:11px">Quantity Item</th>
+        <th style="padding:8px 8px;text-align:center;font-size:11px">Unit</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px">Best FY</th>
+        <th style="padding:8px 12px;text-align:right;font-size:11px">Peak Amount</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px">All FYs</th>
+      </tr></thead>
+      <tbody>${allItems.filter(i=>peakFY[i.key]).map(i=>{
+        const peak=peakFY[i.key];
+        const allFYvals=Object.entries(byFY)
+          .filter(([,d])=>(d.qtys[i.key]||0)>0)
+          .sort((a,b)=>a[0].localeCompare(b[0]))
+          .map(([fy,d])=>`<span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${fy===peak.fy?'#facc15':'var(--surface2)'};color:${fy===peak.fy?'#713f12':'var(--text2)'};font-weight:${fy===peak.fy?700:400};margin-right:3px;white-space:nowrap;display:inline-block;margin-bottom:2px">${fy}: ${d.qtys[i.key].toFixed(2)}</span>`).join('');
+        return `<tr style="border-bottom:1px solid var(--surface2)">
+          <td style="padding:8px 12px;font-size:12px;font-weight:600">${i.label}</td>
+          <td style="padding:8px 8px;text-align:center;font-size:11px;color:var(--text3)">${i.unit}</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#facc15;color:#713f12;font-size:12px;font-weight:800;padding:3px 12px;border-radius:8px">FY ${peak.fy}</span></td>
+          <td style="padding:8px 12px;text-align:right;font-size:15px;font-weight:800;color:#b45309">${peak.value.toFixed(2)}</td>
+          <td style="padding:8px 12px;line-height:1.8">${allFYvals}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+
+  // ─── SIMILAR WORKS VIEW ───────────────────────────────
+  const similarHTML=`<div class="card" style="margin-bottom:14px;border-top:3px solid #7c3aed">
+    <div style="font-size:13px;color:#6d28d9;margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border-radius:var(--rs)">
+      🏗️ <strong>Similar Nature of Work — Value per FY</strong> — when a tender asks "similar works value ≥ ₹X in any one FY for this work type", use the highlighted FY for your reference.
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
+      <thead><tr style="background:#7c3aed;color:#fff">
+        <th style="padding:8px 12px;text-align:left;font-size:11px">Work Type</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px">Best FY</th>
+        <th style="padding:8px 12px;text-align:right;font-size:11px">Peak Value (₹)</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px">All FYs</th>
+      </tr></thead>
+      <tbody>${allWorkTypes.map(wt=>{
+        const peak=peakWorkTypeFY[wt]; if(!peak) return '';
+        const allFYvals=Object.entries(byFYWorkType)
+          .filter(([,d])=>d[wt])
+          .sort((a,b)=>a[0].localeCompare(b[0]))
+          .map(([fy,d])=>`<span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${fy===peak.fy?'#ede9fe':'var(--surface2)'};color:${fy===peak.fy?'#7c3aed':'var(--text2)'};font-weight:${fy===peak.fy?700:400};margin-right:3px;white-space:nowrap;display:inline-block;margin-bottom:2px">${fy}: ${fmt(d[wt].value)} (${d[wt].count})</span>`).join('');
+        return `<tr style="border-bottom:1px solid var(--surface2)">
+          <td style="padding:8px 12px;font-size:13px;font-weight:700;color:var(--navy)">${wt}</td>
+          <td style="padding:8px 12px;text-align:center"><span style="background:#ede9fe;color:#7c3aed;font-size:12px;font-weight:800;padding:3px 12px;border-radius:8px">FY ${peak.fy}</span></td>
+          <td style="padding:8px 12px;text-align:right;font-size:15px;font-weight:800;color:#7c3aed">${fmt(peak.value)}</td>
+          <td style="padding:8px 12px;line-height:1.8">${allFYvals}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+
+  const tabs=[
+    {key:'summary',icon:'📊',label:'Annual Summary'},
+    {key:'peak',   icon:'★', label:'Best FY per Quantity'},
+    {key:'similar',icon:'🏗️',label:'Similar Works Value'},
+  ];
+
   el.innerHTML=`<div class="wrap">
     <div class="pg-hdr">
       <div><div class="pg-title">📐 Work Experience</div>
-        <div style="font-size:12px;color:var(--text3)">${records.length} entries · ${fys.length} FYs · Open projects to enter quantities</div>
+        <div style="font-size:12px;color:var(--text3)">${records.length} entries · ${fys.length} FYs · Open projects to add quantities</div>
       </div>
-      <button onclick="exportWEXToExcel()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export to Excel</button>
+      <button onclick="exportWEXToExcel()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export Excel</button>
     </div>
-    ${summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet.</div></div>'}
+    <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:var(--rs);padding:4px;flex-wrap:wrap">
+      ${tabs.map(t=>`<button onclick="_wexTab='${t.key}';_renderWEXTab(document.getElementById('sec-wex'))"
+        style="flex:1;min-width:120px;padding:8px 12px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;
+          background:${_wexTab===t.key?'#fff':'transparent'};color:${_wexTab===t.key?'var(--navy)':'var(--text3)'};
+          box-shadow:${_wexTab===t.key?'0 1px 4px rgba(0,0,0,.1)':'none'}">${t.icon} ${t.label}</button>`).join('')}
+    </div>
+    ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet.</div></div>'):''}
+    ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet.</div></div>'):''}
+    ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet.</div></div>'):''}
   </div>`;
 }
-
 // ─── EXPORT ───────────────────────────────────────────
 async function exportWEXToExcel(){
   if(!window.XLSX){try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}catch(e){toast('Could not load Excel','error');return;}}
