@@ -222,13 +222,13 @@ function getMissingFields(p){
   if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
   if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
   if(!p.boq || p.boq.length===0) missing.push('BOQ Items');
-  if((p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) missing.push('ASD Amount (required — bid % above 25%)');
+  if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) missing.push('ASD Amount (required — bid % above 25%)');
   return missing;
 }
 function isIncomplete(p){
   if(p._importedFrom==='bulk_excel' && getMissingFields(p).length>0) return true;
   // ASD missing on high-bid projects is always flagged, regardless of import source
-  if((p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) return true;
+  if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) return true;
   return false;
 }
 

@@ -391,8 +391,8 @@ function buildToBeAgreement(){
     const bidPct = p.bidPct||0;
     const agreeAmt = estimated * (1 + bidPct/100);
     const emd = Math.round(agreeAmt * 0.015);
-    const asdRequired = bidPct > 25;
-    const asdAmt = asdRequired ? Math.round(estimated * ((bidPct-25)/100)) : 0;
+    const asdRequired = Math.abs(bidPct) > 25;
+    const asdAmt = asdRequired ? Math.round(estimated * ((Math.abs(bidPct)-25)/100)) : 0;
     return [
       i+1, getProjectFirm(p), p.name||'—', p.tender||'—',
       c?c.name:'—', (p.status||'active').toUpperCase(),
@@ -604,7 +604,7 @@ function getReportData(type, fy){
           const est=p.estimated||0, bid=p.bidPct||0;
           const agAmt=Math.round(est*(1+bid/100));
           const emd=Math.round(agAmt*0.015);
-          const asd=bid>25, asdAmt=asd?Math.round(est*((bid-25)/100)):0;
+          const asd=Math.abs(bid)>25, asdAmt=asd?Math.round(est*((Math.abs(bid)-25)/100)):0;
           return [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',c?c.name:'—',
             est?fmt(est):'—',`${bid}%`,agAmt?fmt(agAmt):'—',
             emd?fmt(emd):'—',asd?'YES ⚠️':'No',asd?fmt(asdAmt):'—',

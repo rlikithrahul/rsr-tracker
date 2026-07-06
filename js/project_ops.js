@@ -695,14 +695,14 @@ async function saveEditProject(){
   p.contractorId = document.getElementById('ep-cont').value;
   p.status = document.getElementById('ep-status').value;
 
-  // ASD validation: any bid % above 25% MUST have an ASD amount entered
-  // ASD = (bidPct - 25)% of estimated value, paid as additional security deposit
-  if(p.bidPct > 25 && (!p.asd || p.asd <= 0)){
+  // ASD validation: bid % more than 25% above OR below estimate requires ASD
+  if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd <= 0)){
+    const bidDir = (p.bidPct||0) < 0 ? 'below' : 'above';
     const proceed = await showConfirm({
       title:'⚠️ ASD Amount Missing',
-      message:'This project is quoted at <strong>'+p.bidPct+'%</strong> (above 25%). '
-        +'Tenders quoted above 25% require an <strong>Additional Security Deposit (ASD)</strong> — '
-        +'roughly <strong>'+(p.bidPct-25).toFixed(2)+'%</strong> of the estimated value.<br><br>'
+      message:'This project is quoted at <strong>'+p.bidPct+'%</strong> (more than 25% '+bidDir+' estimate). '
+        +'Tenders deviating more than 25% from the estimate require an <strong>Additional Security Deposit (ASD)</strong> — '
+        +'roughly <strong>'+(Math.abs(p.bidPct||0)-25).toFixed(2)+'%</strong> of the estimated value.<br><br>'
         +'You have not entered an ASD amount. Continue anyway, or go back and enter it?',
       confirmLabel:'Continue without ASD',
       cancelLabel:'Go back and add ASD'
