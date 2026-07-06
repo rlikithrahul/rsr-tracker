@@ -241,8 +241,8 @@ function renderExpectedJVSection(allProjects){
   const thisLabel = months[thisM]+' '+thisY;
   const nextLabel = months[nextM]+' '+nextY;
 
-  const thisProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&(p.expectedJVMonth===thisKey||p.expectedJVMonth<thisKey));
-  const nextProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&p.expectedJVMonth===nextKey);
+  const thisProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&projStatus(p)!=='completed'&&(p.expectedJVMonth===thisKey||p.expectedJVMonth<thisKey));
+  const nextProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&projStatus(p)!=='completed'&&p.expectedJVMonth===nextKey);
 
   const buildTable = (projects, monthKey) => {
     if(!projects.length) return '<div style="font-size:12px;color:var(--text3);padding:8px;text-align:center;font-style:italic">None tagged</div>';

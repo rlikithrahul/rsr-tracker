@@ -14,6 +14,7 @@ function renderPipeline(){
 
   // ── CATEGORISE EACH PROJECT ───────────────────────
   const stages = {
+    completed_no_jv: [], // Status = completed but no JV uploaded yet — needs follow-up
     ea_pending:      [], // JV received, no EA number yet
     asd_to_apply:    [], // EA received, ASD exists, not applied
     wec_to_apply:    [], // EA received, WEC not applied
@@ -47,7 +48,13 @@ function renderPipeline(){
       daysTo2yr = Math.round((twoYrs-today)/86400000);
     }
 
-    if(!hasJV) return; // Running projects — skip, not in pipeline
+    // Completed but no JV yet — work is done but JV document not received/uploaded
+    if(!hasJV && projStatus(p)==='completed'){
+      stages.completed_no_jv.push(p);
+      return;
+    }
+
+    if(!hasJV) return; // Active/running projects — skip, not in pipeline yet
 
     // Stage 1: JV received, waiting for EA
     if(hasJV && !hasEA){
@@ -113,6 +120,15 @@ function renderPipeline(){
 
   // ── STAGE DEFINITIONS ────────────────────────────
   const stageDefs = [
+    {
+      key:'completed_no_jv',
+      icon:'✅',
+      title:'Completed — JV Not Yet Uploaded',
+      color:'#dc2626',
+      bg:'#fef2f2',
+      desc:'Work status marked as Completed but JV document not yet received/uploaded. Follow up with department to collect the JV.',
+      action:'Collect JV from department and upload it'
+    },
     {
       key:'ea_pending',
       icon:'🔢',
@@ -367,6 +383,7 @@ async function exportActionCentre(format){
 
   // Rebuild stage data (same logic as renderPipeline)
   const stageDefs = [
+    {key:'completed_no_jv',label:'Completed — JV Not Uploaded',  priority:'🔴 Urgent'},
     {key:'ea_pending',    label:'Awaiting EA Number',          priority:'🔴 Urgent'},
     {key:'asd_to_apply',  label:'ASD Refund — Apply Now',      priority:'🔴 Urgent'},
     {key:'wec_to_apply',  label:'Apply for WEC',               priority:'🟡 Action Needed'},
@@ -388,7 +405,10 @@ async function exportActionCentre(format){
     const asdAmt=p.asd||0;
     let daysTo2yr=null;
     if(p.jvDate){const t=new Date(p.jvDate);t.setFullYear(t.getFullYear()+2);daysTo2yr=Math.round((t-today)/86400000);}
-    if(!hasJV) return;
+    if(!hasJV){
+      if(typeof projStatus==='function'&&projStatus(p)==='completed') stages.completed_no_jv.push(p);
+      return;
+    }
     if(!hasEA) stages.ea_pending.push(p);
     else if(asdAmt>0&&!p.asdRefundApplied&&!p.asdRefundReceived) stages.asd_to_apply.push(p);
     else if(!p.wecApplied&&!p.wecReceived) stages.wec_to_apply.push(p);
