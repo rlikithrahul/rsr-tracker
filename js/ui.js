@@ -838,7 +838,7 @@ function buildSidebar(isSuperAdmin){
   if(!linksEl) return;
 
   const tabs = isSuperAdmin
-    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧮', label:'GST Calc'}, {i:11, icon:'📐', label:'Work Experience'}]
+    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧮', label:'GST Calc'}, {i:11, icon:'📐', label:'Work Experience'}, {i:12, icon:'📋', label:'Board Meeting'}]
     : SIDEBAR_TABS;
 
   linksEl.innerHTML = tabs.map(t=>`
@@ -887,7 +887,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -905,6 +905,7 @@ function ownerTab(i){
   if(i===9) renderPipeline();
   if(i===10) renderGSTCalc();
   if(i===11 && typeof renderWEX==='function') renderWEX();
+  if(i===12 && typeof renderMeeting==='function') renderMeeting();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();
@@ -949,7 +950,7 @@ function goBack(){
   const targetTab = navHistory.tab;
   atab = targetTab; dpid = null;
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===targetTab));
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-meeting'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[targetTab];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');

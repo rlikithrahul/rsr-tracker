@@ -14,17 +14,21 @@ function renderPipeline(){
 
   // ── CATEGORISE EACH PROJECT ───────────────────────
   const stages = {
-    completed_no_jv: [], // Status = completed but no JV uploaded yet — needs follow-up
-    ea_pending:      [], // JV received, no EA number yet
-    asd_to_apply:    [], // EA received, ASD exists, not applied
-    wec_to_apply:    [], // EA received, WEC not applied
-    wec_applied:     [], // WEC applied, awaiting certificate
-    payment_pending: [], // WEC received, awaiting GVMC payment
-    gst_pending:     [], // Payment received, GST not filed
-    emd_overdue:     [], // Past 2yr from JV, refund not applied
-    emd_to_apply:    [], // Within 90 days of 2yr mark
-    emd_applied:     [], // Applied, awaiting refund
-    all_clear:       [], // Everything done
+    completed_no_jv:  [], // Completed but no JV uploaded
+    jv_incomplete:    [], // JV uploaded but number/amount/EMD/FSD missing
+    asd_ea_pending:   [], // ASD-eligible, waiting for EA (urgent — money at stake)
+    asd_to_apply:     [], // EA received, ASD exists, not yet applied
+    ea_pending:       [], // JV received, no EA number yet
+    wec_to_apply:     [], // EA received, WEC not applied
+    wec_applied:      [], // WEC applied, awaiting certificate
+    wex_pending:      [], // WEC document uploaded but quantities not entered
+    payment_pending:  [], // WEC received, awaiting GVMC payment
+    gst_pending:      [], // Payment received, GST not filed
+    emd_overdue:      [], // Past 2yr from JV, refund not applied
+    emd_to_apply:     [], // Within 90 days of 2yr mark
+    emd_applied:      [], // Applied, awaiting refund
+    no_gencode:       [], // Has agreement date but no gen code
+    all_clear:        [], // Everything done
   };
 
   projects.forEach(p=>{
@@ -39,6 +43,11 @@ function renderPipeline(){
     const asdAmt = p.asd||0;
     const asdApplied = !!p.asdRefundApplied;
     const asdReceived = !!p.asdRefundReceived;
+    const asdEligible = Math.abs(p.bidPct||0) > 25;
+
+    // Gen code missing + has agreement date
+    const gc = typeof getGenCode==='function' ? getGenCode(p) : '';
+    if(p.agreeDate && !gc) stages.no_gencode.push(p);
 
     // Days until/since 2-year mark
     let daysTo2yr = null;
@@ -48,37 +57,58 @@ function renderPipeline(){
       daysTo2yr = Math.round((twoYrs-today)/86400000);
     }
 
-    // Completed but no JV yet — work is done but JV document not received/uploaded
+    // Completed but no JV yet
     if(!hasJV && projStatus(p)==='completed'){
       stages.completed_no_jv.push(p);
       return;
     }
 
-    if(!hasJV) return; // Active/running projects — skip, not in pipeline yet
+    if(!hasJV) return; // Running — not in pipeline yet
 
-    // Stage 1: JV received, waiting for EA
+    // JV uploaded but details missing
+    if(!p.jvNumber || !p.jvAmount) stages.jv_incomplete.push(p);
+
+    // ASD-eligible + NO EA yet — separate urgent bucket
+    if(asdEligible && !asdReceived && !hasEA){
+      stages.asd_ea_pending.push(p);
+      return;
+    }
+
+    // JV received, waiting for EA (non-ASD)
     if(hasJV && !hasEA){
       stages.ea_pending.push(p);
       return;
     }
 
-    // Stage 2+3: EA received
     if(hasEA){
       let placed = false;
 
-      // ASD refund to apply
+      // ASD to apply (EA received)
       if(asdAmt>0 && !asdApplied && !asdReceived){
         stages.asd_to_apply.push(p);
         placed = true;
       }
 
-      // WEC to apply (if not done)
+      // WEC status
       if(!wecReceived && !wecApplied){
         stages.wec_to_apply.push(p);
         placed = true;
       } else if(!wecReceived && wecApplied){
         stages.wec_applied.push(p);
         placed = true;
+      }
+
+      // WEC received but WEX quantities not entered
+      if(wecReceived){
+        const wecDoc = (p.docVault||{}).wec;
+        const hasWEXEntry = D.wexData &&
+          (D.wexData.records||[]).some(r=>
+            r.projectId===p.id || (gc && r.genCode===gc.toUpperCase())
+          );
+        if(wecDoc && !hasWEXEntry){
+          stages.wex_pending.push(p);
+          placed = true;
+        }
       }
 
       if(placed) return;
@@ -128,6 +158,33 @@ function renderPipeline(){
       bg:'#fef2f2',
       desc:'Work status marked as Completed but JV document not yet received/uploaded. Follow up with department to collect the JV.',
       action:'Collect JV from department and upload it'
+    },
+    {
+      key:'jv_incomplete',
+      icon:'📋',
+      title:'JV Details Incomplete',
+      color:'#f59e0b',
+      bg:'#fffbeb',
+      desc:'JV uploaded but JV Number or JV Amount is missing.',
+      action:'Open project → Fill in JV Details'
+    },
+    {
+      key:'asd_ea_pending',
+      icon:'💰',
+      title:'ASD Eligible — EA Number Pending',
+      color:'#dc2626',
+      bg:'#fef2f2',
+      desc:'These projects have ASD money waiting but EA number not yet received. Push department hard — ASD refund cannot be applied until EA is received.',
+      action:'Follow up urgently with department for EA number'
+    },
+    {
+      key:'no_gencode',
+      icon:'🔢',
+      title:'Gen Code Not Set',
+      color:'#6366f1',
+      bg:'#eef2ff',
+      desc:'Agreement date set but Gen Code not entered. Required for Work Experience tracking and tender applications.',
+      action:'Open project → Edit → Enter Gen Code'
     },
     {
       key:'ea_pending',
@@ -383,11 +440,15 @@ async function exportActionCentre(format){
 
   // Rebuild stage data (same logic as renderPipeline)
   const stageDefs = [
-    {key:'completed_no_jv',label:'Completed — JV Not Uploaded',  priority:'🔴 Urgent'},
+    {key:'completed_no_jv',label:'Completed — JV Not Uploaded',     priority:'🔴 Urgent'},
+    {key:'jv_incomplete',  label:'JV Details Incomplete',             priority:'🟡 Action Needed'},
+    {key:'asd_ea_pending', label:'ASD Eligible — EA Number Pending',  priority:'🔴 Urgent'},
+    {key:'no_gencode',     label:'Gen Code Not Set',                  priority:'🟡 Action Needed'},
     {key:'ea_pending',    label:'Awaiting EA Number',          priority:'🔴 Urgent'},
     {key:'asd_to_apply',  label:'ASD Refund — Apply Now',      priority:'🔴 Urgent'},
     {key:'wec_to_apply',  label:'Apply for WEC',               priority:'🟡 Action Needed'},
     {key:'wec_applied',   label:'WEC Applied — Awaiting',      priority:'🟡 Action Needed'},
+    {key:'wex_pending',   label:'WEX Quantities Not Entered',   priority:'🟡 Action Needed'},
     {key:'payment_pending',label:'Awaiting GVMC Payment',      priority:'🟡 Action Needed'},
     {key:'gst_pending',   label:'GST Filing Pending',          priority:'🟡 Action Needed'},
     {key:'emd_overdue',   label:'EMD/FSD Refund OVERDUE',      priority:'🔴 Urgent'},
