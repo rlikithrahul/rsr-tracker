@@ -449,7 +449,7 @@ let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar'
 
 async function renderWEX(){
   const el=document.getElementById('sec-wex'); if(!el) return;
-  if(!CU||!CU.isSuperAdmin){el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div></div></div>';return;}
+  if(!CU){el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Please log in.</div></div></div>';return;}
   el.innerHTML='<div class="wrap"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>';
   await loadWEXData(); await loadWEXCustomTypes();
   _renderWEXTab(el);
