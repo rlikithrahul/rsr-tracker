@@ -173,7 +173,7 @@ function makeSheet(headers, rows, title){
 // Projects with NO JV date — still in execution
 function buildRunningWorks(){
   const projects = D.projects
-    .filter(p=>!isArchived(p) && !p.jvDate)
+    .filter(p=>!isArchived(p) && !p.jvDate && projStatus(p)!=='completed')
     .sort((a,b)=>{
       // Agreement date ascending — earliest agreement first.
       // Projects with no agreement date yet go to the bottom (still pending agreement).
@@ -559,7 +559,7 @@ function getReportData(type, fy){
     case 'running':
       title = 'Running Works';
       headers = ['Sl No','Firm','Project Name','Tender ID','Contractor','Agreement Date','Estimated BOQ Value','Agreement Amount','Bid %','Max Fundable (70%)','Total Deployed','Cap Used %','Status'];
-      rows = D.projects.filter(p=>!isArchived(p)&&!p.jvDate)
+      rows = D.projects.filter(p=>!isArchived(p)&&!p.jvDate&&projStatus(p)!=='completed')
         .sort((a,b)=>{
           if(!a.agreeDate && !b.agreeDate) return (a.createdAt||'').localeCompare(b.createdAt||'');
           if(!a.agreeDate) return 1;
