@@ -91,8 +91,8 @@ let _refView = 'overview'; // 'overview' | 'emd' | 'fsd' | 'asd'
 async function renderRefunds(){
   const el = document.getElementById('sec-refunds');
   if(!el) return;
-  if(!CU||!CU.isSuperAdmin){
-    el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Super Admin only.</div></div></div>';
+  if(!CU){
+    el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Please log in.</div></div></div>';
     return;
   }
   _renderRefundsTab(el);

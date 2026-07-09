@@ -830,8 +830,6 @@ const SIDEBAR_TABS = [
   {i:7, icon:'🧾', label:'GST'},
   {i:8, icon:'🧱', label:'Material Credit'},
   {i:9, icon:'⚡', label:'Action Centre'},
-  {i:11, icon:'📐', label:'Work Experience'},
-  {i:13, icon:'🏦', label:'Deposit Refunds'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -841,7 +839,7 @@ function buildSidebar(isSuperAdmin){
 
   const tabs = isSuperAdmin
     ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧮', label:'GST Calc'}, {i:11, icon:'📐', label:'Work Experience'}, {i:12, icon:'📋', label:'Board Meeting'}, {i:13, icon:'🏦', label:'Deposit Refunds'}]
-    : SIDEBAR_TABS;
+    : [...SIDEBAR_TABS, {i:11, icon:'📐', label:'Work Experience'}, {i:13, icon:'🏦', label:'Deposit Refunds'}];
 
   linksEl.innerHTML = tabs.map(t=>`
     <button class="sidebar-link${t.i===0?' active':''}" id="sbl-${t.i}" onclick="ownerTab(${t.i});closeSidebar()">
@@ -953,10 +951,20 @@ function goBack(){
   const targetTab = navHistory.tab;
   atab = targetTab; dpid = null;
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===targetTab));
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-wex','sec-refunds'];
+
+  // Use the correct mainSecs based on role — must match buildSidebar logic
+  const isSA = CU&&CU.isSuperAdmin;
+  const mainSecs = isSA
+    ? ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds']
+    : ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-wex','sec-refunds'];
+
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[targetTab];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
+  else {
+    // Fallback — if tab index doesn't map (shouldn't happen), go to dashboard
+    document.getElementById('sec-dash')?.classList.remove('hidden');
+  }
   updateSidebarActive(targetTab);
 
   if(targetTab === 1){

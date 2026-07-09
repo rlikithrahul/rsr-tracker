@@ -111,7 +111,7 @@ function updateLetterPreview(pid){
 
   // Show letterhead space in preview
   const topNote = letterhead
-    ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:28px 0;margin-bottom:12px;font-family:sans-serif">[ Letterhead area — ~4cm ]</div>'
+    ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:34px 0;margin-bottom:12px;font-family:sans-serif">[ Letterhead area — ~5cm ]</div>'
     : '';
 
   document.getElementById('ltr-preview').innerHTML = topNote +
@@ -165,8 +165,8 @@ function downloadLetter(pid){
 
   // Build XML paragraphs
   const letterhead = document.getElementById('lf-letterhead')?.checked||false;
-  // 4cm = 2268 twips, normal = 1440 twips (1 inch)
-  const topMargin = letterhead ? 2268 : 1440;
+  // 5cm = 2835 twips (was 4cm = 2268 twips, increased by 1cm per request), normal = 1440 twips
+  const topMargin = letterhead ? 2835 : 1440;
 
   const xml = buildLetterXML({ firm, date, refs, work, jv, subject, body, extraLines });
   const docx = buildDOCX(xml, topMargin);

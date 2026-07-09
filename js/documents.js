@@ -8,14 +8,15 @@
 
 // Document slot definitions — every project has these
 const DOC_SLOTS = [
-  { id: 'jv',    label: 'Journal Voucher (JV)',          icon: '📋', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after work completion & recording' },
-  { id: 'ea',    label: 'EA Number',                     icon: '🔢', type: 'text', note: 'Accounts number — filled after 1-2 months of receiving JV' },
-  { id: 'gencode', label: 'Gen Code',                    icon: '🏷️', type: 'text', note: 'Unique generation code for this tender' },
-  { id: 'wec',   label: 'Work Experience Certificate',   icon: '🏆', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after certificate is issued' },
-  { id: 'wo',    label: 'Work Order',                    icon: '📄', accept: '.pdf,.jpg,.jpeg,.png', note: 'Original tender work order document' },
-  { id: 'other1',label: 'Other Document 1',              icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
-  { id: 'other2',label: 'Other Document 2',              icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
-  { id: 'other3',label: 'Other Document 3',              icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
+  { id: 'jv',       label: 'Journal Voucher (JV)',        icon: '📋', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after work completion & recording' },
+  { id: 'ea',       label: 'EA Number',                   icon: '🔢', type: 'text', note: 'Accounts number — filled after 1-2 months of receiving JV' },
+  { id: 'gencode',  label: 'Gen Code',                    icon: '🏷️', type: 'text', note: 'Unique generation code for this tender' },
+  { id: 'wec',      label: 'Work Experience Certificate', icon: '🏆', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after certificate is issued' },
+  { id: 'wo',       label: 'Work Order',                  icon: '📄', accept: '.pdf,.jpg,.jpeg,.png', note: 'Original tender work order document' },
+  { id: 'billform', label: 'Bill Form',                   icon: '🧾', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after JV & EA received — verify final JV amount' },
+  { id: 'other1',   label: 'Other Document 1',            icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
+  { id: 'other2',   label: 'Other Document 2',            icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
+  { id: 'other3',   label: 'Other Document 3',            icon: '📎', accept: '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx', customLabel: true },
 ];
 
 let uploadingDocPid = null;
@@ -142,8 +143,84 @@ async function handleDocUpload(evt, pid, slotId) {
     return;
   }
 
+  // For Bill Form — upload first, then ask about JV amount verification
+  if(slotId === 'billform'){
+    await _doDocUpload(file, pid, slotId, null);
+    evt.target.value = '';
+    // Show JV amount verification popup after upload
+    _showBillFormVerification(pid);
+    return;
+  }
+
   await _doDocUpload(file, pid, slotId, null);
   evt.target.value = '';
+}
+
+function _showBillFormVerification(pid){
+  const p = GP(pid); if(!p) return;
+  const currentJVAmt = p.jvAmount||0;
+  let modal = document.getElementById('modal-billform-verify');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-billform-verify'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="mbox" style="max-width:440px">
+    <div class="mhdr"><h2>🧾 Bill Form — Verify JV Amount</h2><button class="mx" onclick="CM('modal-billform-verify')">✕</button></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Bill Form uploaded. Please verify: is the final JV amount on the Bill Form the same as the current JV amount?
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--text2)">Current JV Amount</span>
+      <span style="font-size:16px;font-weight:800;color:var(--navy)">${fmt(currentJVAmt)}</span>
+    </div>
+    <div class="fg" id="billform-new-amt-section" style="display:none">
+      <label>Final JV Amount on Bill Form (₹)</label>
+      <input type="number" id="billform-new-amt" placeholder="Enter corrected amount"
+        style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-family:'Inter',sans-serif">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn" onclick="CM('modal-billform-verify')" style="color:var(--text3)">Skip for now</button>
+      <button class="btn" onclick="document.getElementById('billform-new-amt-section').style.display='block';this.style.display='none'"
+        style="background:#fef2f2;border-color:var(--red);color:var(--red)">
+        ✗ Amount is Different
+      </button>
+      <button class="btn btn-green" onclick="saveBillFormAmt('${pid}',false)">✓ Same Amount</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px" id="billform-save-btn" style="display:none">
+      <button class="btn btn-navy" onclick="saveBillFormAmt('${pid}',true)">Save Corrected Amount</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+  // Show save button when new amount section is visible
+  setTimeout(()=>{
+    const newAmtSection = document.getElementById('billform-new-amt-section');
+    const saveBtn = document.getElementById('billform-save-btn');
+    if(newAmtSection && saveBtn){
+      const obs = new MutationObserver(()=>{ saveBtn.style.display = newAmtSection.style.display==='block'?'flex':'none'; });
+      obs.observe(newAmtSection, {attributes:true, attributeFilter:['style']});
+    }
+  },100);
+}
+
+async function saveBillFormAmt(pid, isDifferent){
+  const p = GP(pid); if(!p) return;
+  if(isDifferent){
+    const newAmt = parseFloat(document.getElementById('billform-new-amt')?.value)||0;
+    if(!newAmt){ toast('Please enter the corrected amount','error'); return; }
+    const oldAmt = p.jvAmount||0;
+    p.jvAmount = newAmt;
+    p.billFormAmtNote = `Bill Form corrected JV amount from ${fmt(oldAmt)} to ${fmt(newAmt)}`;
+    p.billFormVerified = true;
+    await saveProjectDB(p,{type:'billform_correction',amount:newAmt,ref:null,meta:{oldAmt}});
+    logActivity({category:'project',action:'billform_correction',projectId:pid,projectName:p.name,
+      description:`Bill Form: JV amount corrected from ${fmt(oldAmt)} to ${fmt(newAmt)}`});
+    toast(`✓ JV amount updated to ${fmt(newAmt)}`,'ok');
+  } else {
+    p.billFormVerified = true;
+    await saveProjectDB(p,{type:'billform_verified',amount:p.jvAmount||0,ref:null,meta:{}});
+    logActivity({category:'project',action:'billform_verified',projectId:pid,projectName:p.name,
+      description:'Bill Form uploaded — JV amount verified as same'});
+    toast('✓ JV amount verified','ok');
+  }
+  CM('modal-billform-verify');
+  renderDetail(pid);
 }
 
 async function confirmJVDate(){

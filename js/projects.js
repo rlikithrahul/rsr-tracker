@@ -219,6 +219,15 @@ function renderDetail(id){
       </div>
     </div>` : ''}
 
+    ${(p.documents?.billform && !p.billFormVerified) ? `<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:16px;line-height:1">🧾</div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#92400e;font-size:12px;margin-bottom:4px">Bill Form Uploaded — JV Amount Not Verified</div>
+        <div style="font-size:11px;color:#92400e;margin-bottom:6px">Please confirm whether the final JV amount on the Bill Form matches the recorded JV amount of ${fmt(p.jvAmount||0)}.</div>
+        <button onclick="_showBillFormVerification('${p.id}')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Verify JV Amount →</button>
+      </div>
+    </div>` : ''}
+
     <!-- NEW HEADER: compact back + meta + project name -->
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
