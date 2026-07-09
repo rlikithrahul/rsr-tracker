@@ -396,3 +396,93 @@ async function backupAllData(){
     toast('Backup failed: ' + e.message, 'error', 5000);
   }
 }
+
+// ─── BULK TALLY DATE CORRECTION ──────────────────────
+// Fixes dates on all Tally-imported transactions that were shifted
+// one day back due to the IST timezone bug in parseTallyDate().
+// Safe to run multiple times — tracks which releases have been corrected.
+
+function openBulkDateFix(){
+  // First do a dry run to count how many would be affected
+  let count = 0;
+  const preview = [];
+  D.projects.forEach(p=>{
+    (p.releases||[]).filter(r=>r.source==='tally'&&!r._dateCorrected&&r.date).forEach(r=>{
+      count++;
+      if(preview.length < 5){
+        preview.push(`${r.date} → ${_shiftDateByOne(r.date)} (Vch #${r.ref||'—'}, ${fmt(r.amount)})`);
+      }
+    });
+  });
+
+  let modal = document.getElementById('modal-bulk-date-fix');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-bulk-date-fix'; document.body.appendChild(modal); }
+
+  modal.innerHTML = `<div class="mbox" style="max-width:500px">
+    <div class="mhdr"><h2>📅 Bulk Date Correction</h2><button class="mx" onclick="CM('modal-bulk-date-fix')">✕</button></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      The Tally import had a timezone bug where all dates were shifted <strong>1 day back</strong> (e.g. 4 Jul was stored as 3 Jul). This will shift all existing Tally transactions forward by 1 day to correct them.
+    </div>
+    ${count===0
+      ? `<div style="background:#f0fdf4;border:1px solid var(--green);border-radius:var(--rs);padding:12px;color:var(--green);font-weight:700;margin-bottom:14px">✅ All transactions already corrected — nothing to fix.</div>`
+      : `<div style="background:#fffbeb;border:1px solid var(--amber);border-radius:var(--rs);padding:12px;margin-bottom:14px">
+          <div style="font-weight:700;color:#92400e;margin-bottom:8px">⚠️ ${count} Tally transaction${count>1?'s':''} will have their dates shifted +1 day</div>
+          <div style="font-size:11px;color:#92400e;margin-bottom:6px">Preview (first ${Math.min(5,preview.length)}):</div>
+          ${preview.map(p=>`<div style="font-size:11px;font-family:monospace;color:#713f12">${p}</div>`).join('')}
+          ${count>5?`<div style="font-size:11px;color:#92400e;margin-top:4px">... and ${count-5} more</div>`:''}
+        </div>`
+    }
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">
+      This action is safe and reversible — each transaction is marked as corrected so it won't be shifted again if you run this twice. The correction is saved to Supabase immediately.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="CM('modal-bulk-date-fix')">Cancel</button>
+      ${count>0?`<button class="btn btn-navy" onclick="runBulkDateFix()">Fix ${count} Transaction${count>1?'s':''}</button>`:''}
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+function _shiftDateByOne(dateStr){
+  // Add exactly 1 day to a YYYY-MM-DD string without any timezone issues
+  const parts = dateStr.split('-');
+  const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2])+1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+async function runBulkDateFix(){
+  CM('modal-bulk-date-fix');
+  setBusy(true,'Correcting transaction dates…');
+
+  const projectsTouched = new Set();
+  let corrected = 0;
+
+  D.projects.forEach(p=>{
+    (p.releases||[]).filter(r=>r.source==='tally'&&!r._dateCorrected&&r.date).forEach(r=>{
+      r.date = _shiftDateByOne(r.date);
+      r._dateCorrected = true; // mark so we never shift again
+      corrected++;
+      projectsTouched.add(p.id);
+    });
+  });
+
+  // Save all touched projects
+  let saved = 0;
+  for(const pid of projectsTouched){
+    const p = D.projects.find(x=>x.id===pid);
+    if(p){
+      try{
+        await saveProjectDB(p,{type:'bulk_date_correction',amount:0,ref:null,meta:{corrected:true}});
+        saved++;
+      }catch(e){ console.error('Failed to save',pid,e); }
+    }
+  }
+
+  setBusy(false);
+  logActivity({category:'system',action:'bulk_date_correction',description:`Bulk date correction: ${corrected} Tally transactions shifted +1 day across ${saved} projects`});
+  toast(`✅ Corrected ${corrected} transaction${corrected>1?'s':''} across ${saved} projects`,'ok',6000);
+  if(typeof renderFunds==='function') renderFunds();
+}
