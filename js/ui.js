@@ -830,6 +830,8 @@ const SIDEBAR_TABS = [
   {i:7, icon:'🧾', label:'GST'},
   {i:8, icon:'🧱', label:'Material Credit'},
   {i:9, icon:'⚡', label:'Action Centre'},
+  {i:11, icon:'📐', label:'Work Experience'},
+  {i:13, icon:'🏦', label:'Deposit Refunds'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -951,7 +953,7 @@ function goBack(){
   const targetTab = navHistory.tab;
   atab = targetTab; dpid = null;
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===targetTab));
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-meeting'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-wex','sec-refunds'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[targetTab];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
