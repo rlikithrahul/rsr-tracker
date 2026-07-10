@@ -579,16 +579,17 @@ function _renderWEXTab(el){
       byFY[fy].qtys[k]=(byFY[fy].qtys[k]||0)+v;
     });
 
-    // Work type — always prefer the linked project's official work type(s)
-    // (the standardized list managed in Settings) over the raw free-text
-    // workType string that came in with older imported/historical records.
-    // Only fall back to that raw text when a record has no matching project
-    // at all — we never invent or split into ad-hoc categories on our own.
+    // Work type — ONLY ever use the standardized list managed in Settings
+    // (a project's official p.types/p.type). We never invent a bucket from
+    // a record's raw free-text workType (old imported records carry things
+    // like "box culvert", "GEDDA RAFT/WALLS", "cc road & cc drains" — those
+    // are not real categories, just how each tender happened to be typed
+    // in the original Excel). If a record can't be matched to a live
+    // project at all, it goes to 'Other' rather than creating a new group.
     const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
     let workTypes=[];
     if(p&&p.types&&p.types.length) workTypes=[...p.types];
     else if(p&&p.type) workTypes=p.type.split(',').map(t=>t.trim()).filter(Boolean);
-    else if(r.workType&&r.workType.trim()) workTypes=[r.workType.trim()];
     if(!workTypes.length) workTypes=['Other'];
 
     if(!byFYWorkType[fy]) byFYWorkType[fy]={};
