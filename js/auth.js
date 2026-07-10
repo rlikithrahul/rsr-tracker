@@ -188,7 +188,8 @@ function enterOwner(){
   Promise.all([
     loadEMIData().catch(()=>{}),
     loadGSTData().catch(()=>{}),
-    loadCustomWorkTypes().catch(()=>{})
+    loadCustomWorkTypes().catch(()=>{}),
+    loadCustomLabourTypes().catch(()=>{})
   ]).then(()=>{
     // Try restoring previous session position
     if(typeof restoreSessionState === 'function' && restoreSessionState()) return;
@@ -225,6 +226,7 @@ function enterCont(){
     <button class="bn" id="cbn-2" onclick="cTab(2)" style="${CU.isSupervisor?'display:none':''}"><div class="bn-icon">👥</div><div>Team</div></button>`;
   SP('page-cont'); cTab(0);
   startAutoRefresh();
+  loadCustomLabourTypes().catch(()=>{});
 }
 
 function cTab(i){

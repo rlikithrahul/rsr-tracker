@@ -365,7 +365,7 @@ function _refActionBtn(p,r,type){
 
 // ─── MARK REFUND RECEIVED ────────────────────────────
 async function markRefundReceived(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   const ok = await showConfirm({title:'Mark Refund Received?',message:`Mark EMD + FSD refund as received for <strong>${p.name.substring(0,40)}</strong>?`,confirmLabel:'Yes, Mark Received'});
   if(!ok) return;
   p.refundReceived=true; p.refundReceivedDate=new Date().toISOString().split('T')[0];

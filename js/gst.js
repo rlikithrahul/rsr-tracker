@@ -14,17 +14,13 @@ const GST_MONTHLY_DUE_DAY = 1; // 1st of every month for 2B upload
 
 // ─── DATA LOAD / SAVE ────────────────────────────────
 async function loadGSTData(){
-  try{
-    const row = await sbReq(`settings?key=eq.gst_data&select=value`, 'GET');
-    D.gstData = (row && row[0]) ? JSON.parse(row[0].value||'{}') : {monthly:{}, quarterly:{}};
-    if(!D.gstData.monthly) D.gstData.monthly = {};
-    if(!D.gstData.quarterly) D.gstData.quarterly = {};
-  }catch(e){ D.gstData = {monthly:{}, quarterly:{}}; }
+  D.gstData = await getSetting('gst_data', {monthly:{}, quarterly:{}});
+  if(!D.gstData.monthly) D.gstData.monthly = {};
+  if(!D.gstData.quarterly) D.gstData.quarterly = {};
 }
 
 async function saveGSTData(){
-  const payload = {key:'gst_data', value:JSON.stringify(D.gstData)};
-  await sbReq(`settings?key=eq.gst_data`, 'PATCH', payload);
+  await saveSetting('gst_data', D.gstData);
 }
 
 // ─── KEY HELPERS ─────────────────────────────────────

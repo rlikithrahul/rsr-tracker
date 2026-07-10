@@ -228,13 +228,13 @@ async function markWECApplied(pid){
   catch(e){ toast('Save failed','error'); }
 }
 async function markWECReceived(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   p.wecReceived=true; p.wecReceivedDate=new Date().toISOString().split('T')[0];
   try{ await saveProjectDB(p,{type:'wec_received',amount:0,ref:null,meta:{}}); renderDetail(pid); toast('✓ WEC received','ok'); }
   catch(e){ toast('Save failed','error'); }
 }
 async function markRefundApplied(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   const date=prompt('Date of refund application (YYYY-MM-DD):',new Date().toISOString().split('T')[0]);
   if(!date) return;
   p.refundApplied=true; p.refundAppliedDate=date;
@@ -242,13 +242,13 @@ async function markRefundApplied(pid){
   catch(e){ toast('Save failed','error'); }
 }
 async function markASDApplied(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   p.asdRefundApplied=true; p.asdRefundAppliedDate=new Date().toISOString().split('T')[0];
   try{ await saveProjectDB(p,{type:'asd_refund_applied',amount:p.asd||0,ref:null,meta:{}}); renderDetail(pid); toast('✓ ASD refund marked applied','ok'); }
   catch(e){ toast('Save failed','error'); }
 }
 async function markASDReceived(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   p.asdRefundReceived=true; p.asdRefundReceivedDate=new Date().toISOString().split('T')[0];
   try{ await saveProjectDB(p,{type:'asd_refund_received',amount:p.asd||0,ref:null,meta:{}}); renderDetail(pid); toast('✓ ASD refund received','ok'); }
   catch(e){ toast('Save failed','error'); }

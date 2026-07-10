@@ -693,6 +693,19 @@ async function clearUnmatchedFromCloud(){
 }
 
 async function matchAndImport(transactions){
+  // Tally import can touch any project by cost centre, and D.projects may
+  // currently only hold the lightweight dashboard summary (contractorUpdates
+  // photos stripped to placeholders, to keep the initial page load fast —
+  // see loadDBSummary). Mutating and saving that stripped version back
+  // would permanently destroy real photo data — and since a single import
+  // run can touch dozens of projects at once, that mistake would compound
+  // across all of them in one operation. Refresh every project to its true
+  // full record — one request, not N — before matching/mutating anything.
+  try{
+    const rows = await sbReq('projects?order=created_at','GET');
+    if(rows) D.projects = rows.map(r=>({...r.data, id:r.id}));
+  }catch(e){ /* fall back to whatever's already in memory if this fails */ }
+
   let matchedPayments=0, matchedReceipts=0, skipped=0, unmatchedCount=0;
   let corrected=0, reassigned=0;
   const skippedDuplicates = []; // track for review
@@ -916,7 +929,7 @@ function showDuplicateReviewModal(dupes){
 window._pendingDupes = [];
 
 async function forceImportDuplicate(idx, projId, tx){
-  const proj = GP(projId);
+  const proj = await GPFull(projId);
   if(!proj){ toast('Project not found','error'); return; }
   if(!proj.releases) proj.releases=[];
   const fp = txFingerprint(tx);
@@ -944,7 +957,7 @@ async function quickAssignUnmatched(pid, i, isReceipt){
   if(!pid){ toast('Project not found','error'); return; }
   const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
   const tx = queue[i]; if(!tx) return;
-  const proj = GP(pid); if(!proj) return;
+  const proj = await GPFull(pid); if(!proj) return;
   if(!proj.releases) proj.releases=[];
   const fp = txFingerprint(tx);
   proj.releases.push({
@@ -969,7 +982,7 @@ async function assignUnmatched(i, isReceipt){
   const tx=queue[i];
   const pid=document.getElementById(`um-assign-${isReceipt?'r':'p'}-${i}`)?.value;
   if(!pid){toast('Select a project first','error');return;}
-  const proj=GP(pid); if(!proj)return;
+  const proj=await GPFull(pid); if(!proj)return;
   if(!proj.releases) proj.releases=[];
   proj.releases.push({
     id:uid(),date:tx.date,amount:tx.amount,
@@ -1237,7 +1250,7 @@ async function runMonthlyVerification(transactions){
 
 async function importMissingTx(idx){
   const tx = window._monthlyMissing?.[idx]; if(!tx) return;
-  const proj = D.projects.find(p=>p.id===tx.projId); if(!proj) return;
+  const proj = await GPFull(tx.projId); if(!proj) return;
   if(!proj.releases) proj.releases=[];
   proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,
     method:tx.vchType||'Payment',ref:tx.vchNo,
@@ -1255,7 +1268,7 @@ async function importAllMissing(){
   if(!missing.length) return;
   if(!confirm(`Import all ${missing.length} missing transactions?`)) return;
   for(const tx of missing){
-    const proj = D.projects.find(p=>p.id===tx.projId); if(!proj) continue;
+    const proj = await GPFull(tx.projId); if(!proj) continue;
     if(!proj.releases) proj.releases=[];
     proj.releases.push({id:uid(),date:tx.date,amount:tx.amount,
       method:tx.vchType||'Payment',ref:tx.vchNo,

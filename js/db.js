@@ -38,15 +38,17 @@ async function sbReq(table, method, body, extra) {
 // a new duplicate row every single save. A later read that naively takes
 // "the first matching row" can then return an old/empty duplicate instead
 // of the latest save. That silent mismatch was the root cause behind
-// several "I added it and it just disappeared" bugs. These two helpers
-// never depend on that constraint existing: they always look up what's
-// really there, write to the exact row that exists by its id, and clean up
-// any already-created duplicates as they're found — so it's correct
-// forever after, regardless of what's already in the table today.
+// several "I added it and it just disappeared" bugs. This pair of helpers
+// never depends on that constraint existing, and — importantly — never
+// assumes the table has any particular column (like `id`) beyond `key` and
+// `value`, since that assumption is what broke this the first time round.
+// A PATCH filtered by key updates every row matching that key at once, so
+// even if duplicates already exist they all end up holding the same
+// (latest) value — self-healing without needing to target a specific row.
 
 async function getSettingRows(key){
   try{
-    const rows = await sbReq('settings?key=eq.'+encodeURIComponent(key)+'&order=id.desc','GET');
+    const rows = await sbReq('settings?key=eq.'+encodeURIComponent(key),'GET');
     return rows||[];
   }catch(e){ return []; }
 }
@@ -58,17 +60,14 @@ async function getSetting(key, fallback){
   try{ return JSON.parse(rows[0].value); }catch(e){ return fallback; }
 }
 
-// Writes value (any JSON-serializable data) for key, self-healing any
-// duplicate rows found along the way.
+// Writes value (any JSON-serializable data) for key. If the key already
+// has one or more rows, all of them get updated to the same value; if none
+// exist yet, one is created.
 async function saveSetting(key, value){
   const json = JSON.stringify(value);
   const rows = await getSettingRows(key);
   if(rows.length){
-    const keep = rows[0];
-    await sbReq('settings?id=eq.'+keep.id, 'PATCH', {value: json});
-    for(let i=1;i<rows.length;i++){
-      try{ await sbReq('settings?id=eq.'+rows[i].id, 'DELETE'); }catch(e){}
-    }
+    await sbReq('settings?key=eq.'+encodeURIComponent(key), 'PATCH', {value: json});
   } else {
     await sbReq('settings', 'POST', {key, value: json});
   }
@@ -195,6 +194,25 @@ async function fetchProjectFull(id) {
     }
   } catch(e) { console.error('fetchProjectFull failed:', e); }
   return GP(id);
+}
+
+// Safe accessor for quick-action buttons that live in LIST views (Action
+// Centre, Deposit Refunds, Dashboard alerts) rather than a project's own
+// detail page. Those pages load a lightweight summary of every project
+// (contractorUpdates photos stripped to placeholders, to keep the initial
+// load fast) — GP(id) alone would return that stripped version if the
+// project's full detail was never opened this session. Blindly mutating
+// and saving that stripped object would permanently overwrite the real
+// photos on the server with placeholders. This always fetches the true,
+// full, current record first, so a one-field "Mark as X" click from a list
+// can never destroy unrelated data — and as a side benefit, it also always
+// starts from the very latest server state, so it can't clobber a change
+// someone else just made either.
+async function GPFull(pid){
+  if(typeof dbOK!=='undefined' && dbOK){
+    try{ const fresh = await fetchProjectFull(pid); if(fresh) return fresh; }catch(e){}
+  }
+  return GP(pid);
 }
 
 async function saveContractorDB(c) {

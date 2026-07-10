@@ -4,8 +4,6 @@
 // Every delete is reversible for 7 days by Super Admin
 // ═══════════════════════════════════════════════════════
 
-const DELETED_BIN_KEY = 'rsr_deleted_bin_v1';
-
 // ─── CUSTOM CONFIRM DIALOG ────────────────────────────
 // Replaces browser confirm() with premium in-app dialog
 function showConfirm(options){
@@ -48,9 +46,17 @@ function showConfirm(options){
 }
 
 // ─── SOFT DELETE HELPERS ──────────────────────────────
-function saveToBin(type, data, projectId, projectName){
+// NOTE: this bin used to live in localStorage only, which meant a delete
+// made on one device/browser was invisible everywhere else — including to
+// Super Admin checking Settings from a different device — and vanished
+// completely if that browser's data was ever cleared. The whole point of a
+// "7-day recovery bin" is that it's reliably there when someone needs it,
+// so this now lives in Supabase like everything else that matters.
+const DELETED_BIN_KEY = 'rsr_deleted_bin_v1';
+
+async function saveToBin(type, data, projectId, projectName){
   try{
-    const bin = JSON.parse(localStorage.getItem(DELETED_BIN_KEY)||'[]');
+    const bin = await getSetting(DELETED_BIN_KEY, []);
     bin.unshift({
       id: (typeof uid==='function'?uid():Date.now().toString(36)),
       type, data, projectId, projectName,
@@ -60,27 +66,27 @@ function saveToBin(type, data, projectId, projectName){
     });
     // Keep only items not expired
     const valid = bin.filter(b=>new Date(b.expiresAt)>new Date());
-    localStorage.setItem(DELETED_BIN_KEY, JSON.stringify(valid.slice(0,200)));
+    await saveSetting(DELETED_BIN_KEY, valid.slice(0,200));
   }catch(e){}
 }
 
-function getDeletedBin(){
+async function getDeletedBin(){
   try{
-    const bin = JSON.parse(localStorage.getItem(DELETED_BIN_KEY)||'[]');
+    const bin = await getSetting(DELETED_BIN_KEY, []);
     return bin.filter(b=>new Date(b.expiresAt)>new Date());
   }catch(e){ return []; }
 }
 
-function removeFromBin(id){
+async function removeFromBin(id){
   try{
-    const bin = getDeletedBin().filter(b=>b.id!==id);
-    localStorage.setItem(DELETED_BIN_KEY, JSON.stringify(bin));
+    const bin = (await getDeletedBin()).filter(b=>b.id!==id);
+    await saveSetting(DELETED_BIN_KEY, bin);
   }catch(e){}
 }
 
 // ─── DELETED ITEMS PANEL (in Settings) ───────────────
-function renderDeletedBin(){
-  const bin = getDeletedBin();
+async function renderDeletedBin(){
+  const bin = await getDeletedBin();
   const el = document.getElementById('deleted-bin-wrap');
   if(!el) return;
 
@@ -116,7 +122,7 @@ function renderDeletedBin(){
 }
 
 async function restoreDeletedItem(binId){
-  const bin = getDeletedBin();
+  const bin = await getDeletedBin();
   const item = bin.find(b=>b.id===binId);
   if(!item){ toast('Item not found or expired','error'); return; }
 
@@ -127,13 +133,13 @@ async function restoreDeletedItem(binId){
     const pp = c.personalProjects.find(x=>x.id===item.data.id);
     if(pp) delete pp._archived;
     await saveContractorDB(c);
-    removeFromBin(binId);
-    renderDeletedBin();
+    await removeFromBin(binId);
+    await renderDeletedBin();
     toast('✓ Project restored successfully','ok');
     return;
   }
 
-  const p = GP(item.projectId);
+  const p = await GPFull(item.projectId);
   if(!p){ toast('Project not found','error'); return; }
 
   try{
@@ -166,8 +172,8 @@ async function restoreDeletedItem(binId){
       else p.workProgress.push(item.data);
       await saveProjectDB(p);
     }
-    removeFromBin(binId);
-    renderDeletedBin();
+    await removeFromBin(binId);
+    await renderDeletedBin();
     toast('✓ Item restored successfully','ok');
     if(typeof haptic==='function') haptic('success');
   }catch(e){ toast('Restore failed — try again','error'); }

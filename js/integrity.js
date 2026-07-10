@@ -469,11 +469,26 @@ async function runBulkDateFix(){
     });
   });
 
-  // Save all touched projects
+  // Save all touched projects — fetch each one's true full record first.
+  // This tool can run from the global Health Check modal without any of
+  // these projects' own detail pages having been opened this session, so
+  // D.projects may only hold the lightweight dashboard summary (with
+  // contractorUpdates photos stripped to placeholders to keep the initial
+  // load fast). Saving that stripped object back would permanently wipe
+  // real photo data — and since this loop can touch every project in the
+  // app in one pass, that mistake would compound across all of them at
+  // once instead of just one.
   let saved = 0;
   for(const pid of projectsTouched){
-    const p = D.projects.find(x=>x.id===pid);
+    const p = await GPFull(pid);
     if(p){
+      // Re-apply the same date correction to the freshly-fetched object,
+      // since the in-memory summary copy we corrected above may not be
+      // the same object GPFull just returned.
+      (p.releases||[]).filter(r=>r.source==='tally'&&!r._dateCorrected&&r.date).forEach(r=>{
+        r.date = _shiftDateByOne(r.date);
+        r._dateCorrected = true;
+      });
       try{
         await saveProjectDB(p,{type:'bulk_date_correction',amount:0,ref:null,meta:{corrected:true}});
         saved++;

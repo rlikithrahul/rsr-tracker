@@ -19,19 +19,33 @@ const DEFAULT_LABOUR_TYPES = [
 const LABOUR_STORAGE_KEY = 'rsr_labour_v1';
 const EXPENSE_STORAGE_KEY = 'rsr_expense_v1';
 
+const CUSTOM_LABOUR_KEY = 'rsr_custom_labour';
+
 // ─── GET CONTRACTOR LABOUR TYPES ─────────────────────
+// Custom labour types used to be saved to localStorage only — meaning a
+// type added on one phone/browser was invisible to everyone else and lost
+// if that device's storage was ever cleared. Now backed by Supabase like
+// everything else global. getLabourTypes() stays synchronous (reads an
+// in-memory cache loaded once at login via loadCustomLabourTypes()) so all
+// the existing render call sites don't need to become async.
+async function loadCustomLabourTypes(){
+  if(D.customLabourTypes) return D.customLabourTypes;
+  D.customLabourTypes = await getSetting(CUSTOM_LABOUR_KEY, []);
+  return D.customLabourTypes;
+}
+
 function getLabourTypes(){
-  const custom = JSON.parse(localStorage.getItem('rsr_custom_labour')||'[]');
+  const custom = D.customLabourTypes||[];
   return [...DEFAULT_LABOUR_TYPES, ...custom];
 }
 
-function addCustomLabourType(label){
+async function addCustomLabourType(label){
   if(!label.trim()) return;
-  const custom = JSON.parse(localStorage.getItem('rsr_custom_labour')||'[]');
+  if(!D.customLabourTypes) D.customLabourTypes=[];
   const id = 'custom_'+label.trim().toLowerCase().replace(/\s+/g,'_');
-  if(custom.some(c=>c.id===id)) return;
-  custom.push({id, label:label.trim(), icon:'👤', custom:true});
-  localStorage.setItem('rsr_custom_labour', JSON.stringify(custom));
+  if(D.customLabourTypes.some(c=>c.id===id)) return;
+  D.customLabourTypes.push({id, label:label.trim(), icon:'👤', custom:true});
+  await saveSetting(CUSTOM_LABOUR_KEY, D.customLabourTypes);
 }
 
 // ─── LOAD/SAVE LABOUR DATA ────────────────────────────
@@ -208,10 +222,10 @@ async function saveLabourEntry(pid, date){
 }
 
 // ─── ADD CUSTOM LABOUR TYPE ───────────────────────────
-function showAddCustomLabour(pid){
+async function showAddCustomLabour(pid){
   const label = prompt('Enter custom labour type name:');
   if(!label) return;
-  addCustomLabourType(label);
+  await addCustomLabourType(label);
   const wrap = document.getElementById('labour-tab-wrap');
   if(wrap) wrap.innerHTML = renderLabourTab(pid);
   toast(`✓ "${label}" added to labour types`,'ok');

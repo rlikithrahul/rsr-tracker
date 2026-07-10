@@ -471,7 +471,7 @@ function renderArchive(){
 }
 
 async function restoreProject(pid){
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   delete p._archived;
   delete p._archivedAt;
   try{

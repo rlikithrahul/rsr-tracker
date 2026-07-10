@@ -418,7 +418,7 @@ async function saveMatCredit(editId){
   if(!supplier){ toast('Enter supplier name','error'); return; }
   if(!amount){ toast('Enter invoice amount','error'); return; }
 
-  const p = GP(pid); if(!p) return;
+  const p = await GPFull(pid); if(!p) return;
   if(!p.materialCredits) p.materialCredits = [];
 
   if(editId){
@@ -511,7 +511,7 @@ function openClearMatCredit(pid, mid){
 }
 
 async function clearMatCredit(pid, mid){
-  const p = GP(pid); if(!p) return;
+  const p = await GPFull(pid); if(!p) return;
   const m = (p.materialCredits||[]).find(x=>x.id===mid); if(!m) return;
   const amt = parseFloat(document.getElementById('mc-clear-amt')?.value)||0;
   const date = document.getElementById('mc-clear-date')?.value;
@@ -536,7 +536,7 @@ async function clearMatCredit(pid, mid){
 
 async function deleteMatCredit(pid, mid){
   if(!confirm('Remove this material credit entry?')) return;
-  const p = GP(pid); if(!p) return;
+  const p = await GPFull(pid); if(!p) return;
   const m = (p.materialCredits||[]).find(x=>x.id===mid); if(!m) return;
   m._archived = true;
   try{
