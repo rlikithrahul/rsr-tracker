@@ -76,6 +76,8 @@ async function renderSettings(){
   }
 
   await loadStaff();
+  await loadCustomWorkTypes();
+  await loadWEXCustomTypes();
 
   const el = document.getElementById('sec-settings');
   if(!el) return;
@@ -98,6 +100,41 @@ async function renderSettings(){
           <div class="fg"><label>Password</label><input type="password" id="new-staff-pw" placeholder="Set their login password" autocomplete="new-password"></div>
         </div>
         <button class="btn btn-navy" onclick="addStaffMember()" style="margin-top:8px">+ Add Staff Member</button>
+      </div>
+    </div>
+
+    <!-- WORK TYPES -->
+    <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
+      <div class="st" style="margin-bottom:4px">🏷️ Work Types</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Add a new work type here once and it's immediately available when creating or editing <strong>any</strong> project — old or new. This is the single list used everywhere (project creation, Work Experience "Similar Works Value" grouping, etc.) so grouping always stays consistent.
+      </div>
+      <div id="worktypes-settings-list" style="margin-bottom:14px">${_renderWorkTypesSettingsList()}</div>
+      <div style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:14px">
+        <input type="text" id="new-worktype-input" placeholder="e.g. Park, Gym Equipment" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:'Inter',sans-serif" onkeydown="if(event.key==='Enter')addCustomWorkTypeFromSettings()">
+        <button class="btn btn-navy" onclick="addCustomWorkTypeFromSettings()">+ Add Work Type</button>
+      </div>
+    </div>
+
+    <!-- WORK EXPERIENCE QUANTITY TYPES -->
+    <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
+      <div class="st" style="margin-bottom:4px">📐 Work Experience Quantity Types</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Add a new quantity item here (e.g. under Steel: HYSD Steel, Fabricated Steel, SS 304 Steel) and it appears in the Work Experience entry form for <strong>every</strong> project, old and new.
+      </div>
+      <div id="wex-types-settings-list" style="margin-bottom:14px">${renderWEXTypesSettingsList()}</div>
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div class="frow">
+          <div class="fg"><label>Quantity Name</label><input type="text" id="new-wextype-label" placeholder="e.g. SS 304 Steel"></div>
+          <div class="fg"><label>Unit</label><input type="text" id="new-wextype-unit" placeholder="e.g. kg, cum, sqm, nos"></div>
+          <div class="fg"><label>Group</label>
+            <select id="new-wextype-group">
+              ${getAllWEXGroups().map(g=>`<option value="${g}">${g}</option>`).join('')}
+              <option value="__new__">+ New group…</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-navy" onclick="addWEXCustomTypeFromSettings()" style="margin-top:8px">+ Add Quantity Type</button>
       </div>
     </div>
 

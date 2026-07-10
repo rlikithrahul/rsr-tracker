@@ -13,18 +13,66 @@ function getAllWorkTypes(){
 }
 
 async function saveCustomWorkTypes(){
-  try{
-    await sbReq('settings?key=eq.custom_work_types','PATCH',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])});
-  }catch(e){
-    try{ await sbReq('settings','POST',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])}); }catch(e2){}
-  }
+  // Always POST with merge-duplicates upsert — a PATCH against a key that
+  // doesn't exist yet in the settings table returns 200 with 0 rows updated
+  // (PostgREST does not error on that), so a PATCH-then-fallback-to-POST
+  // pattern silently never creates the row on first use. POST-as-upsert
+  // (same pattern used successfully for WEX custom types) always works.
+  await sbReq('settings','POST',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])});
 }
 
 async function loadCustomWorkTypes(){
+  if(D.customWorkTypes) return D.customWorkTypes;
   try{
     const rows = await sbReq('settings?key=eq.custom_work_types','GET');
     if(rows&&rows[0]) D.customWorkTypes = JSON.parse(rows[0].value||'[]');
   }catch(e){}
+  if(!D.customWorkTypes) D.customWorkTypes=[];
+  return D.customWorkTypes;
+}
+
+async function removeCustomWorkType(idx){
+  if(!D.customWorkTypes||!D.customWorkTypes[idx]) return;
+  const t=D.customWorkTypes[idx];
+  if(!confirm(`Remove "${t}" from the work type list?\n(Projects already using this type keep it — it just won't be offered for new selections.)`)) return;
+  D.customWorkTypes.splice(idx,1);
+  await saveCustomWorkTypes();
+  const el=document.getElementById('worktypes-settings-list');
+  if(el) el.innerHTML=_renderWorkTypesSettingsList();
+}
+
+async function addCustomWorkTypeFromSettings(){
+  const inp=document.getElementById('new-worktype-input');
+  if(!inp) return;
+  const val=inp.value.trim();
+  if(!val){ toast('Enter a work type name','error'); return; }
+  if(!D.customWorkTypes) D.customWorkTypes=[];
+  if(D.customWorkTypes.includes(val) || BASE_WORK_TYPES.includes(val)){
+    toast('That work type already exists','error'); return;
+  }
+  D.customWorkTypes.push(val);
+  try{
+    await saveCustomWorkTypes();
+    inp.value='';
+    const el=document.getElementById('worktypes-settings-list');
+    if(el) el.innerHTML=_renderWorkTypesSettingsList();
+    toast(`✓ "${val}" added — available for every project now`,'ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+
+function _renderWorkTypesSettingsList(){
+  const custom=D.customWorkTypes||[];
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${BASE_WORK_TYPES.map(t=>`<span style="padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2)">${t}</span>`).join('')}
+    </div>
+    ${custom.length?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Custom types (added by you):</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${custom.map((t,i)=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--navy);color:#fff">
+        ${t}
+        <button onclick="removeCustomWorkType(${i})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:2px 4px" title="Remove">✕</button>
+      </span>`).join('')}
+    </div>`:'<div style="font-size:12px;color:var(--text3);font-style:italic">No custom work types added yet.</div>'}`;
 }
 
 // Render multi-select type chips widget

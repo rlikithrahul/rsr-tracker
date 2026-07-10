@@ -422,6 +422,62 @@ function _addWEXCustomItem(label,unit,group,suffix){
   if(modal) _buildWEXModal(modal,p,existing,fy1,wv1,jvAmt,usedFYs);
 }
 
+// ─── SETTINGS-PAGE MANAGEMENT UI ──────────────────────
+// Lets Super Admin add/remove global custom WEX quantity types directly
+// from Settings, without going through a project's quantity entry modal.
+// Anything added here is immediately available on every project, old and new.
+function renderWEXTypesSettingsList(){
+  const groups=getAllWEXGroups();
+  const custom=D.wexCustomTypes||[];
+  return groups.map(g=>{
+    const stdItems=WEX_ITEMS.filter(i=>i.group===g);
+    const customItems=custom.map((c,i)=>({...c,_idx:i})).filter(c=>(c.group||'Custom')===g);
+    if(!stdItems.length && !customItems.length) return '';
+    return `<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">${g}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${stdItems.map(i=>`<span style="padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2)">${i.label} <span style="color:var(--text3)">(${i.unit})</span></span>`).join('')}
+        ${customItems.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--navy);color:#fff">
+          ${c.label} <span style="opacity:.75">(${c.unit})</span>
+          <button onclick="_removeWEXCustomTypeFromSettings(${c._idx})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:2px 4px" title="Remove">✕</button>
+        </span>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function _removeWEXCustomTypeFromSettings(idx){
+  if(!D.wexCustomTypes||!D.wexCustomTypes[idx]) return;
+  const ct=D.wexCustomTypes[idx];
+  if(!confirm(`Remove "${ct.label}" from the quantity type list?\n(Existing saved entries keep their data — it just won't be offered for new entries.)`)) return;
+  D.wexCustomTypes.splice(idx,1);
+  await saveWEXCustomTypes();
+  const el=document.getElementById('wex-types-settings-list');
+  if(el) el.innerHTML=renderWEXTypesSettingsList();
+}
+
+async function addWEXCustomTypeFromSettings(){
+  const labelEl=document.getElementById('new-wextype-label');
+  const unitEl=document.getElementById('new-wextype-unit');
+  const groupEl=document.getElementById('new-wextype-group');
+  const label=labelEl?.value.trim();
+  const unit=unitEl?.value.trim()||'nos';
+  let group=groupEl?.value||'Custom';
+  if(group==='__new__'){
+    group=prompt('New group name (e.g. "Miscellaneous"):')?.trim();
+    if(!group) return;
+  }
+  if(!label){ toast('Enter a quantity type name','error'); return; }
+  if(!D.wexCustomTypes) D.wexCustomTypes=[];
+  _addWEXCustomItem(label,unit,group,'');
+  labelEl.value=''; unitEl.value='';
+  const el=document.getElementById('wex-types-settings-list');
+  if(el) el.innerHTML=renderWEXTypesSettingsList();
+  const grpSel=document.getElementById('new-wextype-group');
+  if(grpSel) grpSel.innerHTML=getAllWEXGroups().map(g=>`<option value="${g}"${g===group?' selected':''}>${g}</option>`).join('')+'<option value="__new__">+ New group…</option>';
+  toast(`✓ "${label}" added — available on every project's Work Experience entry now`,'ok');
+}
+
 async function _removeWEXCustomType(idx){
   if(!D.wexCustomTypes||!D.wexCustomTypes[idx]) return;
   const ct=D.wexCustomTypes[idx];
@@ -523,12 +579,16 @@ function _renderWEXTab(el){
       byFY[fy].qtys[k]=(byFY[fy].qtys[k]||0)+v;
     });
 
-    // Work type — use record workType first, then pull from linked project
+    // Work type — always prefer the linked project's official work type(s)
+    // (the standardized list managed in Settings) over the raw free-text
+    // workType string that came in with older imported/historical records.
+    // Only fall back to that raw text when a record has no matching project
+    // at all — we never invent or split into ad-hoc categories on our own.
     const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
     let workTypes=[];
-    if(r.workType&&r.workType.trim()) workTypes=[r.workType.trim()];
-    else if(p&&p.types&&p.types.length) workTypes=[...p.types];
+    if(p&&p.types&&p.types.length) workTypes=[...p.types];
     else if(p&&p.type) workTypes=p.type.split(',').map(t=>t.trim()).filter(Boolean);
+    else if(r.workType&&r.workType.trim()) workTypes=[r.workType.trim()];
     if(!workTypes.length) workTypes=['Other'];
 
     if(!byFYWorkType[fy]) byFYWorkType[fy]={};
