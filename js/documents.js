@@ -96,6 +96,7 @@ function renderDocVault(p, isOwner) {
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-size:13px;color:var(--green);font-weight:600">✅ ${doc.name}</span>
             <span style="font-size:11px;color:var(--text3)">${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-IN') : ''}</span>
+            ${doc.uploadedBy ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--surface2);color:var(--text2)">👤 ${doc.uploadedBy}</span>` : ''}
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <a href="${doc.url}" target="_blank" class="btn btn-sm">👁️ View</a>
