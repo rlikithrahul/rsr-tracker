@@ -831,8 +831,8 @@ async function processBulkImport(){
   status.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)">⏳ Reading file...</div>';
 
   try{
-    // Load XLSX
-    if(!window.XLSX) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    // Load XLSX (pre-bundled)
+    if(!window.XLSX){ toast('Excel library not loaded','error'); return; }
     const buf = await file.arrayBuffer();
     const wb = window.XLSX.read(buf, {type:'array'});
 

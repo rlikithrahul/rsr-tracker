@@ -18,7 +18,7 @@ let boqEditPid = null;    // project being edited
 
 async function parseBOQExcel(file){
   if(!window.XLSX){
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    /* XLSX pre-loaded */
   }
   const buffer = await file.arrayBuffer();
   const wb = window.XLSX.read(buffer, {type:'array', cellDates:false});

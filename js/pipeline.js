@@ -483,7 +483,7 @@ async function exportActionCentre(format){
 
   if(format==='excel'){
     if(!window.XLSX){
-      try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}
+      try{/* XLSX pre-loaded */}
       catch(e){toast('Could not load Excel library','error');return;}
     }
     const wb=window.XLSX.utils.book_new();

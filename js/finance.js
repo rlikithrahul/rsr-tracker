@@ -436,7 +436,7 @@ function loadScript(src){
 async function parseTallyXLSReal(file, type){
   // Ensure SheetJS is loaded
   if(!window.XLSX){
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    /* XLSX pre-loaded */
   }
   const buffer = await file.arrayBuffer();
   const wb = window.XLSX.read(buffer, {type:'array', cellDates:true});
@@ -1006,7 +1006,7 @@ async function exportAllData(){
   try {
     // Ensure SheetJS is loaded
     if(!window.XLSX){
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+      /* XLSX pre-loaded */
     }
 
     const wb = window.XLSX.utils.book_new();
@@ -1431,7 +1431,7 @@ function copyCCName(name,btn){
 }
 
 async function exportCCRef(){
-  if(!window.XLSX){try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}catch(e){toast('Could not load Excel','error');return;}}
+  if(!window.XLSX){toast('Excel library not loaded','error');return;}
   const rows=[['Sl No','Cost Centre Name','Project Name','Contractor','Firm','Status']];
   D.projects.filter(p=>!isArchived(p)&&p.costCentre)
     .sort((a,b)=>{const ca=GC(a.contractorId)?.name||'',cb=GC(b.contractorId)?.name||'';return ca!==cb?ca.localeCompare(cb):a.name.localeCompare(b.name);})

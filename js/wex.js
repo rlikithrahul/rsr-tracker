@@ -624,7 +624,7 @@ function _renderWEXTab(el){
 }
 // ─── EXPORT ───────────────────────────────────────────
 async function exportWEXToExcel(){
-  if(!window.XLSX){try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}catch(e){toast('Could not load Excel','error');return;}}
+  if(!window.XLSX){toast('Excel library not loaded','error');return;}
   const allItems=getAllWEXItems();
   const records=D.wexData.records||[];
   const wb=window.XLSX.utils.book_new();

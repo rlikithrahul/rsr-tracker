@@ -365,7 +365,7 @@ async function markRefundReceived(pid){
 // ─── EXPORT ───────────────────────────────────────────
 async function exportRefunds(){
   if(!window.XLSX){
-    try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}
+    try{/* XLSX pre-loaded */}
     catch(e){toast('Could not load Excel','error');return;}
   }
   const projects = D.projects.filter(p=>!isArchived(p)&&(projStatus(p)==='completed'||p.jvDate));

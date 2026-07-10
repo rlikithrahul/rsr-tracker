@@ -51,7 +51,7 @@ async function exportReport(){
   // Load SheetJS if not already loaded
   if(!window.XLSX){
     try{
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+      /* XLSX pre-loaded */
     }catch(e){
       toast('Failed to load export library. Check internet connection.','error',4000);
       return;
