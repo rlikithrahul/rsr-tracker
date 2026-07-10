@@ -207,7 +207,12 @@ function renderFunds(){
   const ccMap = D.projects.filter(p=>p.costCentre).map(p=>`<tr><td style="font-family:monospace;font-size:12px">${p.costCentre}</td><td style="font-weight:700;color:var(--navy)">${p.name}</td><td>${GC(p.contractorId)?.name||'—'}</td></tr>`).join('');
 
   document.getElementById('tally-wrap').innerHTML=`
-    <div class="pg-hdr"><div class="pg-title">📂 Tally Import</div></div>
+    <div class="pg-hdr">
+      <div class="pg-title">📂 Tally Import</div>
+      <button onclick="openCostCentreRef()" style="background:#7c3aed;color:#fff;border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:6px">
+        🏷️ Cost Centre Reference
+      </button>
+    </div>
 
     <!-- DAYBOOK CALENDAR -->
     <div class="card" style="border-top:4px solid var(--navy)">
@@ -362,17 +367,6 @@ function renderFunds(){
           <td style="text-align:right;font-weight:700;color:${r.txType==='receipt'?'var(--green)':'var(--navy)'}">${r.txType==='receipt'?'−':''}${fmt(r.amount)}</td>
         </tr>`).join('')}</tbody></table></div>`
       :'<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No transactions imported yet. Upload a Tally file above.</div>'}
-    </div>
-
-    <!-- COST CENTRE REFERENCE -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-        <div class="st" style="margin:0;border:none;padding:0">🏷️ Cost Centre → Project Mapping</div>
-        <button onclick="openCostCentreRef()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🔍 Open Full Reference</button>
-      </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Tally Cost Centre names for each project. Use "Open Full Reference" for a searchable list while entering transactions in Tally.</div>
-      ${ccMap?`<div class="tbl-wrap"><table><thead><tr><th>Tally Cost Centre Name</th><th>Project</th><th>Contractor</th></tr></thead><tbody>${ccMap}</tbody></table></div>`
-      :'<div style="color:var(--text3);font-size:13px">No cost centres registered yet. Edit each project to add the Tally Cost Centre name.</div>'}
     </div>`;
 
 // ─── PARSE TALLY FILE ─────────────────────────────────
@@ -1302,226 +1296,153 @@ document.addEventListener('click', e=>{
   }
 });
 
-// ─── COST CENTRE REFERENCE MODAL ─────────────────────
-// Full searchable, filterable cost centre reference for staff
-// Used while entering transactions in Tally to find the right cost centre name
 
-let _ccSearch = '';
-let _ccContractor = '';
-let _ccStatus = '';
-let _ccFirm = '';
+// ─── COST CENTRE REFERENCE MODAL ─────────────────────
+let _ccSearch='',_ccContractor='',_ccStatus='',_ccFirm='';
 
 function openCostCentreRef(){
-  let modal = document.getElementById('modal-cc-ref');
-  if(!modal){
-    modal = document.createElement('div');
-    modal.className = 'mov';
-    modal.id = 'modal-cc-ref';
-    document.body.appendChild(modal);
-  }
-  _ccSearch = ''; _ccContractor = ''; _ccStatus = ''; _ccFirm = '';
+  let modal=document.getElementById('modal-cc-ref');
+  if(!modal){modal=document.createElement('div');modal.className='mov';modal.id='modal-cc-ref';document.body.appendChild(modal);}
+  _ccSearch='';_ccContractor='';_ccStatus='';_ccFirm='';
   _renderCCRef(modal);
   modal.classList.add('open');
+  setTimeout(()=>document.getElementById('cc-search-inp')?.focus(),150);
 }
 
 function _renderCCRef(modal){
-  const projects = D.projects.filter(p => !isArchived(p));
+  const projects=D.projects.filter(p=>!isArchived(p));
+  const contractors=[...new Set(projects.map(p=>GC(p.contractorId)?.name).filter(Boolean))].sort();
+  const firms=[...new Set(projects.map(p=>p.firm||'RSR Constructions'))].sort();
 
-  // Get unique contractors and firms for filters
-  const contractors = [...new Set(
-    projects.filter(p => p.contractorId).map(p => GC(p.contractorId)?.name).filter(Boolean)
-  )].sort();
-  const firms = [...new Set(projects.map(p => p.firm||'RSR Constructions').filter(Boolean))].sort();
-
-  // Apply filters
-  let filtered = projects.filter(p => {
-    if(!p.costCentre) return false; // only show projects with cost centres
-    const status = projStatus(p);
-    const contractor = GC(p.contractorId)?.name||'';
-    const firm = p.firm||'RSR Constructions';
-
-    if(_ccStatus && status !== _ccStatus) return false;
-    if(_ccFirm && firm !== _ccFirm) return false;
-    if(_ccContractor && contractor !== _ccContractor) return false;
+  let filtered=projects.filter(p=>{
+    if(!p.costCentre) return false;
+    const st=projStatus(p),cn=GC(p.contractorId)?.name||'',fi=p.firm||'RSR Constructions';
+    if(_ccStatus&&st!==_ccStatus) return false;
+    if(_ccFirm&&fi!==_ccFirm) return false;
+    if(_ccContractor&&cn!==_ccContractor) return false;
     if(_ccSearch){
-      const q = _ccSearch.toLowerCase();
-      if(!p.costCentre.toLowerCase().includes(q) &&
-         !p.name.toLowerCase().includes(q) &&
-         !contractor.toLowerCase().includes(q)) return false;
+      const q=_ccSearch.toLowerCase();
+      if(!p.costCentre.toLowerCase().includes(q)&&!p.name.toLowerCase().includes(q)&&!cn.toLowerCase().includes(q)) return false;
     }
     return true;
+  }).sort((a,b)=>{
+    const ca=GC(a.contractorId)?.name||'',cb=GC(b.contractorId)?.name||'';
+    return ca!==cb?ca.localeCompare(cb):a.name.localeCompare(b.name);
   });
 
-  // Sort by contractor name, then by project name
-  filtered.sort((a,b) => {
-    const ca = GC(a.contractorId)?.name||'';
-    const cb = GC(b.contractorId)?.name||'';
-    if(ca !== cb) return ca.localeCompare(cb);
-    return a.name.localeCompare(b.name);
-  });
-
-  const noCCCount = projects.filter(p => !p.costCentre && !isArchived(p)).length;
-
-  const STATUS_STYLE = {
-    active:    {label:'Active',    bg:'#dcfce7', color:'#166534'},
-    onhold:    {label:'On Hold',   bg:'#fef9c3', color:'#92400e'},
-    completed: {label:'Completed', bg:'#e8edf8', color:'var(--navy)'},
+  const ST={
+    active:{l:'Active',bg:'#dcfce7',c:'#166534'},
+    onhold:{l:'On Hold',bg:'#fef9c3',c:'#92400e'},
+    completed:{l:'Completed',bg:'#e8edf8',c:'var(--navy)'}
   };
+  const noCCCount=projects.filter(p=>!p.costCentre).length;
 
-  // Group by contractor for cleaner display
-  let lastContractor = '';
-  const rows = filtered.map(p => {
-    const status = projStatus(p);
-    const ss = STATUS_STYLE[status]||STATUS_STYLE.active;
-    const contractor = GC(p.contractorId)?.name||'—';
-    const firm = p.firm||'RSR Constructions';
-    const firmShort = firm==='RSR Constructions'?'RSR':firm==='R Sadhu Rao'?'RS Rao':'RLR';
-
-    let contractorHeader = '';
-    if(contractor !== lastContractor){
-      lastContractor = contractor;
-      const cProjects = filtered.filter(x=>(GC(x.contractorId)?.name||'—')===contractor);
-      contractorHeader = `<tr style="background:#1a2744">
-        <td colspan="4" style="padding:7px 14px;font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.06em">
-          👷 ${contractor} <span style="opacity:.6;font-weight:400">(${cProjects.length} project${cProjects.length>1?'s':''})</span>
-        </td>
-      </tr>`;
+  // Build rows grouped by contractor
+  let lastCon='',bodyHTML='';
+  filtered.forEach(p=>{
+    const st=projStatus(p),s=ST[st]||ST.active;
+    const cn=GC(p.contractorId)?.name||'—';
+    const fi=(p.firm||'RSR Constructions').replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao').replace('R Likith Rahul','RLR');
+    if(cn!==lastCon){
+      lastCon=cn;
+      const cnt=filtered.filter(x=>(GC(x.contractorId)?.name||'—')===cn).length;
+      bodyHTML+=`<tr style="background:var(--navy)"><td colspan="4" style="padding:8px 14px;font-size:11px;font-weight:800;color:#fff;letter-spacing:.06em">👷 ${cn.toUpperCase()} &nbsp;<span style="opacity:.5;font-weight:400">${cnt} project${cnt>1?'s':''}</span></td></tr>`;
     }
-
-    return `${contractorHeader}<tr style="border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='#f8faff'" onmouseout="this.style.background=''">
-      <td style="padding:8px 14px;font-family:monospace;font-size:12px;font-weight:700;color:var(--navy);user-select:all;cursor:text" onclick="selectCCText(this)" title="Click to select">${p.costCentre}</td>
-      <td style="padding:8px 12px;font-size:12px">${p.name.substring(0,55)}${p.name.length>55?'…':''}</td>
-      <td style="padding:8px 10px;text-align:center">
-        <span style="font-size:10px;background:${ss.bg};color:${ss.color};padding:2px 8px;border-radius:8px;font-weight:700">${ss.label}</span>
-        <span style="font-size:10px;background:var(--surface2);color:var(--text3);padding:2px 6px;border-radius:8px;margin-left:4px">${firmShort}</span>
+    bodyHTML+=`<tr style="border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''">
+      <td style="padding:9px 14px">
+        <div style="font-family:monospace;font-size:12px;font-weight:700;color:#1e3a8a;letter-spacing:.01em;margin-bottom:2px">${p.costCentre}</div>
+        <div style="font-size:11px;color:var(--text3)">${fi}</div>
       </td>
-      <td style="padding:8px 10px;text-align:center">
-        <button onclick="event.stopPropagation();copyCCName('${p.costCentre.replace(/'/g,"\\'")}',this)"
-          style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">
-          📋 Copy
-        </button>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2);max-width:320px">${p.name.substring(0,60)}${p.name.length>60?'…':''}</td>
+      <td style="padding:9px 10px;text-align:center;white-space:nowrap">
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:${s.bg};color:${s.c}">${s.l}</span>
+      </td>
+      <td style="padding:9px 12px;text-align:center">
+        <button onclick="copyCCName('${p.costCentre.replace(/'/g,"\\'")}',this)" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">📋 Copy</button>
       </td>
     </tr>`;
-  }).join('');
+  });
 
-  modal.innerHTML = `<div class="mbox" style="max-width:860px;width:95vw;max-height:90vh;display:flex;flex-direction:column">
-    <div class="mhdr" style="flex-shrink:0">
+  modal.innerHTML=`<div class="mbox" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column;padding:0">
+    <!-- Header -->
+    <div style="background:var(--navy);color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;flex-shrink:0;display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <h2>🏷️ Tally Cost Centre Reference</h2>
-        <div style="font-size:11px;color:var(--text3);font-weight:400;margin-top:2px">Use this to find the correct cost centre name while entering transactions in Tally</div>
+        <div style="font-size:16px;font-weight:800">🏷️ Tally Cost Centre Reference</div>
+        <div style="font-size:11px;opacity:.7;margin-top:3px">Find the correct cost centre name to use while entering transactions in Tally</div>
       </div>
-      <button class="mx" onclick="CM('modal-cc-ref')">✕</button>
+      <button onclick="CM('modal-cc-ref')" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>
     </div>
 
     <!-- Filters -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;flex-shrink:0">
-      <input id="cc-search" type="text" placeholder="🔍 Search by cost centre, project name, or contractor…" value="${_ccSearch}"
-        oninput="_ccSearch=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
-        style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
-      <select onchange="_ccStatus=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
-        style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
-        <option value="">All Statuses</option>
-        <option value="active" ${_ccStatus==='active'?'selected':''}>Active</option>
-        <option value="completed" ${_ccStatus==='completed'?'selected':''}>Completed</option>
-        <option value="onhold" ${_ccStatus==='onhold'?'selected':''}>On Hold</option>
-      </select>
-      <select onchange="_ccFirm=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
-        style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
-        <option value="">All Firms</option>
-        ${firms.map(f=>`<option value="${f}" ${_ccFirm===f?'selected':''}>${f}</option>`).join('')}
-      </select>
-      <select onchange="_ccContractor=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
-        style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
-        <option value="">All Contractors</option>
-        ${contractors.map(c=>`<option value="${c}" ${_ccContractor===c?'selected':''}>${c}</option>`).join('')}
-      </select>
-    </div>
-
-    <!-- Stats bar -->
-    <div style="display:flex;gap:12px;margin-bottom:10px;flex-shrink:0;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--text3)">Showing <strong>${filtered.length}</strong> projects with cost centres</span>
-      ${noCCCount>0?`<span style="font-size:12px;color:var(--amber)">⚠️ ${noCCCount} project${noCCCount>1?'s':''} missing cost centre</span>`:''}
-      <span style="font-size:12px;color:var(--text3)">Sorted by contractor · Click a cost centre name to select it</span>
+    <div style="padding:12px 16px;background:#f8faff;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="cc-search-inp" type="text" placeholder="🔍 Search cost centre, project, contractor…" value="${_ccSearch}"
+          oninput="_ccSearch=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
+          style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+        <select onchange="_ccStatus=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+          <option value="">All Statuses</option>
+          <option value="active" ${_ccStatus==='active'?'selected':''}>🟢 Active</option>
+          <option value="completed" ${_ccStatus==='completed'?'selected':''}>✅ Completed</option>
+          <option value="onhold" ${_ccStatus==='onhold'?'selected':''}>⏸ On Hold</option>
+        </select>
+        <select onchange="_ccFirm=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+          <option value="">All Firms</option>
+          ${firms.map(f=>`<option value="${f}" ${_ccFirm===f?'selected':''}>${f}</option>`).join('')}
+        </select>
+        <select onchange="_ccContractor=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+          <option value="">All Contractors</option>
+          ${contractors.map(c=>`<option value="${c}" ${_ccContractor===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:6px">
+        <span style="font-size:12px;color:var(--text3)">
+          Showing <strong>${filtered.length}</strong> of ${projects.filter(p=>p.costCentre).length} projects with cost centres
+          ${noCCCount?`&nbsp;·&nbsp;<span style="color:var(--amber)">⚠️ ${noCCCount} missing cost centre</span>`:''}
+        </span>
+        <button onclick="exportCCRef()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export Excel</button>
+      </div>
     </div>
 
     <!-- Table -->
-    <div style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:var(--rs)">
-      ${filtered.length === 0
-        ? `<div style="text-align:center;padding:40px;color:var(--text3)">No projects match your search.</div>`
+    <div style="overflow-y:auto;flex:1">
+      ${filtered.length===0
+        ? `<div style="text-align:center;padding:50px;color:var(--text3)">No projects match your filters.</div>`
         : `<table style="width:100%;border-collapse:collapse">
-          <thead style="position:sticky;top:0;z-index:1">
-            <tr style="background:var(--surface2);border-bottom:2px solid var(--border)">
-              <th style="padding:8px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Cost Centre Name</th>
-              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Project</th>
-              <th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Status / Firm</th>
-              <th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Copy</th>
+          <thead style="position:sticky;top:0;z-index:2;background:#fff;box-shadow:0 1px 0 var(--border)">
+            <tr>
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Cost Centre Name</th>
+              <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Project</th>
+              <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Status</th>
+              <th style="padding:9px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Copy</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
-        </table>`
-      }
-    </div>
-
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-shrink:0">
-      <button onclick="exportCCRef()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export to Excel</button>
-      <button class="btn" onclick="CM('modal-cc-ref')">Close</button>
+          <tbody>${bodyHTML}</tbody>
+        </table>`}
     </div>
   </div>`;
-
-  // Restore search focus
-  setTimeout(()=>document.getElementById('cc-search')?.focus(),100);
 }
 
-function selectCCText(el){
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
-
-function copyCCName(name, btn){
+function copyCCName(name,btn){
   navigator.clipboard.writeText(name).then(()=>{
-    const orig = btn.innerHTML;
-    btn.innerHTML = '✓ Copied!';
-    btn.style.background = 'var(--green)';
-    setTimeout(()=>{ btn.innerHTML = orig; btn.style.background = 'var(--navy)'; }, 1500);
-  }).catch(()=> toast('Could not copy — please select manually','error'));
+    const o=btn.innerHTML;btn.innerHTML='✓ Copied!';btn.style.background='var(--green)';
+    setTimeout(()=>{btn.innerHTML=o;btn.style.background='var(--navy)';},1500);
+  }).catch(()=>toast('Could not copy — select the text manually','error'));
 }
 
 async function exportCCRef(){
-  if(!window.XLSX){
-    try{ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); }
-    catch(e){ toast('Could not load Excel library','error'); return; }
-  }
-  const projects = D.projects.filter(p=>!isArchived(p)&&p.costCentre)
-    .sort((a,b)=>{
-      const ca=GC(a.contractorId)?.name||'', cb=GC(b.contractorId)?.name||'';
-      return ca!==cb ? ca.localeCompare(cb) : a.name.localeCompare(b.name);
+  if(!window.XLSX){try{await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');}catch(e){toast('Could not load Excel','error');return;}}
+  const rows=[['Sl No','Cost Centre Name','Project Name','Contractor','Firm','Status']];
+  D.projects.filter(p=>!isArchived(p)&&p.costCentre)
+    .sort((a,b)=>{const ca=GC(a.contractorId)?.name||'',cb=GC(b.contractorId)?.name||'';return ca!==cb?ca.localeCompare(cb):a.name.localeCompare(b.name);})
+    .forEach((p,i)=>{
+      const c=GC(p.contractorId);
+      rows.push([i+1,p.costCentre,p.name,c?c.name:'—',p.firm||'RSR Constructions',projStatus(p)||'active']);
     });
-
-  const hdr = ['Sl No','Tally Cost Centre Name','Project Name','Contractor','Firm','Status','Agreement Amount','JV Date'];
-  const rows = projects.map((p,i)=>{
-    const c = GC(p.contractorId);
-    return [
-      i+1,
-      p.costCentre,
-      p.name,
-      c?c.name:'—',
-      p.firm||'RSR Constructions',
-      projStatus(p)||'active',
-      agAmt(p)||0,
-      p.jvDate||'—'
-    ];
-  });
-
-  const wb = window.XLSX.utils.book_new();
-  const ws = window.XLSX.utils.aoa_to_sheet([hdr,...rows]);
-  ws['!cols'] = [{wch:6},{wch:35},{wch:60},{wch:22},{wch:18},{wch:12},{wch:16},{wch:12}];
-  window.XLSX.utils.book_append_sheet(wb, ws, 'Cost Centres');
-  window.XLSX.writeFile(wb, `RSR_Cost_Centres_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const wb=window.XLSX.utils.book_new();
+  const ws=window.XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:6},{wch:35},{wch:60},{wch:22},{wch:18},{wch:12}];
+  window.XLSX.utils.book_append_sheet(wb,ws,'Cost Centres');
+  window.XLSX.writeFile(wb,`RSR_Cost_Centres_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('✓ Exported','ok');
 }
-
-
 }
