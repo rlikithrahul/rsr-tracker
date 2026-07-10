@@ -621,8 +621,8 @@ function renderProjects(){
 
   let list=D.projects.filter(p=>{
     const c=GC(p.contractorId);
-    const genCode = p.genCode||(p.docVault&&p.docVault.gencode)||'';
-    const eaNum = p.eaNumber||(p.docVault&&p.docVault.ea)||'';
+    const genCode = p.genCode||(p.documents&&p.documents.gencode)||'';
+    const eaNum = p.eaNumber||(p.documents&&p.documents.ea)||'';
     const matchQ = !q || p.name.toLowerCase().includes(q)||
       (p.tender||'').toLowerCase().includes(q)||
       (c&&c.name.toLowerCase().includes(q))||
@@ -1042,8 +1042,8 @@ function globalSearch(query){
   // Search projects — all fields
   D.projects.filter(p=>!isArchived(p)).forEach(p=>{
     const c = GC(p.contractorId);
-    const genCode = (p.genCode||(p.docVault&&p.docVault.gencode)||'').toLowerCase();
-    const eaNum = (p.eaNumber||(p.docVault&&p.docVault.ea)||'').toLowerCase();
+    const genCode = (p.genCode||(p.documents&&p.documents.gencode)||'').toLowerCase();
+    const eaNum = (p.eaNumber||(p.documents&&p.documents.ea)||'').toLowerCase();
     const jvNum = (p.jvNumber||'').toLowerCase();
     const cc = (p.costCentre||'').toLowerCase();
     const matched =
@@ -1055,8 +1055,8 @@ function globalSearch(query){
       jvNum.includes(q) || cc.includes(q);
     if(matched){
       let hint = '';
-      if(genCode.includes(q)&&q) hint=`Gen: ${(p.genCode||(p.docVault&&p.docVault.gencode)||'')}`;
-      else if(eaNum.includes(q)&&q) hint=`EA: ${(p.eaNumber||(p.docVault&&p.docVault.ea)||'')}`;
+      if(genCode.includes(q)&&q) hint=`Gen: ${(p.genCode||(p.documents&&p.documents.gencode)||'')}`;
+      else if(eaNum.includes(q)&&q) hint=`EA: ${(p.eaNumber||(p.documents&&p.documents.ea)||'')}`;
       else if(jvNum.includes(q)&&q) hint=`JV: ${p.jvNumber}`;
       else if(cc.includes(q)&&q) hint=`CC: ${p.costCentre}`;
       results.push({ type:'project', id:p.id, name:p.name,

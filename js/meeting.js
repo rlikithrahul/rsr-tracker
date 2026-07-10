@@ -104,7 +104,7 @@ async function _buildMeetingSnapshot(){
 
   // EA numbers received since last meeting
   const easReceived = projects.filter(p=>{
-    if(!p.eaNumber && !(p.docVault&&p.docVault.ea)) return false;
+    if(!p.eaNumber && !(p.documents&&p.documents.ea)) return false;
     // Use EA date if available, else approximate from JV date
     return p.eaDate ? p.eaDate > sinceDateStr : false;
   });
@@ -137,7 +137,7 @@ async function _buildMeetingSnapshot(){
   const expectedNext = projects.filter(p=>p.expectedJVMonth&&!p.jvDate&&projStatus(p)!=='completed'&&p.expectedJVMonth===nextKey);
 
   // Long-pending items
-  const longPendingJV = projects.filter(p=>p.jvDate&&!p.eaNumber&&!(p.docVault&&p.docVault.ea)).map(p=>({
+  const longPendingJV = projects.filter(p=>p.jvDate&&!p.eaNumber&&!(p.documents&&p.documents.ea)).map(p=>({
     project:p, days:Math.round((today-new Date(p.jvDate))/86400000)
   })).filter(x=>x.days>60).sort((a,b)=>b.days-a.days);
 
@@ -145,7 +145,7 @@ async function _buildMeetingSnapshot(){
   await loadWEXData().catch(()=>{});
   const wexPending = projects.filter(p=>{
     if(!p.wecReceived) return false;
-    const wecDoc=(p.docVault||{}).wec;
+    const wecDoc=(p.documents||{}).wec;
     if(!wecDoc) return false;
     const gc=(getGenCode(p)||'').toUpperCase();
     return !(D.wexData?.records||[]).some(r=>r.projectId===p.id||(gc&&r.genCode===gc));
@@ -178,7 +178,7 @@ function _buildStageData(projects, today){
     payment_pending:0, gst_pending:0, emd_overdue:0, emd_to_apply:0
   };
   projects.forEach(p=>{
-    const hasJV=!!p.jvDate, hasEA=!!(p.eaNumber||(p.docVault&&p.docVault.ea));
+    const hasJV=!!p.jvDate, hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment=(p.settlements||[]).filter(s=>!isArchived(s)).length>0;
     const asdEligible=Math.abs(p.bidPct||0)>25;
     if(!hasJV&&projStatus(p)==='completed'){counts.completed_no_jv++;return;}

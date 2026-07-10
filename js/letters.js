@@ -21,7 +21,7 @@ function openLetterModal(pid, defaultType){
   const hasASD = (p.asd||0)>0;
   const hasEMDFSD = (p.emd||0)>0||(p.fsd||0)>0;
   const hasJV = !!p.jvDate;
-  const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+  const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
 
   let modal = document.getElementById('modal-letters');
   if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-letters'; document.body.appendChild(modal); }
@@ -35,7 +35,7 @@ function openLetterModal(pid, defaultType){
       <label>Letter Type</label>
       <div style="display:flex;flex-direction:column;gap:7px">
         ${[
-          {val:'wec', label:'📜 Work Experience Certificate', disabled:!hasEA, note: hasEA?'EA: '+(p.eaNumber||(p.docVault&&p.docVault.ea)):'⚠️ Needs EA number'},
+          {val:'wec', label:'📜 Work Experience Certificate', disabled:!hasEA, note: hasEA?'EA: '+(p.eaNumber||(p.documents&&p.documents.ea)):'⚠️ Needs EA number'},
           {val:'asd', label:'💵 ASD Refund Application', disabled:!hasASD||!hasEA, note:!hasEA?'⚠️ Needs EA number':!hasASD?'⚠️ No ASD amount':'ASD: ₹'+Number(p.asd).toLocaleString('en-IN')},
           {val:'emd_fsd', label:'🏦 EMD / FSD Refund Application', disabled:!hasEMDFSD||!hasJV, note:!hasJV?'⚠️ Needs JV date':!hasEMDFSD?'⚠️ No EMD/FSD amounts':'EMD: ₹'+Number(p.emd||0).toLocaleString('en-IN')+' · FSD: ₹'+Number(p.fsd||0).toLocaleString('en-IN')}
         ].map(t=>`<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;opacity:${t.disabled?'0.5':'1'}">
@@ -51,8 +51,8 @@ function openLetterModal(pid, defaultType){
       <div class="fg"><label>Date</label><input type="text" id="lf-date" value="${todayLong()}" oninput="updateLetterPreview('${pid}')"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="fg"><label style="font-size:11px">EA / Accounts No.</label><input type="text" id="lf-ea" value="${p.eaNumber||(p.docVault&&p.docVault.ea)||''}" placeholder="—" oninput="updateLetterPreview('${pid}')"></div>
-      <div class="fg"><label style="font-size:11px">Gen Code</label><input type="text" id="lf-gencode" value="${p.genCode||(p.docVault&&p.docVault.gencode)||''}" placeholder="—" oninput="updateLetterPreview('${pid}')"></div>
+      <div class="fg"><label style="font-size:11px">EA / Accounts No.</label><input type="text" id="lf-ea" value="${p.eaNumber||(p.documents&&p.documents.ea)||''}" placeholder="—" oninput="updateLetterPreview('${pid}')"></div>
+      <div class="fg"><label style="font-size:11px">Gen Code</label><input type="text" id="lf-gencode" value="${p.genCode||(p.documents&&p.documents.gencode)||''}" placeholder="—" oninput="updateLetterPreview('${pid}')"></div>
       <div class="fg"><label style="font-size:11px">Tender ID</label><input type="text" id="lf-tender" value="${p.tender||''}" placeholder="—" oninput="updateLetterPreview('${pid}')"></div>
     </div>
     <div class="fg" style="margin-bottom:10px"><label>Name of Work</label>

@@ -270,16 +270,16 @@ async function cOpenProj(id){
           {label:'JV Date', value: p.jvDate ? fmtDate(p.jvDate) : null, icon:'📄'},
           {label:'JV Number', value: p.jvNumber||null, icon:'🔢'},
           {label:'JV Amount', value: p.jvAmount ? fmt(p.jvAmount) : null, icon:'💰'},
-          {label:'EA / Accounts Number', value: p.eaNumber||(p.docVault&&p.docVault.ea)||null, icon:'🔑'},
-          {label:'Gen Code', value: p.genCode||(p.docVault&&p.docVault.gencode)||null, icon:'🏷️'},
+          {label:'EA / Accounts Number', value: p.eaNumber||(p.documents&&p.documents.ea)||null, icon:'🔑'},
+          {label:'Gen Code', value: p.genCode||(p.documents&&p.documents.gencode)||null, icon:'🏷️'},
           {label:'Tender ID', value: p.tender||null, icon:'📑'},
           {label:'Agreement Date', value: p.agreeDate ? fmtDate(p.agreeDate) : null, icon:'📅'},
         ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:var(--rs)">'
           +'<span style="font-size:12px;color:var(--text2)">'+d.icon+' '+d.label+'</span>'
           +'<span style="font-size:13px;font-weight:700;color:'+(d.value?'var(--navy)':'var(--text3)')+'">'+  (d.value||'—')+'</span>'
           +'</div>').join('')}
-        ${(p.docVault&&p.docVault.wec&&p.docVault.wec.url)?'<a href="'+p.docVault.wec.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e8f5e9;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--green);text-decoration:none">📜 View Work Experience Certificate →</a>':''}
-        ${(p.documents&&p.documents.ea&&p.docVault&&p.docVault.ea_doc&&p.docVault.ea_doc.url)?'<a href="'+p.docVault.ea_doc.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e3f2fd;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--navy);text-decoration:none">🔑 View EA Document →</a>':''}
+        ${(p.documents&&p.documents.wec&&p.documents.wec.url)?'<a href="'+p.documents.wec.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e8f5e9;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--green);text-decoration:none">📜 View Work Experience Certificate →</a>':''}
+        ${(p.documents&&p.documents.ea&&p.documents&&p.documents.ea_doc&&p.documents.ea_doc.url)?'<a href="'+p.documents.ea_doc.url+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#e3f2fd;border-radius:var(--rs);font-size:12px;font-weight:700;color:var(--navy);text-decoration:none">🔑 View EA Document →</a>':''}
       </div>
     </div>
 

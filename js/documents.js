@@ -285,7 +285,7 @@ async function _doDocUpload(file, pid, slotId, jvDetails){
       await saveProjectDB(p, {type:'jv_replaced',amount:0,ref:null,meta:{}});
     }
     // If bill form is already uploaded and JV was replaced, ask for re-verification
-    if(slotId === 'jv' && (p.docVault||{}).billform){
+    if(slotId === 'jv' && (p.documents||{}).billform){
       setTimeout(()=>_showBillFormVerification(pid), 800);
     }
     const vaultEl = document.getElementById(`doc-vault-${pid}`);

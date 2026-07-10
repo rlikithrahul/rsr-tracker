@@ -406,13 +406,13 @@ function buildLifecycleTimeline(p, id){
 
   // ── Determine each stage ──────────────────────────
   const hasJV = !!p.jvDate;
-  const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+  const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
   const wecApplied = !!p.wecApplied;
   // WEC is considered "done" if EITHER: formally marked received, OR the
   // certificate document is uploaded, OR work experience quantities have
   // been entered for this project. Any one of these is real evidence
   // the certificate was received — don't ask for it again.
-  const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+  const wecDocUploaded = !!(p.documents && p.documents.wec);
   const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
   const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
   const checkCount = (p.settlements||[]).filter(s=>!isArchived(s)).length;
@@ -478,7 +478,7 @@ function buildLifecycleTimeline(p, id){
     {
       icon:'🔢', label:'EA Number',
       done: hasEA,
-      date: hasEA ? (p.eaNumber||(p.docVault&&p.docVault.ea)||'') : '',
+      date: hasEA ? (p.eaNumber||(p.documents&&p.documents.ea)||'') : '',
       pending: hasJV && !hasEA ? 'Awaiting EA number (usually 2-2.5 months after JV)' : '',
       locked: !hasJV,
       action: null

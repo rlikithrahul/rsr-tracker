@@ -33,10 +33,10 @@ function renderPipeline(){
 
   projects.forEach(p=>{
     const hasJV = !!p.jvDate;
-    const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+    const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length > 0;
     const wecApplied = !!p.wecApplied;
-    const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+    const wecDocUploaded = !!(p.documents && p.documents.wec);
     const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
     const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
     const gstFiled = !!p.gstFiled;
@@ -352,8 +352,8 @@ function renderPipeline(){
           const daysSinceJV = Math.round((today-new Date(p.jvDate))/86400000);
           detail = 'JV: '+fmtDate(p.jvDate)+' · Waiting '+daysSinceJV+'d for EA';
         }
-        if(def.key==='asd_to_apply') detail = 'ASD: '+fmt(p.asd||0)+' · EA: '+(p.eaNumber||(p.docVault&&p.docVault.ea)||'—');
-        if(def.key==='wec_to_apply'||def.key==='wec_applied') detail = 'EA: '+(p.eaNumber||(p.docVault&&p.docVault.ea)||'—')+(p.wecAppliedDate?' · Applied: '+fmtDate(p.wecAppliedDate):'');
+        if(def.key==='asd_to_apply') detail = 'ASD: '+fmt(p.asd||0)+' · EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—');
+        if(def.key==='wec_to_apply'||def.key==='wec_applied') detail = 'EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—')+(p.wecAppliedDate?' · Applied: '+fmtDate(p.wecAppliedDate):'');
         if(def.key==='payment_pending') detail = 'WEC received: '+(p.wecReceivedDate?fmtDate(p.wecReceivedDate):'—');
         if(def.key==='gst_pending'){
           const firstCheck = (p.settlements||[]).filter(s=>!isArchived(s))[0];
@@ -450,7 +450,7 @@ async function exportActionCentre(format){
 
   projects.forEach(p=>{
     const hasJV=!!p.jvDate;
-    const hasEA=!!(p.eaNumber||(p.docVault&&p.docVault.ea));
+    const hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment=(p.settlements||[]).filter(s=>!isArchived(s)).length>0;
     const asdAmt=p.asd||0;
     let daysTo2yr=null;
@@ -461,9 +461,9 @@ async function exportActionCentre(format){
     }
     if(!hasEA) stages.ea_pending.push(p);
     else if(asdAmt>0&&!p.asdRefundApplied&&!p.asdRefundReceived) stages.asd_to_apply.push(p);
-    else if(!p.wecApplied&&!(p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_to_apply.push(p);
-    else if(p.wecApplied&&!(p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_applied.push(p);
-    else if((p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))&&!hasPayment&&!p.gstFiled) stages.payment_pending.push(p);
+    else if(!p.wecApplied&&!(p.wecReceived||(p.documents&&p.documents.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_to_apply.push(p);
+    else if(p.wecApplied&&!(p.wecReceived||(p.documents&&p.documents.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_applied.push(p);
+    else if((p.wecReceived||(p.documents&&p.documents.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))&&!hasPayment&&!p.gstFiled) stages.payment_pending.push(p);
     else if(hasPayment&&!p.gstFiled) stages.gst_pending.push(p);
     else if(daysTo2yr!==null&&daysTo2yr<=0&&!p.refundReceived&&!p.refundApplied) stages.emd_overdue.push(p);
     else if(daysTo2yr!==null&&daysTo2yr<=90&&daysTo2yr>0&&!p.refundReceived&&!p.refundApplied) stages.emd_to_apply.push(p);
@@ -599,9 +599,9 @@ function getPipelineDashboardAlert(){
   projects.forEach(p=>{
     const hasJV = !!p.jvDate;
     if(!hasJV) return;
-    const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+    const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length>0;
-    const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+    const wecDocUploaded = !!(p.documents && p.documents.wec);
     const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
     const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
     const gstFiled = !!p.gstFiled;

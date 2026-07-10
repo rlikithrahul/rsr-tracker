@@ -44,7 +44,7 @@ function getAllAlerts(){
     }
 
     // 2. EA NUMBER (after JV received)
-    if(p.jvDate && !p.eaNumber && !(p.docVault && p.docVault.ea)){
+    if(p.jvDate && !p.eaNumber && !(p.documents && p.documents.ea)){
       const daysSinceJV = Math.round((today - new Date(p.jvDate)) / 86400000);
       const months = daysSinceJV / 30;
       if(months > 3){
@@ -63,7 +63,7 @@ function getAllAlerts(){
     }
 
     // 3. WEC (after EA number received)
-    const eaNumber = p.eaNumber || (p.docVault && p.docVault.ea) || '';
+    const eaNumber = p.eaNumber || (p.documents && p.documents.ea) || '';
     if(eaNumber && !p.wecReceived){
       if(!p.wecApplied){
         all.push({ code:'wec_apply', type:'amber', priority:2, projectId:p.id,
@@ -150,14 +150,14 @@ function getAutoWarnings(p){ return []; } // all logic now in getAllAlerts — n
 function getContractorAlerts(contractorId){
   const alerts = [];
   D.projects.filter(p=>p.contractorId===contractorId&&!isArchived(p)).forEach(p=>{
-    if(p.jvDate && !p.eaNumber && !(p.docVault&&p.docVault.ea)){
+    if(p.jvDate && !p.eaNumber && !(p.documents&&p.documents.ea)){
       const daysSinceJV = Math.round((new Date()-new Date(p.jvDate))/86400000);
       if(daysSinceJV > 45){
         alerts.push({ type:daysSinceJV>60?'red':'amber',
           msg:`JV received for "${p.name}" — EA Number not yet received (${daysSinceJV} days).` });
       }
     }
-    const eaNumber = p.eaNumber||(p.docVault&&p.docVault.ea)||'';
+    const eaNumber = p.eaNumber||(p.documents&&p.documents.ea)||'';
     if(eaNumber && !p.wecReceived && !p.wecApplied){
       alerts.push({ type:'amber', msg:`WEC pending for "${p.name}" — EA Number received.` });
     }

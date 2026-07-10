@@ -19,7 +19,7 @@ function getRefundData(p){
   // Compute all deposit amounts and statuses for a project
   const today = new Date();
   const hasJV = !!p.jvDate;
-  const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
+  const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
   const agreeAmt = agAmt(p)||0;
   const asdEligible = Math.abs(p.bidPct||0) > 25;
 
