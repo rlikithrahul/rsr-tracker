@@ -895,7 +895,11 @@ function ownerTab(i){
   if(i===1) renderProjects();
   if(i===2){ renderConts(); }
   if(i===3){
-    loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
+    if(typeof loadUnmatchedFromCloud==='function'){
+      loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
+    } else if(typeof renderFunds==='function'){
+      renderFunds();
+    }
   }
   if(i===4) renderInterest();
   if(i===5) renderEMI();
