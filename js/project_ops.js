@@ -13,21 +13,12 @@ function getAllWorkTypes(){
 }
 
 async function saveCustomWorkTypes(){
-  // Always POST with merge-duplicates upsert — a PATCH against a key that
-  // doesn't exist yet in the settings table returns 200 with 0 rows updated
-  // (PostgREST does not error on that), so a PATCH-then-fallback-to-POST
-  // pattern silently never creates the row on first use. POST-as-upsert
-  // (same pattern used successfully for WEX custom types) always works.
-  await sbReq('settings','POST',{key:'custom_work_types',value:JSON.stringify(D.customWorkTypes||[])});
+  await saveSetting('custom_work_types', D.customWorkTypes||[]);
 }
 
 async function loadCustomWorkTypes(){
   if(D.customWorkTypes) return D.customWorkTypes;
-  try{
-    const rows = await sbReq('settings?key=eq.custom_work_types','GET');
-    if(rows&&rows[0]) D.customWorkTypes = JSON.parse(rows[0].value||'[]');
-  }catch(e){}
-  if(!D.customWorkTypes) D.customWorkTypes=[];
+  D.customWorkTypes = await getSetting('custom_work_types', []);
   return D.customWorkTypes;
 }
 

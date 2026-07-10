@@ -36,31 +36,23 @@ function addCustomLabourType(label){
 
 // ─── LOAD/SAVE LABOUR DATA ────────────────────────────
 async function loadLabourData(){
-  try{
-    const rows = await sbReq('settings','GET');
-    const key = LABOUR_STORAGE_KEY + '_' + (CU&&CU.id||'');
-    const row = (rows||[]).find(x=>x.key===key);
-    D.labourData = row ? JSON.parse(row.value||'{}') : {};
-  }catch(e){ D.labourData = {}; }
+  const key = LABOUR_STORAGE_KEY + '_' + (CU&&CU.id||'');
+  D.labourData = await getSetting(key, {});
 }
 
 async function saveLabourData(){
   const key = LABOUR_STORAGE_KEY + '_' + (CU&&CU.id||'');
-  await sbReq('settings','POST',{key, value:JSON.stringify(D.labourData)});
+  await saveSetting(key, D.labourData);
 }
 
 async function loadExpenseData(){
-  try{
-    const rows = await sbReq('settings','GET');
-    const key = EXPENSE_STORAGE_KEY + '_' + (CU&&CU.id||'');
-    const row = (rows||[]).find(x=>x.key===key);
-    D.expenseData = row ? JSON.parse(row.value||'{}') : {};
-  }catch(e){ D.expenseData = {}; }
+  const key = EXPENSE_STORAGE_KEY + '_' + (CU&&CU.id||'');
+  D.expenseData = await getSetting(key, {});
 }
 
 async function saveExpenseData(){
   const key = EXPENSE_STORAGE_KEY + '_' + (CU&&CU.id||'');
-  await sbReq('settings','POST',{key, value:JSON.stringify(D.expenseData)});
+  await saveSetting(key, D.expenseData);
 }
 
 

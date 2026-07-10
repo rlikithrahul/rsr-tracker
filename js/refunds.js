@@ -278,9 +278,24 @@ function _renderRefTable(projects, type){
     const amt = type==='emd'?r.emdAmt : type==='fsd'?r.fsdAmt : r.asdAmt;
     return {p, r, status, amt};
   }).filter(Boolean).sort((a,b)=>{
-    // Sort: eligible first, then applied, then not eligible, then paid
+    // Sort: eligible first, then applied, then not eligible, then paid —
+    // and *within* each of those groups, nearest-to-eligible first (fewest
+    // days left), so the projects that need action soonest are always at
+    // the top and newer/further-out ones sink toward the bottom.
     const order = {eligible:0,applied:1,not_eligible:2,no_ea:2,no_jv:3,paid:4,no_fsd:5,not_applicable:5};
-    return (order[a.status]||3)-(order[b.status]||3);
+    const primary = (order[a.status]||3)-(order[b.status]||3);
+    if(primary !== 0) return primary;
+    if(type==='asd'){
+      // ASD has no fixed waiting period (eligible immediately on EA number)
+      // — the closest equivalent to "days left" is how long it's already
+      // been waiting on JV, oldest JV first.
+      const da = a.p.jvDate ? new Date(a.p.jvDate).getTime() : Infinity;
+      const db = b.p.jvDate ? new Date(b.p.jvDate).getTime() : Infinity;
+      return da - db;
+    }
+    const da = a.r.emdDaysLeft===null||a.r.emdDaysLeft===undefined ? Infinity : a.r.emdDaysLeft;
+    const db = b.r.emdDaysLeft===null||b.r.emdDaysLeft===undefined ? Infinity : b.r.emdDaysLeft;
+    return da - db;
   });
 
   if(!rows.length) return `<div class="empty"><div class="empty-icon">🏦</div><div class="empty-text">No ${col.title} deposits tracked yet.</div></div>`;

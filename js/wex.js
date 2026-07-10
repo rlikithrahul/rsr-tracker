@@ -35,22 +35,15 @@ const WEX_SEED=[{"genCode": "2023-ENG05-48-148", "firm": "RSR Constructions", "f
 // ─── HELPERS ─────────────────────────────────────────
 async function loadWEXCustomTypes(){
   if(D.wexCustomTypes) return D.wexCustomTypes;
-  try{
-    const rows=await sbReq('settings?key=eq.'+WEX_CTYPES_KEY,'GET');
-    if(rows&&rows.length&&rows[0].value) D.wexCustomTypes=JSON.parse(rows[0].value);
-  }catch(e){}
-  if(!D.wexCustomTypes) D.wexCustomTypes=[];
+  D.wexCustomTypes = await getSetting(WEX_CTYPES_KEY, []);
   return D.wexCustomTypes;
 }
 async function saveWEXCustomTypes(){
-  await sbReq('settings','POST',{key:WEX_CTYPES_KEY,value:JSON.stringify(D.wexCustomTypes||[])});
+  await saveSetting(WEX_CTYPES_KEY, D.wexCustomTypes||[]);
 }
 async function loadWEXData(){
   if(D.wexData) return D.wexData;
-  try{
-    const rows=await sbReq('settings?key=eq.'+WEX_KEY,'GET');
-    if(rows&&rows.length&&rows[0].value) D.wexData=JSON.parse(rows[0].value);
-  }catch(e){}
+  D.wexData = await getSetting(WEX_KEY, null);
   if(!D.wexData||!D.wexData.records){
     D.wexData={records:WEX_SEED.map(r=>({...r,id:'wex_'+uid()})),seeded:true};
     await saveWEXData().catch(()=>{});
@@ -62,9 +55,8 @@ async function saveWEXData(){
   // tab/session from silently wiping out entries saved by another session
   // in the meantime (this was the cause of "disappearing" WEX entries).
   try{
-    const rows=await sbReq('settings?key=eq.'+WEX_KEY,'GET');
-    if(rows&&rows.length&&rows[0].value){
-      const remote=JSON.parse(rows[0].value);
+    const remote = await getSetting(WEX_KEY, null);
+    if(remote){
       const remoteRecords=remote.records||[];
       const localRecords=D.wexData.records||[];
       const localIds=new Set(localRecords.map(r=>r.id));
@@ -73,8 +65,9 @@ async function saveWEXData(){
       D.wexData.records=[...localRecords, ...remoteRecords.filter(r=>!localIds.has(r.id))];
     }
   }catch(e){}
-  await sbReq('settings','POST',{key:WEX_KEY,value:JSON.stringify(D.wexData)});
+  await saveSetting(WEX_KEY, D.wexData);
 }
+
 
 // ─── RESTORE HISTORICAL DATA ──────────────────────────
 // Re-merges the originally-imported Excel records (WEX_SEED, still bundled

@@ -672,15 +672,13 @@ async function saveUnmatchedToCloud(){
     receipts: tallyUnmatchedReceipts,
     savedAt: new Date().toISOString()
   };
-  await sbReq('settings','POST',{key: UNMATCHED_KEY, value: JSON.stringify(data)});
+  await saveSetting(UNMATCHED_KEY, data);
 }
 
 async function loadUnmatchedFromCloud(){
   try{
-    const rows = await sbReq('settings','GET');
-    const row = (rows||[]).find(x=>x.key===UNMATCHED_KEY);
-    if(!row) return;
-    const data = JSON.parse(row.value||'{}');
+    const data = await getSetting(UNMATCHED_KEY, null);
+    if(!data) return;
     if(data.payments && data.payments.length){
       tallyUnmatched = data.payments;
     }
@@ -691,7 +689,7 @@ async function loadUnmatchedFromCloud(){
 }
 
 async function clearUnmatchedFromCloud(){
-  await sbReq('settings','POST',{key: UNMATCHED_KEY, value: JSON.stringify({payments:[],receipts:[],savedAt:new Date().toISOString()})}).catch(()=>{});
+  await saveSetting(UNMATCHED_KEY, {payments:[],receipts:[],savedAt:new Date().toISOString()}).catch(()=>{});
 }
 
 async function matchAndImport(transactions){

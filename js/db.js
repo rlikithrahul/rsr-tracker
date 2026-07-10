@@ -28,6 +28,53 @@ async function sbReq(table, method, body, extra) {
 }
 
 // ═══════════════════════════════════════════════════════
+// ROBUST SETTINGS KEY-VALUE STORE
+// ═══════════════════════════════════════════════════════
+// Every "global setting" (staff list, custom work types, WEX custom types,
+// WEX data, meetings, EMI data, unmatched Tally cache, etc.) is stored as
+// one row per key in the `settings` table. Relying on POST with an upsert
+// Prefer header only actually updates the existing row if the table has a
+// DB-level unique constraint on `key` — without one, Postgres just inserts
+// a new duplicate row every single save. A later read that naively takes
+// "the first matching row" can then return an old/empty duplicate instead
+// of the latest save. That silent mismatch was the root cause behind
+// several "I added it and it just disappeared" bugs. These two helpers
+// never depend on that constraint existing: they always look up what's
+// really there, write to the exact row that exists by its id, and clean up
+// any already-created duplicates as they're found — so it's correct
+// forever after, regardless of what's already in the table today.
+
+async function getSettingRows(key){
+  try{
+    const rows = await sbReq('settings?key=eq.'+encodeURIComponent(key)+'&order=id.desc','GET');
+    return rows||[];
+  }catch(e){ return []; }
+}
+
+// Returns the parsed value for a key, or fallback if not present.
+async function getSetting(key, fallback){
+  const rows = await getSettingRows(key);
+  if(!rows.length) return fallback;
+  try{ return JSON.parse(rows[0].value); }catch(e){ return fallback; }
+}
+
+// Writes value (any JSON-serializable data) for key, self-healing any
+// duplicate rows found along the way.
+async function saveSetting(key, value){
+  const json = JSON.stringify(value);
+  const rows = await getSettingRows(key);
+  if(rows.length){
+    const keep = rows[0];
+    await sbReq('settings?id=eq.'+keep.id, 'PATCH', {value: json});
+    for(let i=1;i<rows.length;i++){
+      try{ await sbReq('settings?id=eq.'+rows[i].id, 'DELETE'); }catch(e){}
+    }
+  } else {
+    await sbReq('settings', 'POST', {key, value: json});
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // SUPABASE STORAGE (photo uploads)
 // ═══════════════════════════════════════════════════════
 // ─── UPLOAD VIA CLOUDFLARE WORKER ────────────────────
@@ -73,6 +120,16 @@ async function uploadDocument(file, projId, docType) {
 // On login: fetch contractor list + project summaries (lightweight)
 // On project open: fetch full project data (heavy: updates, photos, releases)
 
+// Picks the most recently-created row for a key out of a bulk settings
+// fetch — guards against the same duplicate-row issue described above for
+// the couple of places that still bulk-fetch the whole settings table.
+function _pickLatestSettingRow(rows, key){
+  const matches = (rows||[]).filter(x => x.key === key);
+  if(!matches.length) return null;
+  matches.sort((a,b) => (b.id||0) - (a.id||0));
+  return matches[0];
+}
+
 async function loadDB() {
   // Full load for initial/refresh — kept for compatibility
   const [c, p, s] = await Promise.all([
@@ -84,9 +141,9 @@ async function loadDB() {
   D.projects = (p||[]).map(r => ({...r.data, id:r.id}));
   // Clear cache on full reload so fresh data is fetched on next project open
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
-  const pw = (s||[]).find(x => x.key === OPW_KEY);
+  const pw = _pickLatestSettingRow(s, OPW_KEY);
   if (pw) D.ownerPw = pw.value;
-  const staffRow = (s||[]).find(x => x.key === 'rsr_staff_v1');
+  const staffRow = _pickLatestSettingRow(s, 'rsr_staff_v1');
   D.staffMembers = staffRow ? JSON.parse(staffRow.value||'[]') : [];
 }
 
@@ -116,9 +173,9 @@ async function loadDBSummary() {
     return proj;
   });
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
-  const pw = (s||[]).find(x => x.key === OPW_KEY);
+  const pw = _pickLatestSettingRow(s, OPW_KEY);
   if (pw) D.ownerPw = pw.value;
-  const staffRow2 = (s||[]).find(x => x.key === 'rsr_staff_v1');
+  const staffRow2 = _pickLatestSettingRow(s, 'rsr_staff_v1');
   D.staffMembers = staffRow2 ? JSON.parse(staffRow2.value||'[]') : [];
 }
 

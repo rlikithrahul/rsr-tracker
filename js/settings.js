@@ -7,15 +7,11 @@ const STAFF_KEY = 'rsr_staff_v1';
 
 // ─── LOAD STAFF FROM DB ───────────────────────────────
 async function loadStaff(){
-  try{
-    const rows = await sbReq('settings','GET');
-    const staffRow = (rows||[]).find(x=>x.key===STAFF_KEY);
-    D.staffMembers = staffRow ? JSON.parse(staffRow.value) : [];
-  }catch(e){ D.staffMembers = []; }
+  D.staffMembers = await getSetting(STAFF_KEY, []);
 }
 
 async function saveStaff(){
-  await sbReq('settings','POST',{key:STAFF_KEY, value:JSON.stringify(D.staffMembers)});
+  await saveSetting(STAFF_KEY, D.staffMembers||[]);
 }
 
 // ─── ACTIVITY LOG ─────────────────────────────────────

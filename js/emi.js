@@ -7,18 +7,14 @@ const EMI_KEY = 'rsr_emi_data_v1';
 
 // ─── LOAD/SAVE EMI DATA ───────────────────────────────
 async function loadEMIData(){
-  try{
-    const rows = await sbReq('settings','GET');
-    const row = (rows||[]).find(x=>x.key===EMI_KEY);
-    D.emiData = row ? JSON.parse(row.value||'{}') : {emis:[], cards:[], billAmounts:{}};
-    if(!D.emiData.emis) D.emiData.emis = [];
-    if(!D.emiData.cards) D.emiData.cards = [];
-    if(!D.emiData.billAmounts) D.emiData.billAmounts = {};
-  }catch(e){ D.emiData = {emis:[], cards:[], billAmounts:{}}; }
+  D.emiData = await getSetting(EMI_KEY, {emis:[], cards:[], billAmounts:{}});
+  if(!D.emiData.emis) D.emiData.emis = [];
+  if(!D.emiData.cards) D.emiData.cards = [];
+  if(!D.emiData.billAmounts) D.emiData.billAmounts = {};
 }
 
 async function saveEMIData(){
-  await sbReq('settings','POST',{key:EMI_KEY, value:JSON.stringify(D.emiData)});
+  await saveSetting(EMI_KEY, D.emiData);
 }
 
 // ─── RENDER EMI TAB ───────────────────────────────────

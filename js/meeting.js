@@ -7,15 +7,11 @@ const MEETING_KEY = 'rsr_meetings_v1';
 // ─── LOAD / SAVE ─────────────────────────────────────
 async function loadMeetings(){
   if(D.meetings) return D.meetings;
-  try{
-    const rows = await sbReq('settings?key=eq.'+MEETING_KEY,'GET');
-    if(rows&&rows.length&&rows[0].value) D.meetings = JSON.parse(rows[0].value);
-  }catch(e){}
-  if(!D.meetings) D.meetings = [];
+  D.meetings = await getSetting(MEETING_KEY, []);
   return D.meetings;
 }
 async function saveMeetings(){
-  await sbReq('settings','POST',{key:MEETING_KEY, value:JSON.stringify(D.meetings||[])});
+  await saveSetting(MEETING_KEY, D.meetings||[]);
 }
 
 // ─── MAIN TAB RENDER ─────────────────────────────────

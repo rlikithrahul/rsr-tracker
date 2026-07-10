@@ -213,15 +213,19 @@ function isArchived(item){ return item && item._archived === true; }
 function getMissingFields(p){
   const missing = [];
   const isCompleted = p.status==='completed';
+  const hasEA = !!(p.eaNumber || (p.documents && p.documents.ea));
+
+  // Tender ID and Work Type must always be present, whether the project is
+  // active or completed — these identify the project itself, unlike the
+  // in-progress operational fields below.
+  if(!p.tender) missing.push('Tender ID');
+  if(!p.type || p.type==='Other') missing.push('Work Type');
+
   // For completed projects: the work is done and JV is uploaded — don't keep
   // nagging about setup fields that only matter while a project is still
-  // running (Tender ID, Cost Centre, Work Type, BOQ, Estimated Amount).
-  // Only genuinely important post-completion items are still flagged
-  // (e.g. ASD amount, since it affects refund eligibility/tracking).
+  // running (Cost Centre, BOQ, Estimated Amount).
   if(!isCompleted){
-    if(!p.tender) missing.push('Tender ID');
     if(!p.costCentre) missing.push('Tally Cost Centre');
-    if(!p.type || p.type==='Other') missing.push('Work Type');
     if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
     if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
     if(!p.boq || p.boq.length===0) missing.push('BOQ Items');
@@ -230,13 +234,25 @@ function getMissingFields(p){
   // implies the agreement was done, even if the exact date wasn't recorded
   // (common for old/bulk-imported closed projects)
   if(!p.agreeDate && !isCompleted) missing.push('Agreement Date');
-  if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) missing.push('ASD Amount (required — bid % above 25%)');
+
+  // Security deposit amounts — each only becomes relevant once the project
+  // has reached the lifecycle stage where that figure is actually known, so
+  // we don't nag about it before then:
+  //  - EMD is fixed once the agreement is signed
+  //  - FSD is only known once the JV (which it's deducted from) is received
+  //  - ASD is only relevant once EA number is received (that's when ASD
+  //    refund eligibility begins)
+  if(p.agreeDate && (!p.emd || p.emd<=0)) missing.push('EMD Amount');
+  if(p.jvDate && (!p.fsd || p.fsd<=0)) missing.push('FSD Amount');
+  if(hasEA && Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) missing.push('ASD Amount (required — bid % above 25%)');
   return missing;
 }
 function isIncomplete(p){
   if(p._importedFrom==='bulk_excel' && getMissingFields(p).length>0) return true;
-  // ASD missing on high-bid projects is always flagged, regardless of import source
-  if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) return true;
+  // ASD missing on high-bid projects is flagged once EA number is received
+  // (that's the point ASD refund eligibility begins) — not before.
+  const hasEA = !!(p.eaNumber || (p.documents && p.documents.ea));
+  if(hasEA && Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) return true;
   return false;
 }
 
