@@ -1301,16 +1301,16 @@ document.addEventListener('click', e=>{
 // ─── COST CENTRE REFERENCE MODAL ─────────────────────
 let _ccSearch='',_ccContractor='',_ccStatus='',_ccFirm='';
 
-function showCCRef(){
+function openCostCentreRef(){
   let modal=document.getElementById('modal-cc-ref');
   if(!modal){modal=document.createElement('div');modal.className='mov';modal.id='modal-cc-ref';document.body.appendChild(modal);}
   _ccSearch='';_ccContractor='';_ccStatus='';_ccFirm='';
-  _renderCCRef2(modal);
+  _renderCCRef(modal);
   modal.classList.add('open');
   setTimeout(()=>document.getElementById('cc-search-inp')?.focus(),150);
 }
 
-function _renderCCRef2(modal){
+function _renderCCRef(modal){
   const projects=D.projects.filter(p=>!isArchived(p));
   const contractors=[...new Set(projects.map(p=>GC(p.contractorId)?.name).filter(Boolean))].sort();
   const firms=[...new Set(projects.map(p=>p.firm||'RSR Constructions'))].sort();
@@ -1378,19 +1378,19 @@ function _renderCCRef2(modal){
     <div style="padding:12px 16px;background:#f8faff;border-bottom:1px solid var(--border);flex-shrink:0">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="cc-search-inp" type="text" placeholder="🔍 Search cost centre, project, contractor…" value="${_ccSearch}"
-          oninput="_ccSearch=this.value;_renderCCRef2(document.getElementById('modal-cc-ref'))"
+          oninput="_ccSearch=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))"
           style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
-        <select onchange="_ccStatus=this.value;_renderCCRef2(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+        <select onchange="_ccStatus=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
           <option value="">All Statuses</option>
           <option value="active" ${_ccStatus==='active'?'selected':''}>🟢 Active</option>
           <option value="completed" ${_ccStatus==='completed'?'selected':''}>✅ Completed</option>
           <option value="onhold" ${_ccStatus==='onhold'?'selected':''}>⏸ On Hold</option>
         </select>
-        <select onchange="_ccFirm=this.value;_renderCCRef2(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+        <select onchange="_ccFirm=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
           <option value="">All Firms</option>
           ${firms.map(f=>`<option value="${f}" ${_ccFirm===f?'selected':''}>${f}</option>`).join('')}
         </select>
-        <select onchange="_ccContractor=this.value;_renderCCRef2(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
+        <select onchange="_ccContractor=this.value;_renderCCRef(document.getElementById('modal-cc-ref'))" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif;background:#fff">
           <option value="">All Contractors</option>
           ${contractors.map(c=>`<option value="${c}" ${_ccContractor===c?'selected':''}>${c}</option>`).join('')}
         </select>
@@ -1447,8 +1447,3 @@ async function exportCCRef(){
   toast('✓ Exported','ok');
 }
 }
-
-// Explicitly register on window to prevent cache issues
-window.showCCRef = showCCRef;
-window.copyCCName = copyCCName;
-window.exportCCRef = exportCCRef;
