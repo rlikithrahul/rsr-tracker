@@ -1,3 +1,4 @@
+// finance.js v2 — 202607100611
 // ═══════════════════════════════════════
 // finance.js
 // RSR Constructions Tracker v17
