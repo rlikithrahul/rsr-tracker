@@ -408,7 +408,13 @@ function buildLifecycleTimeline(p, id){
   const hasJV = !!p.jvDate;
   const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
   const wecApplied = !!p.wecApplied;
-  const wecReceived = !!p.wecReceived;
+  // WEC is considered "done" if EITHER: formally marked received, OR the
+  // certificate document is uploaded, OR work experience quantities have
+  // been entered for this project. Any one of these is real evidence
+  // the certificate was received — don't ask for it again.
+  const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+  const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
+  const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
   const checkCount = (p.settlements||[]).filter(s=>!isArchived(s)).length;
   const hasPayment = checkCount > 0;
   const gstFiled = !!(p.gstFiled);

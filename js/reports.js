@@ -318,7 +318,7 @@ function buildJVSheet(fyFilter){
         c?c.name:'—', getFYFromDate(p.jvDate)||'—',
         fmtDate(p.jvDate), getJVNumber(p), getEANumber(p),
         p.emd||0, p.asd||0, p.fsd||0, p.jvAmount||0,
-        p.wecReceived?'Yes':(p.docVault&&p.docVault.wec)?'Uploaded':'No'
+        (p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))?'Yes':'No'
       ];
     });
 
@@ -632,7 +632,7 @@ function getReportData(type, fy){
         const fy_val = type==='jvsheet'?getFYFromDate(p.jvDate):getFYFromDate(getSettlementDate(p));
         return type==='jvsheet'
           ? [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',getGenCode(p),c?c.name:'—',fy_val,fmtDate(p.jvDate),getJVNumber(p),getEANumber(p),p.emd||0,p.asd||0,p.fsd||0,p.jvAmount||0,
-              p.wecReceived?'Yes':(p.docVault&&p.docVault.wec)?'Uploaded':'No']
+              (p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))?'Yes':'No']
           : [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',getGenCode(p),c?c.name:'—',fy_val,fmtDate(getSettlementDate(p)),getAmountReceived(p)||0];
       });
       break;

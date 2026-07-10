@@ -58,7 +58,52 @@ async function loadWEXData(){
   return D.wexData;
 }
 async function saveWEXData(){
+  // Merge with latest server state before writing — prevents one browser
+  // tab/session from silently wiping out entries saved by another session
+  // in the meantime (this was the cause of "disappearing" WEX entries).
+  try{
+    const rows=await sbReq('settings?key=eq.'+WEX_KEY,'GET');
+    if(rows&&rows.length&&rows[0].value){
+      const remote=JSON.parse(rows[0].value);
+      const remoteRecords=remote.records||[];
+      const localRecords=D.wexData.records||[];
+      const localIds=new Set(localRecords.map(r=>r.id));
+      // Keep all local records (they include the newest edit) plus any
+      // remote records that aren't present locally (added elsewhere)
+      D.wexData.records=[...localRecords, ...remoteRecords.filter(r=>!localIds.has(r.id))];
+    }
+  }catch(e){}
   await sbReq('settings','POST',{key:WEX_KEY,value:JSON.stringify(D.wexData)});
+}
+
+// ─── RESTORE HISTORICAL DATA ──────────────────────────
+// Re-merges the originally-imported Excel records (WEX_SEED, still bundled
+// in this file) back into the current data. Only adds records that are
+// genuinely missing (matched by genCode+FY) — never duplicates or
+// overwrites anything already present. Use this if older financial years
+// seem to have disappeared from the Work Experience tab.
+async function restoreWEXHistoricalData(){
+  await loadWEXData();
+  const existing = D.wexData.records||[];
+  const existingKeys = new Set(existing.map(r=>(r.genCode||'')+'|'+(r.fy||'')));
+  const missing = WEX_SEED.filter(seed=>!existingKeys.has((seed.genCode||'')+'|'+(seed.fy||'')));
+
+  if(!missing.length){
+    toast('✓ No missing historical records — all data already present','ok');
+    return;
+  }
+
+  const ok = await showConfirm({
+    title:'Restore Historical Data?',
+    message:`Found <strong>${missing.length}</strong> historical record${missing.length>1?'s':''} from the original Excel import that are missing from the current data (financial years: ${[...new Set(missing.map(m=>m.fy))].sort().join(', ')}). These will be added back without touching any existing entries.`,
+    confirmLabel:'Yes, Restore'
+  });
+  if(!ok) return;
+
+  D.wexData.records = [...existing, ...missing.map(r=>({...r, id:'wex_'+uid()}))];
+  await saveWEXData();
+  toast(`✓ Restored ${missing.length} historical record${missing.length>1?'s':''}`,'ok');
+  renderWEX();
 }
 function getAllWEXItems(){
   const customs=(D.wexCustomTypes||[]).map(c=>({...c,isCustom:true}));
@@ -445,7 +490,9 @@ async function deleteWEXEntry(wexId,pid){
 }
 
 // ─── TAB VIEW ─────────────────────────────────────────
-let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar'
+let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar' | 'flat'
+let _wexFlatFY = '';
+let _wexFlatFirm = '';
 
 async function renderWEX(){
   const el=document.getElementById('sec-wex'); if(!el) return;
@@ -598,10 +645,62 @@ function _renderWEXTab(el){
     </table></div>
   </div>`;
 
+  // ─── FLAT EXCEL-LIKE VIEW ─────────────────────────────
+  const flatFilterFY = typeof _wexFlatFY!=='undefined'?_wexFlatFY:'';
+  const flatFilterFirm = typeof _wexFlatFirm!=='undefined'?_wexFlatFirm:'';
+  let flatRecords = records.slice().sort((a,b)=>(b.fy||'').localeCompare(a.fy||'')||(a.genCode||'').localeCompare(b.genCode||''));
+  if(flatFilterFY) flatRecords = flatRecords.filter(r=>r.fy===flatFilterFY);
+  if(flatFilterFirm) flatRecords = flatRecords.filter(r=>r.firm===flatFilterFirm);
+
+  const flatHTML = `<div class="card" style="border-top:3px solid var(--navy)">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--surface2);border-radius:var(--rs)">
+      📋 Plain spreadsheet-style list — every entry, one row per project per financial year, exactly like the Excel you're used to.
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <select onchange="_wexFlatFY=this.value;_renderWEXTab(document.getElementById('sec-wex'))" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px">
+        <option value="">All Years</option>
+        ${fys.slice().sort().reverse().map(fy=>`<option value="${fy}" ${flatFilterFY===fy?'selected':''}>FY ${fy}</option>`).join('')}
+      </select>
+      <select onchange="_wexFlatFirm=this.value;_renderWEXTab(document.getElementById('sec-wex'))" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px">
+        <option value="">All Firms</option>
+        ${firms.map(f=>`<option value="${f}" ${flatFilterFirm===f?'selected':''}>${f}</option>`).join('')}
+      </select>
+      <span style="font-size:12px;color:var(--text3);align-self:center">${flatRecords.length} record${flatRecords.length!==1?'s':''}</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+      <thead><tr style="background:var(--navy);color:#fff">
+        <th style="padding:6px 10px;text-align:left">FY</th>
+        <th style="padding:6px 10px;text-align:left">Firm</th>
+        <th style="padding:6px 10px;text-align:left">Gen Code</th>
+        <th style="padding:6px 10px;text-align:left">Project</th>
+        <th style="padding:6px 10px;text-align:left">Work Type</th>
+        <th style="padding:6px 10px;text-align:right">Value (₹)</th>
+        <th style="padding:6px 10px;text-align:left">Quantities</th>
+      </tr></thead>
+      <tbody>
+        ${flatRecords.map((r,i)=>{
+          const p=D.projects.find(pr=>pr.id===r.projectId||(getGenCode(pr)||'').toUpperCase()===r.genCode);
+          const qtyStr=allItems.filter(it=>(r.quantities||{})[it.key]>0)
+            .map(it=>`${it.label}: <strong>${r.quantities[it.key].toFixed(2)}</strong> ${it.unit}`).join(' &nbsp;·&nbsp; ');
+          return `<tr style="border-bottom:1px solid var(--surface2);background:${i%2?'var(--surface2)':'#fff'}">
+            <td style="padding:6px 10px;font-weight:700">${r.fy}</td>
+            <td style="padding:6px 10px">${(r.firm||'').replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao').replace('R Likith Rahul','RLR')}</td>
+            <td style="padding:6px 10px;font-family:monospace;font-size:11px">${r.genCode}</td>
+            <td style="padding:6px 10px;${p?'cursor:pointer;color:var(--navy);font-weight:600':''}" ${p?`onclick="openDetail('${p.id}')"`:''}>${p?p.name.substring(0,45):r.genCode}</td>
+            <td style="padding:6px 10px">${r.workType||'—'}</td>
+            <td style="padding:6px 10px;text-align:right;font-weight:700">${fmt(r.workValue||0)}</td>
+            <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${qtyStr||'—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+
   const tabs=[
     {key:'summary',icon:'📊',label:'Annual Summary'},
     {key:'peak',   icon:'★', label:'Best FY per Quantity'},
     {key:'similar',icon:'🏗️',label:'Similar Works Value'},
+    {key:'flat',   icon:'📋',label:'All Records (Excel View)'},
   ];
 
   el.innerHTML=`<div class="wrap">
@@ -609,7 +708,10 @@ function _renderWEXTab(el){
       <div><div class="pg-title">📐 Work Experience</div>
         <div style="font-size:12px;color:var(--text3)">${records.length} entries · ${fys.length} FYs · Open projects to add quantities</div>
       </div>
-      <button onclick="exportWEXToExcel()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export Excel</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="restoreWEXHistoricalData()" style="background:#fff;color:#7c3aed;border:1px solid #7c3aed;border-radius:var(--rs);padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">♻️ Restore Historical Data</button>
+        <button onclick="exportWEXToExcel()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export Excel</button>
+      </div>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:var(--rs);padding:4px;flex-wrap:wrap">
       ${tabs.map(t=>`<button onclick="_wexTab='${t.key}';_renderWEXTab(document.getElementById('sec-wex'))"
@@ -620,6 +722,7 @@ function _renderWEXTab(el){
     ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet.</div></div>'):''}
     ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet.</div></div>'):''}
     ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet.</div></div>'):''}
+    ${_wexTab==='flat'?(records.length?flatHTML:'<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No data yet.</div></div>'):''}
   </div>`;
 }
 // ─── EXPORT ───────────────────────────────────────────

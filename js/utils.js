@@ -212,16 +212,24 @@ function isArchived(item){ return item && item._archived === true; }
 // ─── INCOMPLETE PROJECT DETECTION ────────────────────
 function getMissingFields(p){
   const missing = [];
-  if(!p.tender) missing.push('Tender ID');
-  if(!p.costCentre) missing.push('Tally Cost Centre');
-  if(!p.type || p.type==='Other') missing.push('Work Type');
+  const isCompleted = p.status==='completed';
+  // For completed projects: the work is done and JV is uploaded — don't keep
+  // nagging about setup fields that only matter while a project is still
+  // running (Tender ID, Cost Centre, Work Type, BOQ, Estimated Amount).
+  // Only genuinely important post-completion items are still flagged
+  // (e.g. ASD amount, since it affects refund eligibility/tracking).
+  if(!isCompleted){
+    if(!p.tender) missing.push('Tender ID');
+    if(!p.costCentre) missing.push('Tally Cost Centre');
+    if(!p.type || p.type==='Other') missing.push('Work Type');
+    if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
+    if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
+    if(!p.boq || p.boq.length===0) missing.push('BOQ Items');
+  }
   // Agreement Date: not required for completed projects — JV received already
   // implies the agreement was done, even if the exact date wasn't recorded
   // (common for old/bulk-imported closed projects)
-  if(!p.agreeDate && p.status!=='completed') missing.push('Agreement Date');
-  if(!p.estimated || p.estimated===0) missing.push('Est. BOQ Amount');
-  if(!p.bidPct && p.bidPct!==0) missing.push('Bid %');
-  if(!p.boq || p.boq.length===0) missing.push('BOQ Items');
+  if(!p.agreeDate && !isCompleted) missing.push('Agreement Date');
   if(Math.abs(p.bidPct||0) > 25 && (!p.asd || p.asd<=0)) missing.push('ASD Amount (required — bid % above 25%)');
   return missing;
 }

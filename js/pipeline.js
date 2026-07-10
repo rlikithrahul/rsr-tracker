@@ -36,7 +36,9 @@ function renderPipeline(){
     const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length > 0;
     const wecApplied = !!p.wecApplied;
-    const wecReceived = !!p.wecReceived;
+    const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+    const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
+    const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
     const gstFiled = !!p.gstFiled;
     const refundApplied = !!p.refundApplied;
     const refundReceived = !!p.refundReceived;
@@ -96,21 +98,6 @@ function renderPipeline(){
       } else if(!wecReceived && wecApplied){
         stages.wec_applied.push(p);
         placed = true;
-      }
-
-      // WEC received but WEX quantities not entered
-      // Remove from pending if: WEC document uploaded OR quantities already entered
-      if(wecReceived){
-        const wecDoc = (p.docVault||{}).wec;
-        const hasWEXEntry = D.wexData &&
-          (D.wexData.records||[]).some(r=>
-            r.projectId===p.id || (gc && r.genCode===gc.toUpperCase())
-          );
-        // Only show as pending if NEITHER is done
-        if(!wecDoc && !hasWEXEntry){
-          stages.wex_pending.push(p);
-          placed = true;
-        }
       }
 
       if(placed) return;
@@ -474,9 +461,9 @@ async function exportActionCentre(format){
     }
     if(!hasEA) stages.ea_pending.push(p);
     else if(asdAmt>0&&!p.asdRefundApplied&&!p.asdRefundReceived) stages.asd_to_apply.push(p);
-    else if(!p.wecApplied&&!p.wecReceived) stages.wec_to_apply.push(p);
-    else if(p.wecApplied&&!p.wecReceived) stages.wec_applied.push(p);
-    else if(p.wecReceived&&!hasPayment&&!p.gstFiled) stages.payment_pending.push(p);
+    else if(!p.wecApplied&&!(p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_to_apply.push(p);
+    else if(p.wecApplied&&!(p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))) stages.wec_applied.push(p);
+    else if((p.wecReceived||(p.docVault&&p.docVault.wec)||(typeof getWEXEntries==='function'&&getWEXEntries(p).length>0))&&!hasPayment&&!p.gstFiled) stages.payment_pending.push(p);
     else if(hasPayment&&!p.gstFiled) stages.gst_pending.push(p);
     else if(daysTo2yr!==null&&daysTo2yr<=0&&!p.refundReceived&&!p.refundApplied) stages.emd_overdue.push(p);
     else if(daysTo2yr!==null&&daysTo2yr<=90&&daysTo2yr>0&&!p.refundReceived&&!p.refundApplied) stages.emd_to_apply.push(p);
@@ -614,7 +601,9 @@ function getPipelineDashboardAlert(){
     if(!hasJV) return;
     const hasEA = !!(p.eaNumber||(p.docVault&&p.docVault.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length>0;
-    const wecReceived = !!p.wecReceived;
+    const wecDocUploaded = !!(p.docVault && p.docVault.wec);
+    const wecHasWEXEntry = typeof getWEXEntries==='function' && getWEXEntries(p).length>0;
+    const wecReceived = !!p.wecReceived || wecDocUploaded || wecHasWEXEntry;
     const gstFiled = !!p.gstFiled;
     const refundApplied = !!p.refundApplied;
 
