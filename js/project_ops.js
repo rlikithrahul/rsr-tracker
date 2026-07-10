@@ -212,6 +212,9 @@ async function saveProject(){
       setBusy(false);
     }
     CM('modal-np');
+    logActivity({category:'project',action:'create',projectId:proj.id,projectName:proj.name,
+      description:(CU?CU.name:'User')+' created project: '+proj.name+' ('+proj.tender+')',
+      meta:{firm:proj.firm,contractor:GC(proj.contractorId)?.name||'',boqItems:boq.length}});
     toast('✓ Project created with '+boq.length+' BOQ items','ok');
     writeActivityLog('project_create', `Project created: ${proj.name}`, proj.id).catch(()=>{});
     ownerTab(0);
@@ -294,6 +297,8 @@ async function deleteProject(pid){
     document.querySelectorAll('.mov.open').forEach(m=>m.classList.remove('open'));
     dpid=null;
     ownerTab(0);
+    logActivity({category:'project',action:'archive',projectId:pid,projectName:p.name,
+      description:(CU?CU.name:'User')+' archived project: '+p.name});
     toast('✓ Project archived — restore it anytime from Archive','ok');
   }catch(e){ toast('Archive failed: '+e.message,'error'); }
 }
@@ -720,6 +725,8 @@ async function saveEditProject(){
     CM('modal-edit-proj');
     renderDetail(editProjId);
     ownerTab(0);
+    logActivity({category:'project',action:'edit',projectId:p.id,projectName:p.name,
+      description:(CU?CU.name:'User')+' edited project: '+p.name});
     toast('✅ Project updated','ok');
     writeActivityLog('project_edit',`Project edited: ${p.name}`,editProjId).catch(()=>{});
   } catch(e){ toast('Save failed: '+e.message,'error'); }
@@ -1088,6 +1095,8 @@ async function quickSettleFromDetection(pid, rid, amount, date, ref){
   try{
     await saveProjectDB(p, {type:'settlement', amount, ref, meta:{autoDetected:true}});
     renderDetail(pid);
+    logActivity({category:'finance',action:'settlement',projectId:pid,projectName:p.name,
+      amount:amount,description:(CU?CU.name:'User')+' recorded settlement of ₹'+amount.toLocaleString('en-IN')+' for '+p.name});
     toast('✅ Settlement recorded — ₹'+amount.toLocaleString('en-IN'), 'ok');
   }catch(e){ toast('Save failed','error'); }
 }

@@ -266,11 +266,16 @@ async function _doDocUpload(file, pid, slotId, jvDetails){
       if(d.jvNotes) p.jvNotes = d.jvNotes;
       if(!p.status || p.status === 'active'){
         p.status = 'completed';
-        toast('✅ JV uploaded — project marked as Completed','ok',4000);
+        logActivity({category:'project',action:'jv_uploaded',projectId:pid,projectName:p.name,
+      description:(CU?CU.name:'User')+' uploaded JV document for '+p.name+' — marked Completed'});
+    toast('✅ JV uploaded — project marked as Completed','ok',4000);
       }
     }
     await saveProjectDB(p);
     setBusy(false);
+    logActivity({category:'project',action:'document_uploaded',projectId:pid,projectName:p?.name||'',
+      description:(CU?CU.name:'User')+' uploaded document ['+slotId+']: '+file.name+
+        (p?' for '+p.name:'')});
     toast(`✅ ${file.name} uploaded`, 'ok');
     const vaultEl = document.getElementById(`doc-vault-${pid}`);
     if (vaultEl) vaultEl.outerHTML = renderDocVault(p, CU.role === 'owner');

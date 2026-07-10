@@ -395,7 +395,10 @@ async function processTallyFile(){
       await matchAndImport(transactions);
       renderFunds();
       setTimeout(()=>{const c=document.getElementById('daybook-calendar');if(c)c.innerHTML=renderDaybookCalendar();},100);
-      toast(`✅ Monthly daybook imported — ${transactions.length} transactions processed`,'ok',4000);
+      logActivity({category:'tally',action:'daybook_import',
+      description:(CU?CU.name:'User')+' imported monthly daybook: '+transactions.length+' transactions processed',
+      meta:{count:transactions.length}});
+    toast(`✅ Monthly daybook imported — ${transactions.length} transactions processed`,'ok',4000);
     } else {
       await matchAndImport(transactions);
       renderFunds();
