@@ -278,6 +278,16 @@ async function _doDocUpload(file, pid, slotId, jvDetails){
       description:(CU?CU.name:'User')+' uploaded document ['+slotId+']: '+file.name+
         (p?' for '+p.name:'')});
     toast(`✅ ${file.name} uploaded`, 'ok');
+
+    // If JV was replaced/re-uploaded, reset bill form verification and re-trigger check
+    if(slotId === 'jv' && p.billFormVerified){
+      p.billFormVerified = false;
+      await saveProjectDB(p, {type:'jv_replaced',amount:0,ref:null,meta:{}});
+    }
+    // If bill form is already uploaded and JV was replaced, ask for re-verification
+    if(slotId === 'jv' && (p.docVault||{}).billform){
+      setTimeout(()=>_showBillFormVerification(pid), 800);
+    }
     const vaultEl = document.getElementById(`doc-vault-${pid}`);
     if (vaultEl) vaultEl.outerHTML = renderDocVault(p, CU.role === 'owner');
     else renderDetail(pid);

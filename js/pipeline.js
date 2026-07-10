@@ -99,13 +99,15 @@ function renderPipeline(){
       }
 
       // WEC received but WEX quantities not entered
+      // Remove from pending if: WEC document uploaded OR quantities already entered
       if(wecReceived){
         const wecDoc = (p.docVault||{}).wec;
         const hasWEXEntry = D.wexData &&
           (D.wexData.records||[]).some(r=>
             r.projectId===p.id || (gc && r.genCode===gc.toUpperCase())
           );
-        if(wecDoc && !hasWEXEntry){
+        // Only show as pending if NEITHER is done
+        if(!wecDoc && !hasWEXEntry){
           stages.wex_pending.push(p);
           placed = true;
         }

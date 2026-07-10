@@ -297,7 +297,7 @@ function buildJVSheet(fyFilter){
   const headers = [
     'Sl No','Project Name','Tender ID','Gen Code','Contractor',
     'Financial Year','JV Date','JV Number','EA Number',
-    'EMD (₹)','ASD (₹)','FSD (₹)','JV Amount (₹)'
+    'EMD (₹)','ASD (₹)','FSD (₹)','JV Amount (₹)','WEC Received'
   ];
 
   const wb = window.XLSX.utils.book_new();
@@ -317,7 +317,8 @@ function buildJVSheet(fyFilter){
         i+1, p.name||'—', p.tender||'—', getGenCode(p),
         c?c.name:'—', getFYFromDate(p.jvDate)||'—',
         fmtDate(p.jvDate), getJVNumber(p), getEANumber(p),
-        p.emd||0, p.asd||0, p.fsd||0, p.jvAmount||0
+        p.emd||0, p.asd||0, p.fsd||0, p.jvAmount||0,
+        p.wecReceived?'Yes':(p.docVault&&p.docVault.wec)?'Uploaded':'No'
       ];
     });
 
@@ -616,7 +617,7 @@ function getReportData(type, fy){
     case 'checkreceivedfy':
       title = type==='jvsheet'?`Year-wise JV Sheet${fy!=='all'?' — '+fy:''}`:`Year-wise Check Received${fy!=='all'?' — '+fy:''}`;
       headers = type==='jvsheet'
-        ? ['Sl No','Firm','Project Name','Tender ID','Gen Code','Contractor','FY','JV Date','JV Number','EA Number','EMD (₹)','ASD (₹)','FSD (₹)','JV Amount (₹)']
+        ? ['Sl No','Firm','Project Name','Tender ID','Gen Code','Contractor','FY','JV Date','JV Number','EA Number','EMD (₹)','ASD (₹)','FSD (₹)','JV Amount (₹)','WEC Received']
         : ['Sl No','Firm','Project Name','Tender ID','Gen Code','Contractor','FY','Check Received Date','Amount Received (₹)'];
       let projs = type==='jvsheet'
         ? D.projects.filter(p=>!isArchived(p)&&p.jvDate)
@@ -630,7 +631,8 @@ function getReportData(type, fy){
         const c=GC(p.contractorId);
         const fy_val = type==='jvsheet'?getFYFromDate(p.jvDate):getFYFromDate(getSettlementDate(p));
         return type==='jvsheet'
-          ? [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',getGenCode(p),c?c.name:'—',fy_val,fmtDate(p.jvDate),getJVNumber(p),getEANumber(p),p.emd||0,p.asd||0,p.fsd||0,p.jvAmount||0]
+          ? [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',getGenCode(p),c?c.name:'—',fy_val,fmtDate(p.jvDate),getJVNumber(p),getEANumber(p),p.emd||0,p.asd||0,p.fsd||0,p.jvAmount||0,
+              p.wecReceived?'Yes':(p.docVault&&p.docVault.wec)?'Uploaded':'No']
           : [i+1,getProjectFirm(p),p.name||'—',p.tender||'—',getGenCode(p),c?c.name:'—',fy_val,fmtDate(getSettlementDate(p)),getAmountReceived(p)||0];
       });
       break;
