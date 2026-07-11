@@ -276,19 +276,44 @@ function triggerInstall(){
 }
 
 // ─── SERVICE WORKER ───────────────────────────────────
+// IMPORTANT: CACHE_NAME must change on every deploy that touches this
+// file. A previous version of this service worker had a hardcoded cache
+// name that never changed between app versions — since the browser only
+// re-installs a service worker when its script bytes actually change, and
+// this script's bytes were often identical across several recent fixes,
+// the browser had no reason to ever refresh what it had cached. That
+// means the app's HTML shell, cached on someone's very first visit, could
+// keep being served indefinitely afterward regardless of how many new
+// versions were deployed or how many times the page was hard-refreshed —
+// invisible, because nothing about it looks like an error. Bumping this
+// version string forces a real reinstall, a real cache purge, and a
+// guaranteed fresh shell on the next load.
+const SW_VERSION = 'rsr-tracker-v24q-1';
+
 function registerServiceWorker(){
   if(!('serviceWorker' in navigator)) return;
+
+  // Belt-and-braces: proactively unregister any existing service worker
+  // and clear every cache this origin has, before registering the current
+  // one — so anyone whose browser is stuck on an old cached version from
+  // earlier testing gets a guaranteed clean slate on their very next load,
+  // without needing to know to manually clear site data themselves.
+  navigator.serviceWorker.getRegistrations().then(regs=>{
+    regs.forEach(r=>r.unregister());
+  }).catch(()=>{});
+  if('caches' in window){
+    caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});
+  }
+
   // Inline service worker as a blob (since we're a single HTML file)
   const swCode = `
-const CACHE_NAME = 'rsr-tracker-v13';
-const STATIC_ASSETS = ['/'];
+const CACHE_NAME = '${SW_VERSION}';
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS).catch(()=>{});
-    })
-  );
+  // Deliberately does NOT pre-cache the HTML shell ('/') anymore — that
+  // was the source of the stale-version problem above. This service
+  // worker no longer caches anything that could ever go stale in a way
+  // that silently hides a real update from the person using the app.
   self.skipWaiting();
 });
 
@@ -296,35 +321,22 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    ))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
-  // Cache-first for same-origin HTML (the app shell)
-  if(e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match('/').then(r => r || fetch(e.request)))
-    );
+  // Navigation (the HTML shell) and Supabase API calls: always go straight
+  // to the network, no caching, no fallback substitution. A failed
+  // request should fail visibly, not get silently replaced with cached or
+  // fabricated data.
+  if(e.request.mode === 'navigate' || e.request.url.includes('supabase.co')) {
+    e.respondWith(fetch(e.request, {cache:'no-store'}));
     return;
   }
-  // Network-only, pass-through, for Supabase API calls. We deliberately do
-  // NOT catch failures here and substitute a fake empty response anymore —
-  // that used to happen, and it meant any transient hiccup (the service
-  // worker still activating on a fresh tab, a burst of simultaneous
-  // requests at login, a brief network blip) would silently come back as
-  // "here's an empty array" — indistinguishable from a real "this key has
-  // no data" answer. That masked genuine failures as if they were normal,
-  // valid responses, which is exactly the kind of silent data problem this
-  // app must never produce. Let a real failure be a real failure, so the
-  // app's own error handling (which knows it's dealing with a possible
-  // failure, not a confirmed empty result) can respond correctly.
-  if(e.request.url.includes('supabase.co')) {
-    e.respondWith(fetch(e.request));
-    return;
-  }
-  // Cache-first for CDN resources (SheetJS, fonts)
+  // Cache-first for genuinely static third-party CDN resources only
+  // (fonts, SheetJS) — nothing app-specific or data-bearing ever goes
+  // through this path.
   if(e.request.url.includes('cdnjs.cloudflare.com') || e.request.url.includes('fonts.googleapis.com')) {
     e.respondWith(
       caches.match(e.request).then(cached => {
@@ -338,8 +350,10 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Default: network with cache fallback
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  // Everything else (the app's own JS/CSS files): network-only, no
+  // caching. These are already cache-busted with a version query string,
+  // so there is no benefit to caching them here and real risk in doing so.
+  e.respondWith(fetch(e.request, {cache:'no-store'}));
 });
 `;
   const blob = new Blob([swCode], {type:'application/javascript'});
