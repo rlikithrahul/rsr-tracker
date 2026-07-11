@@ -59,10 +59,12 @@ async function sbReq(table, method, body, extra) {
 //      best bet while stale rows still linger).
 
 async function getSettingRows(key){
-  try{
-    const rows = await sbReq('settings?key=eq.'+encodeURIComponent(key),'GET');
-    return rows||[];
-  }catch(e){ return []; }
+  // Deliberately no try/catch swallowing errors into []. A failed request
+  // and a genuinely empty result must never look the same to whatever
+  // called this — see the note above the service worker's fetch handler
+  // in offline.js for why that distinction matters here specifically.
+  const rows = await sbReq('settings?key=eq.'+encodeURIComponent(key),'GET');
+  return rows||[];
 }
 
 function _settingRowSize(row){

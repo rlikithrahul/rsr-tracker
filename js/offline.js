@@ -309,11 +309,19 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Network-first for Supabase API calls (always want fresh data)
+  // Network-only, pass-through, for Supabase API calls. We deliberately do
+  // NOT catch failures here and substitute a fake empty response anymore —
+  // that used to happen, and it meant any transient hiccup (the service
+  // worker still activating on a fresh tab, a burst of simultaneous
+  // requests at login, a brief network blip) would silently come back as
+  // "here's an empty array" — indistinguishable from a real "this key has
+  // no data" answer. That masked genuine failures as if they were normal,
+  // valid responses, which is exactly the kind of silent data problem this
+  // app must never produce. Let a real failure be a real failure, so the
+  // app's own error handling (which knows it's dealing with a possible
+  // failure, not a confirmed empty result) can respond correctly.
   if(e.request.url.includes('supabase.co')) {
-    e.respondWith(
-      fetch(e.request).catch(() => new Response(JSON.stringify([]), {headers:{'Content-Type':'application/json'}}))
-    );
+    e.respondWith(fetch(e.request));
     return;
   }
   // Cache-first for CDN resources (SheetJS, fonts)

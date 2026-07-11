@@ -188,10 +188,10 @@ function enterOwner(){
   setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
   SP('page-owner');
   Promise.all([
-    loadEMIData().catch(()=>{}),
-    loadGSTData().catch(()=>{}),
-    loadCustomWorkTypes().catch(()=>{}),
-    loadCustomLabourTypes().catch(()=>{})
+    loadEMIData().catch(e=>console.error('loadEMIData failed:',e)),
+    loadGSTData().catch(e=>console.error('loadGSTData failed:',e)),
+    loadCustomWorkTypes().catch(e=>console.error('loadCustomWorkTypes failed:',e)),
+    loadCustomLabourTypes().catch(e=>console.error('loadCustomLabourTypes failed:',e))
   ]).then(()=>{
     // Try restoring previous session position
     if(typeof restoreSessionState === 'function' && restoreSessionState()) return;

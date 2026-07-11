@@ -71,9 +71,14 @@ async function renderSettings(){
     return;
   }
 
-  await loadStaff();
-  await loadCustomWorkTypes();
-  await loadWEXCustomTypes();
+  try{
+    await loadStaff();
+    await loadCustomWorkTypes();
+    await loadWEXCustomTypes();
+  }catch(e){
+    console.error('Settings data failed to load:', e);
+    toast('⚠️ Some settings data failed to load — please refresh and try again before making changes here','error',6000);
+  }
 
   const el = document.getElementById('sec-settings');
   if(!el) return;
