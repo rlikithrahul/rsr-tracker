@@ -17,6 +17,14 @@ async function openDetail(id){
   document.getElementById('sec-detail').classList.remove('hidden');
   // Show loading state immediately
   document.getElementById('detail-wrap').innerHTML='<div class="loading" style="padding:40px;text-align:center;color:var(--text3)"><div style="font-size:24px;margin-bottom:8px">⏳</div>Loading project…</div>';
+  // Make sure Work Experience data is loaded (or re-render once it is) —
+  // it loads once, separately, at app startup, and if that fetch is still
+  // in flight when this page first renders, the "Work Experience
+  // Quantities" banner would otherwise show "Not Yet Entered" and never
+  // get corrected, even though the real data exists and is on its way.
+  if(typeof loadWEXData === 'function' && !D.wexData){
+    loadWEXData().then(()=>{ if(dpid===id) renderDetail(id); }).catch(()=>{});
+  }
   // If project already in cache, render immediately
   if(GP(id)){
     renderDetail(id);
