@@ -58,6 +58,141 @@ function getPreviousQuarter(){
   return {q:3, label:'Q3 (Oct–Dec)', year:y-1, filingMonth:1, filingYear:y};
 }
 
+// ─── QUARTERLY BILLS RECEIVED (Dashboard card) ───────
+// Start/end date (inclusive) for a given calendar quarter. Note the
+// financial-year framing: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
+// (Q4 falls in the calendar year AFTER the year label, matching Indian FY
+// convention used everywhere else in this app).
+function gstQuarterDateRange(year, q){
+  const ranges = {
+    1: [`${year}-04-01`, `${year}-06-30`],
+    2: [`${year}-07-01`, `${year}-09-30`],
+    3: [`${year}-10-01`, `${year}-12-31`],
+    4: [`${year+1}-01-01`, `${year+1}-03-31`]
+  };
+  return ranges[q];
+}
+function gstQuarterFYLabel(year, q){
+  // FY label: Q1-Q3 belong to FY year/year+1; Q4 (Jan-Mar) belongs to FY year/year+1 too
+  // (year here is the "Q1 anchor year", e.g. year=2026 means FY2026-27)
+  const fy = `FY${String(year).slice(2)}-${String(year+1).slice(2)}`;
+  const names = {1:'Q1 (Apr–Jun)', 2:'Q2 (Jul–Sep)', 3:'Q3 (Oct–Dec)', 4:'Q4 (Jan–Mar)'};
+  return `${names[q]} ${fy}`;
+}
+// Builds a list of the last N quarters (most recent completed first), for
+// the dashboard card's quarter switcher.
+function getRecentGSTQuarters(n){
+  const cur = getCurrentQuarter();
+  let {year, q} = cur;
+  const out = [];
+  for(let i=0;i<n;i++){
+    q--;
+    if(q<1){ q=4; year--; }
+    out.push({year, q, key:`${year}-Q${q}`, label:gstQuarterFYLabel(year,q)});
+  }
+  return out;
+}
+
+let _gstQuarterlySelected = null; // {year, q} — remembers dropdown choice while on the dashboard
+
+function computeQuarterlyBills(year, q){
+  const [start, end] = gstQuarterDateRange(year, q);
+  const byFirm = {};
+  GST_FIRMS.forEach(f => byFirm[f] = {bills:[], total:0});
+  let grandTotal = 0;
+
+  D.projects.filter(p=>!isArchived(p)).forEach(p=>{
+    (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{
+      if(!s.date || s.date < start || s.date > end) return;
+      const firm = p.firm || 'RSR Constructions';
+      if(!byFirm[firm]) byFirm[firm] = {bills:[], total:0};
+      byFirm[firm].bills.push({
+        projectId: p.id, projectName: p.name, contractorName: (GC(p.contractorId)||{}).name||'—',
+        amount: s.amount||0, date: s.date, ref: s.ref||'', gstFilingNote: p.gstFilingNote||''
+      });
+      byFirm[firm].total += (s.amount||0);
+      grandTotal += (s.amount||0);
+    });
+  });
+  Object.values(byFirm).forEach(f => f.bills.sort((a,b)=>a.date<b.date?-1:1));
+  return {byFirm, grandTotal, start, end};
+}
+
+function renderGSTQuarterlyCard(){
+  if(!_gstQuarterlySelected){
+    const prev = getPreviousQuarter();
+    _gstQuarterlySelected = {year: prev.year, q: prev.q};
+  }
+  const {year, q} = _gstQuarterlySelected;
+  const data = computeQuarterlyBills(year, q);
+  const quarters = getRecentGSTQuarters(8);
+  // Make sure the currently-selected quarter is always in the dropdown
+  // even if it's older than the last 8 (e.g. someone picked an old one)
+  if(!quarters.some(qt=>qt.year===year&&qt.q===q)){
+    quarters.push({year, q, key:`${year}-Q${q}`, label:gstQuarterFYLabel(year,q)});
+  }
+  const anyBills = Object.values(data.byFirm).some(f=>f.bills.length>0);
+
+  return `
+    <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+        <div class="st">🧾 GST Filing — Bills Received</div>
+        <select onchange="_gstQuarterlySelected=JSON.parse(this.value);renderGSTQuarterlyCardInto()" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
+          ${quarters.map(qt=>`<option value='${JSON.stringify({year:qt.year,q:qt.q})}' ${qt.year===year&&qt.q===q?'selected':''}>${qt.label}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        All payments received (per Settlement date) in <strong>${gstQuarterFYLabel(year,q)}</strong> — ${fmtDate(data.start)} to ${fmtDate(data.end)}. This is what needs to be filed for this quarter.
+      </div>
+      ${!anyBills ? `<div style="font-size:13px;color:var(--text3);font-style:italic;padding:12px 0">No payments received in this quarter yet.</div>` : GST_FIRMS.concat(Object.keys(data.byFirm).filter(f=>!GST_FIRMS.includes(f))).map(firm=>{
+        const f = data.byFirm[firm];
+        if(!f || !f.bills.length) return '';
+        return `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:13px;color:var(--navy)">
+            <span>${firm}</span><span>${fmt(f.total)}</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <tbody>
+              ${f.bills.map(b=>`
+                <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px 10px;cursor:pointer;color:var(--navy)" onclick="openDetail('${b.projectId}')">${b.projectName}</td>
+                  <td style="padding:6px 10px;color:var(--text3)">${b.contractorName}</td>
+                  <td style="padding:6px 10px;color:var(--text3)">${fmtDate(b.date)}</td>
+                  <td style="padding:6px 10px;text-align:right;font-weight:600">${fmt(b.amount)}</td>
+                  <td style="padding:6px 10px;min-width:160px">
+                    ${CU&&CU.isSuperAdmin
+                      ? `<input type="text" value="${(b.gstFilingNote||'').replace(/"/g,'&quot;')}" placeholder="Who files this?" style="width:100%;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px" onblur="saveGSTFilingNote('${b.projectId}', this.value)">`
+                      : `<span style="font-size:11px;color:var(--text3)">${b.gstFilingNote||'—'}</span>`}
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+      }).join('')}
+      ${anyBills ? `<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:2px solid var(--navy);font-weight:800;font-size:14px;color:var(--navy)">
+        <span>Grand Total</span><span>${fmt(data.grandTotal)}</span>
+      </div>` : ''}
+    </div>`;
+}
+
+function renderGSTQuarterlyCardInto(){
+  const el = document.getElementById('dash-gst-quarterly-section');
+  if(el) el.innerHTML = renderGSTQuarterlyCard();
+}
+
+async function saveGSTFilingNote(pid, note){
+  if(!CU || !CU.isSuperAdmin){ toast('Only Super Admin can edit this note','error'); return; }
+  const p = await GPFull(pid);
+  if(!p) return;
+  p.gstFilingNote = note.trim();
+  try{
+    await saveProjectDB(p);
+    renderGSTQuarterlyCardInto();
+    toast('✓ Note saved','ok');
+  }catch(e){ toast('Save failed — try again','error'); }
+}
+
 // ─── DASHBOARD ALERTS ────────────────────────────────
 function getGSTDashboardAlerts(){
   if(!D.gstData) return '';

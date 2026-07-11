@@ -170,7 +170,8 @@ function renderDash(){
     </div>
 
     <div id="dash-jv-section"></div>
-    <div id="dash-jv-tracker"></div>`;
+    <div id="dash-jv-tracker"></div>
+    <div id="dash-gst-quarterly-section"></div>`;
 
   // Right sidebar column — capital + EMI
   const sidebarCol = document.getElementById('dash-sidebar-col');
@@ -183,6 +184,11 @@ function renderDash(){
   renderCapitalSection(allProjects);
   renderExpectedJVSection(allProjects);
   renderJVMonthTracker(allProjects);
+  // GST quarterly bills-received card
+  if(typeof renderGSTQuarterlyCard === 'function'){
+    const qEl = document.getElementById('dash-gst-quarterly-section');
+    if(qEl) qEl.innerHTML = renderGSTQuarterlyCard();
+  }
   // EMI upcoming (if data loaded)
   if(D.emiData){
     const emiEl = document.getElementById('dash-emi-section');
