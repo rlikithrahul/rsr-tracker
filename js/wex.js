@@ -115,10 +115,137 @@ function getAllWEXItems(){
   return [...base,...customs];
 }
 function getAllWEXGroups(){
+  // Groups are user-orderable and user-creatable (Settings → Work
+  // Experience Quantity Types). D.wexGroupOrder is the source of truth
+  // for both which groups exist and what order they display in. If it's
+  // never been set (fresh install / before this feature existed), fall
+  // back to the original base groups plus whatever custom groups are
+  // already in use.
+  if(D.wexGroupOrder && D.wexGroupOrder.length) return [...D.wexGroupOrder];
   const customGroups=[...new Set((D.wexCustomTypes||[]).map(c=>c.group||'Custom'))];
   const extra=customGroups.filter(g=>!WEX_BASE_GROUPS.includes(g));
   return [...WEX_BASE_GROUPS,...extra];
 }
+
+const WEX_GROUP_ORDER_KEY='rsr_wex_group_order';
+async function loadWEXGroupOrder(){
+  if(D.wexGroupOrder) return D.wexGroupOrder;
+  D.wexGroupOrder = await getSetting(WEX_GROUP_ORDER_KEY, null);
+  if(!D.wexGroupOrder || !D.wexGroupOrder.length){
+    // First time — seed from whatever groups are already in use, so
+    // nothing appears to move or disappear the first time this loads.
+    const customGroups=[...new Set((D.wexCustomTypes||[]).map(c=>c.group||'Custom'))];
+    const extra=customGroups.filter(g=>!WEX_BASE_GROUPS.includes(g));
+    D.wexGroupOrder=[...WEX_BASE_GROUPS,...extra];
+  }
+  return D.wexGroupOrder;
+}
+async function saveWEXGroupOrder(){
+  await saveSetting(WEX_GROUP_ORDER_KEY, D.wexGroupOrder||[]);
+}
+
+// Which group an item currently belongs to (respecting a std item's group
+// override, if one has been set).
+function _wexItemGroup(item){
+  return item.group;
+}
+
+async function addWEXGroup(){
+  const name = prompt('New group name (e.g. "Flooring", "Railings"):')?.trim();
+  if(!name) return;
+  await loadWEXGroupOrder();
+  if(D.wexGroupOrder.some(g=>g.toLowerCase()===name.toLowerCase())){
+    toast('A group with that name already exists','error'); return;
+  }
+  D.wexGroupOrder.push(name);
+  try{
+    await saveWEXGroupOrder();
+    const el=document.getElementById('wex-types-settings-list');
+    if(el) el.innerHTML=renderWEXTypesSettingsList();
+    toast(`✓ Group "${name}" added`,'ok');
+  }catch(e){
+    D.wexGroupOrder.pop();
+    toast('Save failed — try again','error');
+  }
+}
+
+async function removeWEXGroup(group){
+  await loadWEXGroupOrder();
+  if(WEX_BASE_GROUPS.includes(group)){
+    toast('The original built-in groups (Earthwork, Concrete, Steel, Drains, Other) can\'t be removed — only reordered or emptied out.','error');
+    return;
+  }
+  const itemsInGroup = getAllWEXItems().filter(i=>i.group===group);
+  const ok = await showConfirm({
+    title:`Remove group "${group}"?`,
+    message: itemsInGroup.length
+      ? `${itemsInGroup.length} quantity type${itemsInGroup.length>1?'s':''} in this group will be moved to "Other". Existing saved entries keep their data either way.`
+      : `This group is empty and will be removed.`,
+    confirmLabel:'Yes, Remove Group'
+  });
+  if(!ok) return;
+
+  // Move any items in this group to "Other" first
+  for(const item of itemsInGroup){
+    await _moveWEXItemToGroup(item, 'Other', false); // false = don't save/re-render per item, we'll batch
+  }
+  D.wexGroupOrder = D.wexGroupOrder.filter(g=>g!==group);
+  try{
+    await saveWEXGroupOrder();
+    if(itemsInGroup.some(i=>i.isCustom)) await saveWEXCustomTypes();
+    if(itemsInGroup.some(i=>!i.isCustom)) await saveWEXOverrides();
+    const el=document.getElementById('wex-types-settings-list');
+    if(el) el.innerHTML=renderWEXTypesSettingsList();
+    toast(`✓ Group removed`,'ok');
+  }catch(e){ toast('Save failed — try again','error'); }
+}
+
+async function moveWEXGroup(group, direction){
+  await loadWEXGroupOrder();
+  const idx = D.wexGroupOrder.indexOf(group);
+  const swapIdx = idx + direction;
+  if(idx<0 || swapIdx<0 || swapIdx>=D.wexGroupOrder.length) return;
+  [D.wexGroupOrder[idx], D.wexGroupOrder[swapIdx]] = [D.wexGroupOrder[swapIdx], D.wexGroupOrder[idx]];
+  try{
+    await saveWEXGroupOrder();
+    const el=document.getElementById('wex-types-settings-list');
+    if(el) el.innerHTML=renderWEXTypesSettingsList();
+  }catch(e){
+    [D.wexGroupOrder[idx], D.wexGroupOrder[swapIdx]] = [D.wexGroupOrder[swapIdx], D.wexGroupOrder[idx]]; // revert
+    toast('Save failed — try again','error');
+  }
+}
+
+// Moves a single item (standard or custom) to a different group.
+// batch=false means "caller will save/re-render themselves" (used by
+// removeWEXGroup to avoid N separate saves).
+async function _moveWEXItemToGroup(item, newGroup, batch=true){
+  if(item.isCustom){
+    const ct = D.wexCustomTypes.find(c=>c.key===item.key);
+    if(ct) ct.group = newGroup;
+    if(batch) await saveWEXCustomTypes();
+  } else {
+    if(!D.wexOverrides) D.wexOverrides={};
+    D.wexOverrides[item.key] = {...(D.wexOverrides[item.key]||{}), label:item.label, unit:item.unit, group:newGroup};
+    if(batch) await saveWEXOverrides();
+  }
+}
+
+async function moveWEXItemToGroupFromSettings(itemKey, isCustom, newGroup){
+  const item = getAllWEXItems().find(i=>i.key===itemKey && !!i.isCustom===isCustom);
+  if(!item) return;
+  const oldGroup = item.group;
+  await _moveWEXItemToGroup(item, newGroup, true).then(()=>{
+    const el=document.getElementById('wex-types-settings-list');
+    if(el) el.innerHTML=renderWEXTypesSettingsList();
+    toast(`✓ Moved to "${newGroup}"`,'ok');
+  }).catch(()=>{
+    // best-effort revert
+    _moveWEXItemToGroup(item, oldGroup, true).catch(()=>{});
+    toast('Save failed — try again','error');
+  });
+}
+
 function getWEXEntries(p){
   if(!D.wexData) return [];
   const gc=(getGenCode(p)||'').toUpperCase();
@@ -191,7 +318,7 @@ let _wexPid=null, _wexEditId=null;
 
 async function openWEXEntry(pid,existingId){
   const p=GP(pid); if(!p) return;
-  await loadWEXCustomTypes(); await loadWEXOverrides();
+  await loadWEXCustomTypes(); await loadWEXOverrides(); await loadWEXGroupOrder();
   _wexPid=pid; _wexEditId=existingId||null;
   const existing=existingId?(D.wexData.records||[]).find(r=>r.id===existingId):null;
   const usedFYs=getWEXEntries(p).map(r=>r.fy).filter(fy=>!existing||fy!==existing.fy);
@@ -431,33 +558,50 @@ async function _addWEXCustomItem(label,unit,group,suffix){
 // Anything added here is immediately available on every project, old and new.
 function renderWEXTypesSettingsList(){
   const groups=getAllWEXGroups();
-  const allItems=getAllWEXItems(); // std items already carry any renamed overrides
+  const allItems=getAllWEXItems(); // std items already carry any renamed/regrouped overrides
   const custom=D.wexCustomTypes||[];
-  return groups.map(g=>{
+  const groupOptions=(current)=>groups.map(g=>`<option value="${g}" ${g===current?'selected':''}>${g}</option>`).join('');
+
+  const groupBlocks = groups.map((g,gi)=>{
     const stdItems=allItems.filter(i=>!i.isCustom && i.group===g);
     const customItems=custom.map((c,i)=>({...c,_idx:i})).filter(c=>(c.group||'Custom')===g);
-    if(!stdItems.length && !customItems.length) return '';
-    return `<div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">${g}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${stdItems.map(i=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2)">
-          ${i.label} <span style="color:var(--text3)">(${i.unit})</span>
-          <button onclick="_editWEXStdType('${i.key}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;line-height:1;padding:2px 4px" title="Edit">✏️</button>
-        </span>`).join('')}
-        ${customItems.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--navy);color:#fff">
-          ${c.label} <span style="opacity:.75">(${c.unit})</span>
-          <button onclick="_editWEXCustomTypeFromSettings(${c._idx})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;line-height:1;padding:2px 4px" title="Edit">✏️</button>
-          <button onclick="_removeWEXCustomTypeFromSettings(${c._idx})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:2px 4px" title="Remove">✕</button>
-        </span>`).join('')}
+    const isBase=WEX_BASE_GROUPS.includes(g);
+    return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.03em">${g}${isBase?' <span style="font-size:10px;color:var(--text3);font-weight:500;text-transform:none">(built-in)</span>':''}</div>
+        <div style="display:flex;gap:2px;align-items:center">
+          <button onclick="moveWEXGroup('${g}',-1)" ${gi===0?'disabled':''} style="background:none;border:none;cursor:${gi===0?'default':'pointer'};opacity:${gi===0?'.3':'1'};font-size:13px;padding:2px 5px" title="Move up">▲</button>
+          <button onclick="moveWEXGroup('${g}',1)" ${gi===groups.length-1?'disabled':''} style="background:none;border:none;cursor:${gi===groups.length-1?'default':'pointer'};opacity:${gi===groups.length-1?'.3':'1'};font-size:13px;padding:2px 5px" title="Move down">▼</button>
+          <button onclick="removeWEXGroup('${g}')" style="background:none;border:none;color:${isBase?'var(--text3)':'var(--red)'};cursor:pointer;font-size:12px;padding:2px 6px" title="${isBase?'Built-in groups cannot be removed':'Remove group'}">🗑️</button>
+        </div>
       </div>
+      ${(!stdItems.length && !customItems.length) ? `<div style="font-size:11px;color:var(--text3);font-style:italic">No quantity types in this group yet.</div>` : `
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${stdItems.map(i=>`<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:6px;padding:4px 8px">
+          <span style="flex:1;font-size:12px;font-weight:600">${i.label} <span style="color:var(--text3);font-weight:400">(${i.unit})</span></span>
+          <select onchange="moveWEXItemToGroupFromSettings('${i.key}',false,this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px">${groupOptions(g)}</select>
+          <button onclick="_editWEXStdType('${i.key}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Rename">✏️</button>
+        </div>`).join('')}
+        ${customItems.map(c=>`<div style="display:flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border-radius:6px;padding:4px 8px">
+          <span style="flex:1;font-size:12px;font-weight:600">${c.label} <span style="opacity:.75;font-weight:400">(${c.unit})</span></span>
+          <select onchange="moveWEXItemToGroupFromSettings('${c.key}',true,this.value)" style="font-size:11px;padding:2px 4px;border:1px solid rgba(255,255,255,.3);border-radius:4px;background:rgba(255,255,255,.1);color:#fff">${groupOptions(g)}</select>
+          <button onclick="_editWEXCustomTypeFromSettings(${c._idx})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px" title="Rename">✏️</button>
+          <button onclick="_removeWEXCustomTypeFromSettings(${c._idx})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:13px" title="Remove">✕</button>
+        </div>`).join('')}
+      </div>`}
     </div>`;
   }).join('');
+
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button onclick="addWEXGroup()" style="background:none;border:1px dashed #7c3aed;color:#7c3aed;border-radius:var(--rs);padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">+ Add Group</button>
+  </div>${groupBlocks}`;
 }
 
-// Standard (built-in) items can be renamed — this only changes the display
-// label/unit via a stored override, applied everywhere getAllWEXItems() is
-// used. The item's internal key (what saved quantities are actually keyed
-// by) never changes, so this can never affect or disconnect existing data.
+// Standard (built-in) items can be renamed and moved to a different group
+// — both only change display metadata via a stored override, applied
+// everywhere getAllWEXItems() is used. The item's internal key (what
+// saved quantities are actually keyed by) never changes, so renaming or
+// regrouping can never affect or disconnect existing data.
 async function _editWEXStdType(key){
   const item = getAllWEXItems().find(i=>i.key===key);
   if(!item){ toast('Item not found','error'); return; }
@@ -467,7 +611,8 @@ async function _editWEXStdType(key){
   const newUnit = prompt('Unit:', currentUnit);
   if(newUnit===null) return;
   if(!D.wexOverrides) D.wexOverrides={};
-  D.wexOverrides[key] = {label: newLabel.trim()||currentLabel, unit: newUnit.trim()||currentUnit};
+  // Preserve any existing group override — only label/unit change here.
+  D.wexOverrides[key] = {...(D.wexOverrides[key]||{}), label: newLabel.trim()||currentLabel, unit: newUnit.trim()||currentUnit, group: item.group};
   try{
     await saveWEXOverrides();
     const el=document.getElementById('wex-types-settings-list');
@@ -618,6 +763,7 @@ async function deleteWEXEntry(wexId,pid){
 
 // ─── TAB VIEW ─────────────────────────────────────────
 let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar' | 'flat'
+let _wexFirm = null; // currently-selected firm on the Work Experience page
 let _wexFlatFY = '';
 let _wexFlatFirm = '';
 
@@ -625,29 +771,49 @@ async function renderWEX(){
   const el=document.getElementById('sec-wex'); if(!el) return;
   if(!CU){el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Please log in.</div></div></div>';return;}
   el.innerHTML='<div class="wrap"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>';
-  await loadWEXData(); await loadWEXCustomTypes(); await loadWEXOverrides();
+  await loadWEXData(); await loadWEXCustomTypes(); await loadWEXOverrides(); await loadWEXGroupOrder();
   _renderWEXTab(el);
 }
 
 function _renderWEXTab(el){
   const allItems=getAllWEXItems();
-  const records=(D.wexData.records||[]).filter(r=>!r._archived);
+  const allGroups=getAllWEXGroups();
+  const allRecords=(D.wexData.records||[]).filter(r=>!r._archived);
+  const firms=[...new Set(allRecords.map(r=>r.firm).filter(Boolean))].sort();
+  // Firm selection — this app tracks three separate firms with separate
+  // work experience histories, and they must never be mixed together (a
+  // tender's eligibility is checked against ONE firm's track record).
+  if(!_wexFirm || (firms.length && !firms.includes(_wexFirm))){
+    _wexFirm = firms.includes('RSR Constructions') ? 'RSR Constructions' : (firms[0]||'RSR Constructions');
+  }
+  const records = allRecords.filter(r=>(r.firm||'RSR Constructions')===_wexFirm);
   const fys=[...new Set(records.map(r=>r.fy).filter(Boolean))].sort();
-  const firms=[...new Set(records.map(r=>r.firm).filter(Boolean))].sort();
 
   const byFY={};
   const byFYWorkType={};
+  // Per FY, per item key: list of {projectId, projectName, contractorName,
+  // genCode, qty} — this is what powers the "which projects make up this
+  // number" drill-down.
+  const byFYItemBreakdown={};
 
   records.forEach(r=>{
-    const fy=r.fy||'Unknown', firm=r.firm||'Unknown';
-    if(!byFY[fy]) byFY[fy]={firms:{},count:0,value:0,qtys:{}};
-    if(!byFY[fy].firms[firm]) byFY[fy].firms[firm]={qtys:{},count:0,value:0};
-    byFY[fy].firms[firm].count++;
-    byFY[fy].firms[firm].value+=r.workValue||0;
+    const fy=r.fy||'Unknown';
+    if(!byFY[fy]) byFY[fy]={count:0,value:0,qtys:{}};
     byFY[fy].count++; byFY[fy].value+=r.workValue||0;
+
+    const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
+    const projectName = p ? p.name : (r.genCode||'—');
+    const contractorName = p ? (GC(p.contractorId)||{}).name||'—' : '—';
+
     Object.entries(r.quantities||{}).forEach(([k,v])=>{
-      byFY[fy].firms[firm].qtys[k]=(byFY[fy].firms[firm].qtys[k]||0)+v;
+      if(!v) return;
       byFY[fy].qtys[k]=(byFY[fy].qtys[k]||0)+v;
+      if(!byFYItemBreakdown[fy]) byFYItemBreakdown[fy]={};
+      if(!byFYItemBreakdown[fy][k]) byFYItemBreakdown[fy][k]=[];
+      byFYItemBreakdown[fy][k].push({
+        projectId: p?p.id:null, projectName, contractorName,
+        genCode: r.genCode||'—', qty: v
+      });
     });
 
     // Work type — ONLY ever use the standardized list managed in Settings
@@ -657,7 +823,6 @@ function _renderWEXTab(el){
     // are not real categories, just how each tender happened to be typed
     // in the original Excel). If a record can't be matched to a live
     // project at all, it goes to 'Other' rather than creating a new group.
-    const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
     let workTypes=[];
     if(p&&p.types&&p.types.length) workTypes=[...p.types];
     else if(p&&p.type) workTypes=p.type.split(',').map(t=>t.trim()).filter(Boolean);
@@ -688,34 +853,46 @@ function _renderWEXTab(el){
     if(best.fy) peakWorkTypeFY[wt]=best;
   });
 
-  // ─── ANNUAL SUMMARY ───────────────────────────────────
+  // ─── ANNUAL SUMMARY (grouped, with drill-down per item) ──
   const summaryHTML=Object.keys(byFY).sort().reverse().map(fy=>{
     const d=byFY[fy];
-    const qRows=allItems.filter(i=>(d.qtys[i.key]||0)>0).map(i=>{
-      const isPeak=peakFY[i.key]?.fy===fy;
-      return `<tr style="${isPeak?'background:#fef9c3':''}">
-        <td style="padding:6px 10px;font-size:12px">${i.label}${isPeak?'<span style="font-size:10px;background:#facc15;color:#713f12;padding:1px 7px;border-radius:8px;margin-left:6px;font-weight:700">★ Best</span>':''}</td>
-        <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${i.unit}</td>
-        ${firms.map(firm=>{const v=byFY[fy].firms[firm]?.qtys[i.key];return `<td style="padding:6px 10px;text-align:right;font-size:12px;font-weight:600">${v?v.toFixed(2):'—'}</td>`;}).join('')}
-        <td style="padding:6px 10px;text-align:right;font-size:${isPeak?'14':'13'}px;font-weight:800;color:${isPeak?'#b45309':'var(--navy)'}">${(d.qtys[i.key]||0).toFixed(2)}</td>
-      </tr>`;
+    const groupSections = allGroups.map(g=>{
+      const itemsInGroup = allItems.filter(i=>i.group===g && (d.qtys[i.key]||0)>0);
+      if(!itemsInGroup.length) return '';
+      const rows = itemsInGroup.map(i=>{
+        const isPeak=peakFY[i.key]?.fy===fy;
+        const breakdown = (byFYItemBreakdown[fy]&&byFYItemBreakdown[fy][i.key])||[];
+        const rowId = `wexbd-${fy.replace(/\W/g,'')}-${i.key.replace(/\W/g,'')}`;
+        return `<tr style="${isPeak?'background:#fef9c3':''};cursor:pointer" onclick="const b=document.getElementById('${rowId}');b.style.display=b.style.display==='none'?'table-row':'none';this.querySelector('.wex-caret').textContent=b.style.display==='none'?'▶':'▼'">
+          <td style="padding:6px 10px;font-size:12px"><span class="wex-caret" style="display:inline-block;width:14px;color:var(--text3);font-size:10px">▶</span>${i.label}${isPeak?'<span style="font-size:10px;background:#facc15;color:#713f12;padding:1px 7px;border-radius:8px;margin-left:6px;font-weight:700">★ Best</span>':''}</td>
+          <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${i.unit}</td>
+          <td style="padding:6px 10px;text-align:right;font-size:${isPeak?'14':'13'}px;font-weight:800;color:${isPeak?'#b45309':'var(--navy)'}">${(d.qtys[i.key]||0).toFixed(2)}</td>
+        </tr>
+        <tr id="${rowId}" style="display:none;background:var(--surface2)">
+          <td colspan="3" style="padding:0 10px 10px 32px">
+            <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;padding:6px 0 4px">Made up of ${breakdown.length} project${breakdown.length!==1?'s':''}:</div>
+            <table style="width:100%;border-collapse:collapse">
+              ${breakdown.sort((a,b)=>b.qty-a.qty).map(b=>`<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:4px 8px;font-size:11px;${b.projectId?'cursor:pointer;color:var(--navy);font-weight:600':'color:var(--text2)'}" ${b.projectId?`onclick="event.stopPropagation();openDetail('${b.projectId}')"`:''}>${b.projectName.substring(0,55)}</td>
+                <td style="padding:4px 8px;font-size:11px;color:var(--text3)">${b.contractorName}</td>
+                <td style="padding:4px 8px;font-size:11px;color:var(--text3);font-family:monospace">${b.genCode}</td>
+                <td style="padding:4px 8px;font-size:11px;text-align:right;font-weight:700">${b.qty.toFixed(2)} ${i.unit}</td>
+              </tr>`).join('')}
+            </table>
+          </td>
+        </tr>`;
+      }).join('');
+      return `<div style="margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;padding:4px 10px">${g}</div>
+        <table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>
+      </div>`;
     }).join('');
     return `<div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div><div style="font-size:16px;font-weight:800;color:var(--navy)">FY ${fy}</div>
           <div style="font-size:12px;color:var(--text3)">${d.count} project${d.count>1?'s':''} · <strong>${fmt(d.value)}</strong></div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${firms.map(f=>`<span style="font-size:11px;padding:3px 10px;background:var(--surface2);border-radius:8px">${f.replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao')}: ${byFY[fy].firms[f]?.count||0}</span>`).join('')}
-        </div>
       </div>
-      ${qRows?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px">
-        <thead><tr style="background:var(--navy);color:#fff">
-          <th style="padding:6px 10px;text-align:left;font-size:11px">Item</th>
-          <th style="padding:6px 8px;text-align:center;font-size:11px">Unit</th>
-          ${firms.map(f=>`<th style="padding:6px 10px;text-align:right;font-size:11px">${f.replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao')}</th>`).join('')}
-          <th style="padding:6px 10px;text-align:right;font-size:11px">Total</th>
-        </tr></thead><tbody>${qRows}</tbody>
-      </table></div>`:'<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No quantities.</div>'}
+      ${groupSections||'<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">No quantities.</div>'}
     </div>`;
   }).join('');
 
@@ -779,10 +956,8 @@ function _renderWEXTab(el){
 
   // ─── FLAT EXCEL-LIKE VIEW ─────────────────────────────
   const flatFilterFY = typeof _wexFlatFY!=='undefined'?_wexFlatFY:'';
-  const flatFilterFirm = typeof _wexFlatFirm!=='undefined'?_wexFlatFirm:'';
   let flatRecords = records.slice().sort((a,b)=>(b.fy||'').localeCompare(a.fy||'')||(a.genCode||'').localeCompare(b.genCode||''));
   if(flatFilterFY) flatRecords = flatRecords.filter(r=>r.fy===flatFilterFY);
-  if(flatFilterFirm) flatRecords = flatRecords.filter(r=>r.firm===flatFilterFirm);
 
   const flatHTML = `<div class="card" style="border-top:3px solid var(--navy)">
     <div style="font-size:13px;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--surface2);border-radius:var(--rs)">
@@ -793,16 +968,11 @@ function _renderWEXTab(el){
         <option value="">All Years</option>
         ${fys.slice().sort().reverse().map(fy=>`<option value="${fy}" ${flatFilterFY===fy?'selected':''}>FY ${fy}</option>`).join('')}
       </select>
-      <select onchange="_wexFlatFirm=this.value;_renderWEXTab(document.getElementById('sec-wex'))" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px">
-        <option value="">All Firms</option>
-        ${firms.map(f=>`<option value="${f}" ${flatFilterFirm===f?'selected':''}>${f}</option>`).join('')}
-      </select>
       <span style="font-size:12px;color:var(--text3);align-self:center">${flatRecords.length} record${flatRecords.length!==1?'s':''}</span>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
       <thead><tr style="background:var(--navy);color:#fff">
         <th style="padding:6px 10px;text-align:left">FY</th>
-        <th style="padding:6px 10px;text-align:left">Firm</th>
         <th style="padding:6px 10px;text-align:left">Gen Code</th>
         <th style="padding:6px 10px;text-align:left">Project</th>
         <th style="padding:6px 10px;text-align:left">Work Type</th>
@@ -816,7 +986,6 @@ function _renderWEXTab(el){
             .map(it=>`${it.label}: <strong>${r.quantities[it.key].toFixed(2)}</strong> ${it.unit}`).join(' &nbsp;·&nbsp; ');
           return `<tr style="border-bottom:1px solid var(--surface2);background:${i%2?'var(--surface2)':'#fff'}">
             <td style="padding:6px 10px;font-weight:700">${r.fy}</td>
-            <td style="padding:6px 10px">${(r.firm||'').replace('RSR Constructions','RSR').replace('R Sadhu Rao','RS Rao').replace('R Likith Rahul','RLR')}</td>
             <td style="padding:6px 10px;font-family:monospace;font-size:11px">${r.genCode}</td>
             <td style="padding:6px 10px;${p?'cursor:pointer;color:var(--navy);font-weight:600':''}" ${p?`onclick="openDetail('${p.id}')"`:''}>${p?p.name.substring(0,45):r.genCode}</td>
             <td style="padding:6px 10px">${r.workType||'—'}</td>
@@ -838,12 +1007,21 @@ function _renderWEXTab(el){
   el.innerHTML=`<div class="wrap">
     <div class="pg-hdr">
       <div><div class="pg-title">📐 Work Experience</div>
-        <div style="font-size:12px;color:var(--text3)">${records.length} entries · ${fys.length} FYs · Open projects to add quantities</div>
+        <div style="font-size:12px;color:var(--text3)">${records.length} entries · ${fys.length} FYs for ${_wexFirm} · Open projects to add quantities</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="restoreWEXHistoricalData()" style="background:#fff;color:#7c3aed;border:1px solid #7c3aed;border-radius:var(--rs);padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">♻️ Restore Historical Data</button>
         <button onclick="exportWEXToExcel()" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📊 Export Excel</button>
       </div>
+    </div>
+    <!-- Firm selector — each firm's work experience is entirely separate
+         and is never mixed with another firm's in any of the views below -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      ${firms.length?firms.map(f=>`<button onclick="_wexFirm='${f}';_renderWEXTab(document.getElementById('sec-wex'))"
+        style="flex:1;min-width:160px;padding:12px 16px;border:2px solid ${_wexFirm===f?'var(--navy)':'var(--border)'};border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;
+          background:${_wexFirm===f?'var(--navy)':'#fff'};color:${_wexFirm===f?'#fff':'var(--text2)'};transition:all .12s">
+          🏢 ${f}
+        </button>`).join(''):'<div style="font-size:12px;color:var(--text3)">No firm data yet.</div>'}
     </div>
     <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:var(--rs);padding:4px;flex-wrap:wrap">
       ${tabs.map(t=>`<button onclick="_wexTab='${t.key}';_renderWEXTab(document.getElementById('sec-wex'))"
@@ -851,10 +1029,10 @@ function _renderWEXTab(el){
           background:${_wexTab===t.key?'#fff':'transparent'};color:${_wexTab===t.key?'var(--navy)':'var(--text3)'};
           box-shadow:${_wexTab===t.key?'0 1px 4px rgba(0,0,0,.1)':'none'}">${t.icon} ${t.label}</button>`).join('')}
     </div>
-    ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet.</div></div>'):''}
-    ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet.</div></div>'):''}
-    ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet.</div></div>'):''}
-    ${_wexTab==='flat'?(records.length?flatHTML:'<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No data yet.</div></div>'):''}
+    ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
+    ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
+    ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
+    ${_wexTab==='flat'?(records.length?flatHTML:'<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
   </div>`;
 }
 // ─── EXPORT ───────────────────────────────────────────
@@ -875,4 +1053,4 @@ async function exportWEXToExcel(){
 }
 
 // ─── INIT ─────────────────────────────────────────────
-if(typeof D!=='undefined'){loadWEXData().catch(()=>{});loadWEXCustomTypes().catch(()=>{});loadWEXOverrides().catch(()=>{});}
+if(typeof D!=='undefined'){loadWEXData().catch(()=>{});loadWEXCustomTypes().catch(()=>{});loadWEXOverrides().catch(()=>{});loadWEXGroupOrder().catch(()=>{});}
