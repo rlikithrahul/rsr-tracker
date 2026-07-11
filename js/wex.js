@@ -442,7 +442,7 @@ function renderWEXTypesSettingsList(){
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${stdItems.map(i=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2)">
           ${i.label} <span style="color:var(--text3)">(${i.unit})</span>
-          <button onclick="_editWEXStdType('${i.key}', ${JSON.stringify(i.label)}, ${JSON.stringify(i.unit)})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;line-height:1;padding:2px 4px" title="Edit">✏️</button>
+          <button onclick="_editWEXStdType('${i.key}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;line-height:1;padding:2px 4px" title="Edit">✏️</button>
         </span>`).join('')}
         ${customItems.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border-radius:16px;font-size:12px;font-weight:600;background:var(--navy);color:#fff">
           ${c.label} <span style="opacity:.75">(${c.unit})</span>
@@ -458,7 +458,10 @@ function renderWEXTypesSettingsList(){
 // label/unit via a stored override, applied everywhere getAllWEXItems() is
 // used. The item's internal key (what saved quantities are actually keyed
 // by) never changes, so this can never affect or disconnect existing data.
-async function _editWEXStdType(key, currentLabel, currentUnit){
+async function _editWEXStdType(key){
+  const item = getAllWEXItems().find(i=>i.key===key);
+  if(!item){ toast('Item not found','error'); return; }
+  const currentLabel = item.label, currentUnit = item.unit;
   const newLabel = prompt('Rename this quantity type (existing saved data is unaffected — this only changes the label):', currentLabel);
   if(newLabel===null) return;
   const newUnit = prompt('Unit:', currentUnit);
