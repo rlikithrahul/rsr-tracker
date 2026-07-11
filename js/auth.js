@@ -157,16 +157,18 @@ function logout(){
   if(typeof clearToggleStates === 'function') clearToggleStates();
   try{ sessionStorage.removeItem('rsr_session_state_v2'); }catch(e){}
   CU=null; clearSession(); stopAutoRefresh();
-  // Hide sidebar when logging out
-  const sb = document.getElementById('sidebar');
-  if(sb){ sb.style.display='none'; sb.classList.remove('open'); }
-  const ov = document.getElementById('sidebar-overlay');
-  if(ov) ov.style.display='none';
-  SP('page-login');
-  document.getElementById('main-nav').style.display='none';
-  document.getElementById('bnav').style.display='none';
-  ['owner-pw','cl-name','cl-pw'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  document.getElementById('lerr').style.display='none';
+  // Force a real, full page reload rather than just switching screens.
+  // The app's in-memory D object (projects, contractors, custom work
+  // types, WEX data, everything) was never being cleared on logout —
+  // so logging back in in the same browser tab silently kept reusing
+  // whatever was already cached in memory instead of re-fetching from the
+  // server. That made "log out and log in" look like proof something
+  // saved correctly even when it hadn't actually persisted — and on a
+  // shared computer, it also meant a different staff member logging in
+  // next could see stale data left over from the previous person's
+  // session. A full reload guarantees every login starts from a
+  // genuinely fresh, verified fetch.
+  window.location.reload();
 }
 
 function enterOwner(){
