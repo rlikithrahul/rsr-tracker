@@ -74,7 +74,7 @@ async function renderSettings(){
   try{
     await loadStaff();
     await loadCustomWorkTypes();
-    await loadWEXCustomTypes();
+    await loadWEXCustomTypes(); await loadWEXOverrides();
   }catch(e){
     console.error('Settings data failed to load:', e);
     toast('⚠️ Some settings data failed to load — please refresh and try again before making changes here','error',6000);
