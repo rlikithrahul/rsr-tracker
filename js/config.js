@@ -26,7 +26,21 @@ const UPLOAD_WORKER_URL = 'https://rsr-upload-worker.likithrahul-rlr.workers.dev
 const PHOTO_RETENTION_DAYS = 365;
 
 // ─── GLOBAL STATE ─────────────────────────────────────
-let D = { contractors: [], projects: [], ownerPw: 'RSR@2024', customWorkTypes: [] };
+// IMPORTANT: do not pre-set customWorkTypes (or any similarly cached
+// property) to [] here. Every "already loaded, don't fetch again" guard
+// in this app is written as `if(D.someCache) return D.someCache;` — and
+// an empty array is truthy in JavaScript. Pre-seeding this as [] meant
+// that guard was satisfied before the app ever made a single request,
+// on every page load, permanently — loadCustomWorkTypes() never actually
+// ran its fetch. This was the real root cause behind custom work types
+// appearing to save correctly in the moment (the in-memory array was
+// real and got the new value pushed onto it) but never showing anything
+// that already existed from a previous session, and — worse — a fresh
+// add() building on this permanently-empty starting array would silently
+// overwrite whatever was already correctly saved in the database. Leave
+// cached properties like this unset (undefined) so their loaders can
+// correctly tell "never loaded yet" apart from "loaded, genuinely empty".
+let D = { contractors: [], projects: [], ownerPw: 'RSR@2024' };
 let CU = null;
 let bqc = 0, atab = 0, dpid = null, rfpid = null, vpid = null;
 let notesPid = null, changePwContractorId = null;
