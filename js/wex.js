@@ -382,25 +382,31 @@ function _wexFYChanged(){
 }
 
 // ─── ADD CUSTOM TYPE ─────────────────────────────────
-function addWEXCustomToGroup(group,suffix){
+async function addWEXCustomToGroup(group,suffix){
   const label=prompt(`Add custom item to "${group}" section:\nItem name (e.g. "Pre-cast Slabs"):`)?.trim();
   if(!label) return;
   const unit=prompt('Unit (e.g. nos, sqm, rmt, cum, kg):')?.trim()||'nos';
-  _addWEXCustomItem(label,unit,group,suffix);
+  await _addWEXCustomItem(label,unit,group,suffix);
 }
 
-function addWEXGlobalCustomType(){
+async function addWEXGlobalCustomType(){
   const label=prompt('Custom quantity type name (e.g. "4×4 Tiles"):')?.trim();
   if(!label) return;
   const unit=prompt('Unit (e.g. sqm, nos, rmt, cum, kg):')?.trim()||'nos';
-  _addWEXCustomItem(label,unit,'Custom','');
+  await _addWEXCustomItem(label,unit,'Custom','');
 }
 
-function _addWEXCustomItem(label,unit,group,suffix){
+async function _addWEXCustomItem(label,unit,group,suffix){
   if(!D.wexCustomTypes) D.wexCustomTypes=[];
   const key='custom_'+label.replace(/[^a-z0-9]/gi,'_').toLowerCase()+'_'+Date.now().toString(36);
   D.wexCustomTypes.push({key,label,unit,group:group||'Custom',isCustom:true});
-  saveWEXCustomTypes().catch(()=>{});
+  try{
+    await saveWEXCustomTypes();
+  }catch(e){
+    D.wexCustomTypes = D.wexCustomTypes.filter(c=>c.key!==key);
+    alert('⚠️ "'+label+'" could not be saved as a reusable quantity type ('+(e.message||'unknown error')+').\n\nPlease try again — if this keeps happening, it needs an urgent fix.');
+    return;
+  }
   // Refresh custom types list
   const el=document.getElementById('wex-custom-types-list');
   if(el) el.innerHTML=_renderWEXCustomTypesList();
@@ -462,7 +468,7 @@ async function addWEXCustomTypeFromSettings(){
   }
   if(!label){ toast('Enter a quantity type name','error'); return; }
   if(!D.wexCustomTypes) D.wexCustomTypes=[];
-  _addWEXCustomItem(label,unit,group,'');
+  await _addWEXCustomItem(label,unit,group,'');
   labelEl.value=''; unitEl.value='';
   const el=document.getElementById('wex-types-settings-list');
   if(el) el.innerHTML=renderWEXTypesSettingsList();

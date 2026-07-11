@@ -395,10 +395,17 @@ async function saveMeetingNote(id, key, value){
 async function deleteMeeting(id){
   const ok = await showConfirm({title:'Delete Meeting?',message:'This will permanently delete the meeting record and all notes.',confirmLabel:'Yes, Delete'});
   if(!ok) return;
+  const backup = D.meetings;
   D.meetings = (D.meetings||[]).filter(x=>x.id!==id);
-  await saveMeetings();
-  renderMeeting();
-  toast('Meeting deleted','ok');
+  try{
+    await saveMeetings();
+    renderMeeting();
+    toast('Meeting deleted','ok');
+  }catch(e){
+    D.meetings = backup;
+    renderMeeting();
+    alert('⚠️ Delete failed to save: '+(e.message||'unknown error')+'\n\nThe meeting has NOT been deleted.');
+  }
 }
 
 // ─── PRINT / PDF ──────────────────────────────────────

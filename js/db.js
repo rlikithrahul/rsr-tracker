@@ -32,19 +32,31 @@ async function sbReq(table, method, body, extra) {
 // ═══════════════════════════════════════════════════════
 // Every "global setting" (staff list, custom work types, WEX custom types,
 // WEX data, meetings, EMI data, unmatched Tally cache, etc.) is stored as
-// one row per key in the `settings` table. Relying on POST with an upsert
-// Prefer header only actually updates the existing row if the table has a
-// DB-level unique constraint on `key` — without one, Postgres just inserts
-// a new duplicate row every single save. A later read that naively takes
-// "the first matching row" can then return an old/empty duplicate instead
-// of the latest save. That silent mismatch was the root cause behind
-// several "I added it and it just disappeared" bugs. This pair of helpers
-// never depends on that constraint existing, and — importantly — never
-// assumes the table has any particular column (like `id`) beyond `key` and
-// `value`, since that assumption is what broke this the first time round.
-// A PATCH filtered by key updates every row matching that key at once, so
-// even if duplicates already exist they all end up holding the same
-// (latest) value — self-healing without needing to target a specific row.
+// one row per key in the `settings` table.
+//
+// HISTORY OF WHY THIS IS WRITTEN THE WAY IT IS (read before changing):
+// Earlier versions relied on POST-as-upsert or PATCH, both of which
+// silently do nothing useful if a row for that key doesn't exist and no
+// DB-level unique constraint enforces one-row-per-key — every failed
+// save attempt across many past sessions has very likely left the
+// `settings` table with SEVERAL duplicate rows for the same key, holding
+// different (often stale/empty) values. Without an explicit ORDER BY on a
+// reliable column, Postgres does not guarantee which duplicate a plain
+// SELECT returns first — so a save could genuinely succeed, verify
+// correctly in the same request, and still "disappear" moments later
+// because the very next read (e.g. after logout/login) happened to land
+// on a different, older duplicate row. That is almost certainly what was
+// happening. The fix has two parts:
+//   1. saveSetting INSERTS a fresh row first (never assumes an update will
+//      hit anything), confirms it landed correctly, and only THEN deletes
+//      every other row for that key that doesn't hold the new value — so
+//      every save actively cleans up whatever mess came before it,
+//      converging to exactly one row per key over time.
+//   2. getSetting, until that cleanup has fully happened, picks the most
+//      complete-looking duplicate rather than an arbitrary "first" one, as
+//      the safest available guess (real data here only grows over time —
+//      types get added, rarely removed — so the fullest duplicate is the
+//      best bet while stale rows still linger).
 
 async function getSettingRows(key){
   try{
@@ -53,23 +65,75 @@ async function getSettingRows(key){
   }catch(e){ return []; }
 }
 
-// Returns the parsed value for a key, or fallback if not present.
+function _settingRowSize(row){
+  try{
+    const v = JSON.parse(row.value);
+    if(Array.isArray(v)) return v.length;
+    if(v && typeof v==='object') return Object.keys(v).length;
+    return String(row.value||'').length;
+  }catch(e){ return String(row.value||'').length; }
+}
+
+// Returns the parsed value for a key, or fallback if not present. If
+// several duplicate rows exist for the key, picks the most complete one.
 async function getSetting(key, fallback){
   const rows = await getSettingRows(key);
   if(!rows.length) return fallback;
-  try{ return JSON.parse(rows[0].value); }catch(e){ return fallback; }
+  let best = rows[0];
+  if(rows.length>1){
+    let bestSize = _settingRowSize(best);
+    for(const r of rows.slice(1)){
+      const size = _settingRowSize(r);
+      if(size>bestSize){ best=r; bestSize=size; }
+    }
+  }
+  try{ return JSON.parse(best.value); }catch(e){ return fallback; }
 }
 
-// Writes value (any JSON-serializable data) for key. If the key already
-// has one or more rows, all of them get updated to the same value; if none
-// exist yet, one is created.
+// Writes value (any JSON-serializable data) for key.
+//
+// CRITICAL: always INSERTS a new row, then verifies a row holding the
+// exact value now exists, THEN deletes every other row for the same key
+// that doesn't hold that value. Never trust "the request didn't error" as
+// proof the data is actually there and correctly the only copy — verify,
+// then clean up, every single time.
 async function saveSetting(key, value){
   const json = JSON.stringify(value);
-  const rows = await getSettingRows(key);
-  if(rows.length){
-    await sbReq('settings?key=eq.'+encodeURIComponent(key), 'PATCH', {value: json});
-  } else {
-    await sbReq('settings', 'POST', {key, value: json});
+
+  // Step 1: insert a correct row (never assumes an update will hit
+  // anything — always adds fresh).
+  await sbReq('settings', 'POST', {key, value: json});
+
+  // Step 2: verify a row with the correct value now actually exists.
+  let rows = await getSettingRows(key);
+  if(!rows.some(r=>r.value===json)){
+    throw new Error(`Save did not actually persist for "${key}" — the database did not confirm the write (this can happen if a permissions/RLS rule is silently blocking it, or if the table rejected the insert). Nothing was lost locally, but it will NOT survive a reload until this is fixed.`);
+  }
+
+  // Step 3: if there's more than one row for this key (leftover
+  // duplicates from before this fix, or from this insert landing
+  // alongside old ones), collapse down to exactly one. We deliberately
+  // never put the full value in a URL filter here — some of these
+  // payloads (WEX data, for instance) can be large, and a value=eq.<huge
+  // JSON> filter can silently fail on URL length alone. Instead: delete
+  // every row for this key (cheap, key-only filter), then insert the
+  // correct value fresh once more. There's a brief moment with zero rows
+  // for this key between those two calls, which is an acceptable
+  // trade-off for a cleanup path that only runs when duplicates exist —
+  // far safer than leaving ambiguous duplicates around indefinitely.
+  if(rows.length>1){
+    try{
+      await sbReq('settings?key=eq.'+encodeURIComponent(key), 'DELETE');
+      await sbReq('settings', 'POST', {key, value: json});
+      rows = await getSettingRows(key);
+      if(!rows.some(r=>r.value===json)){
+        throw new Error(`Cleanup of duplicate rows for "${key}" left no correct row behind — please retry this save immediately.`);
+      }
+    }catch(e){
+      // Escalate — a failed cleanup that leaves the key empty is exactly
+      // the kind of silent data loss that must never pass unnoticed.
+      throw e;
+    }
   }
 }
 

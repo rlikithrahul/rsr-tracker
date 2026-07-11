@@ -48,7 +48,16 @@ async function addCustomWorkTypeFromSettings(){
     const el=document.getElementById('worktypes-settings-list');
     if(el) el.innerHTML=_renderWorkTypesSettingsList();
     toast(`✓ "${val}" added — available for every project now`,'ok');
-  }catch(e){ toast('Save failed','error'); }
+  }catch(e){
+    // Roll back the local addition — it did NOT actually save, so the UI
+    // must not pretend it did. Silently keeping a local-only value here is
+    // exactly the kind of "looks saved but isn't" situation we must never
+    // allow again.
+    D.customWorkTypes = D.customWorkTypes.filter(t=>t!==val);
+    const el=document.getElementById('worktypes-settings-list');
+    if(el) el.innerHTML=_renderWorkTypesSettingsList();
+    alert('⚠️ "'+val+'" was NOT saved.\n\n'+(e.message||'Unknown error')+'\n\nThis has not been added — please try again, and if it keeps failing, tell Likith\'s developer immediately (this means the database is silently rejecting saves).');
+  }
 }
 
 function _renderWorkTypesSettingsList(){
@@ -124,7 +133,17 @@ async function addCustomTypeChip(containerId){
   if(!D.customWorkTypes) D.customWorkTypes=[];
   if(!D.customWorkTypes.includes(val) && !BASE_WORK_TYPES.includes(val)){
     D.customWorkTypes.push(val);
-    saveCustomWorkTypes().catch(()=>{});
+    try{
+      await saveCustomWorkTypes();
+    }catch(e){
+      // Roll back — it did NOT actually save globally. It can still be
+      // selected on THIS project below (harmless), but we must not let
+      // the person believe it's now a permanent, reusable work type when
+      // it isn't — that silent gap is exactly what caused it to vanish
+      // after logout before.
+      D.customWorkTypes = D.customWorkTypes.filter(t=>t!==val);
+      alert('⚠️ "'+val+'" could not be saved as a reusable work type ('+(e.message||'unknown error')+').\n\nIt will still apply to this project right now, but won\'t be available for other projects until this is fixed — please try again, and report this if it keeps happening.');
+    }
   }
   // Re-render with new type selected
   const current = getSelectedTypes(containerId);
