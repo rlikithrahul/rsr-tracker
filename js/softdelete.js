@@ -171,6 +171,12 @@ async function restoreDeletedItem(binId){
       if(existing) delete existing._archived;
       else p.workProgress.push(item.data);
       await saveProjectDB(p);
+    } else if(item.type==='wex_entry'){
+      await loadWEXData();
+      const existing = (D.wexData.records||[]).find(r=>r.id===item.data.id);
+      if(existing){ delete existing._archived; delete existing._archivedAt; }
+      else D.wexData.records.push(item.data);
+      await saveWEXData();
     }
     await removeFromBin(binId);
     await renderDeletedBin();

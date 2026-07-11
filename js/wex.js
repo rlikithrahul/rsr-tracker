@@ -111,7 +111,7 @@ function getWEXEntries(p){
   if(!D.wexData) return [];
   const gc=(getGenCode(p)||'').toUpperCase();
   return (D.wexData.records||[])
-    .filter(r=>r.genCode===gc||(r.projectId&&r.projectId===p.id))
+    .filter(r=>!r._archived && (r.genCode===gc||(r.projectId&&r.projectId===p.id)))
     .sort((a,b)=>(a.fy||'').localeCompare(b.fy||''));
 }
 function getFYLabel(dateStr){
@@ -325,7 +325,7 @@ function _wexValueChanged(){
       const fy2=nextFY(fy1);
       const usedFYs=getWEXEntries(p).map(r=>r.fy);
       const allItems=getAllWEXItems(); const allGroups=getAllWEXGroups();
-      const existing2=(D.wexData?.records||[]).find(r=>(r.genCode===(getGenCode(p)||'').toUpperCase()||r.projectId===p.id)&&r.fy===fy2);
+      const existing2=(D.wexData?.records||[]).find(r=>!r._archived && (r.genCode===(getGenCode(p)||'').toUpperCase()||r.projectId===p.id)&&r.fy===fy2);
       const rows=allGroups.map(g=>{
         const items=allItems.filter(i=>i.group===g); if(!items.length) return '';
         return `<tr><td colspan="3" style="padding:10px 12px 4px;background:var(--surface2)">
@@ -520,7 +520,7 @@ async function saveWEXEntry(){
   if(hasFY2&&hasQ2&&fy2){
     const jvAmt=p.jvAmount||0;
     const wv2=Math.max(0,jvAmt-wv1);
-    const ex2=D.wexData.records.find(r=>(r.genCode===gc||r.projectId===p.id)&&r.fy===fy2);
+    const ex2=D.wexData.records.find(r=>!r._archived && (r.genCode===gc||r.projectId===p.id)&&r.fy===fy2);
     const rec2=mkRec(fy2,q2,wv2,ex2?.id||null);
     if(ex2){const i2=D.wexData.records.indexOf(ex2);D.wexData.records[i2]=rec2;}
     else D.wexData.records.push(rec2);
@@ -538,10 +538,31 @@ async function saveWEXEntry(){
 async function deleteWEXEntry(wexId,pid){
   const ok=await showConfirm({title:'Delete Entry?',message:"Remove this FY's work experience quantities?",confirmLabel:'Yes, Delete'});
   if(!ok) return;
-  D.wexData.records=(D.wexData.records||[]).filter(r=>r.id!==wexId);
-  await saveWEXData();
-  renderDetail(pid);
-  toast('Entry deleted','ok');
+  const rec = (D.wexData.records||[]).find(r=>r.id===wexId);
+  if(!rec){ toast('Entry not found','error'); return; }
+  // Soft delete (mark _archived) rather than remove from the array. This
+  // matters for two reasons: (1) it's recoverable for 7 days like every
+  // other delete in this app is supposed to be, and (2) saveWEXData()
+  // merges local and server records by id before writing, to stop one
+  // browser tab from wiping out entries another tab just added — a HARD
+  // removal is indistinguishable from "this record simply isn't known to
+  // this session yet", so the merge was silently re-adding it from the
+  // server copy right after the delete. Marking it archived instead keeps
+  // the same id present with the flag set, which the merge correctly
+  // preserves (local's version of a given id always wins).
+  rec._archived = true;
+  rec._archivedAt = new Date().toISOString();
+  const p = GP(pid);
+  await saveToBin('wex_entry', {...rec}, pid, p?p.name:'');
+  try{
+    await saveWEXData();
+    renderDetail(pid);
+    toast('Entry deleted','ok');
+  }catch(e){
+    rec._archived = false;
+    delete rec._archivedAt;
+    toast('Delete failed — please try again','error');
+  }
 }
 
 // ─── TAB VIEW ─────────────────────────────────────────
@@ -559,7 +580,7 @@ async function renderWEX(){
 
 function _renderWEXTab(el){
   const allItems=getAllWEXItems();
-  const records=D.wexData.records||[];
+  const records=(D.wexData.records||[]).filter(r=>!r._archived);
   const fys=[...new Set(records.map(r=>r.fy).filter(Boolean))].sort();
   const firms=[...new Set(records.map(r=>r.firm).filter(Boolean))].sort();
 
@@ -789,7 +810,7 @@ function _renderWEXTab(el){
 async function exportWEXToExcel(){
   if(!window.XLSX){toast('Excel library not loaded','error');return;}
   const allItems=getAllWEXItems();
-  const records=D.wexData.records||[];
+  const records=(D.wexData.records||[]).filter(r=>!r._archived);
   const wb=window.XLSX.utils.book_new();
   const hdr=['FY','Firm','Gen Code','Project','Work Value (₹)',...allItems.map(i=>`${i.label}(${i.unit})`)];
   const rows=records.sort((a,b)=>(a.fy+a.genCode).localeCompare(b.fy+b.genCode)).map(r=>{
