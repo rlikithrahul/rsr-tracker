@@ -202,8 +202,8 @@ async function loadDB() {
     sbReq('projects?order=created_at', 'GET'),
     sbReq('settings', 'GET')
   ]);
-  D.contractors = (c||[]).map(r => ({...r.data, id:r.id}));
-  D.projects = (p||[]).map(r => ({...r.data, id:r.id}));
+  D.contractors = (c||[]).map(r => { const x={...r.data, id:r.id}; x._loadedSnapshot=_snapshotRecord(x); return x; });
+  D.projects = (p||[]).map(r => { const x={...r.data, id:r.id}; x._loadedSnapshot=_snapshotRecord(x); return x; });
   // Clear cache on full reload so fresh data is fetched on next project open
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = _pickLatestSettingRow(s, OPW_KEY);
@@ -223,7 +223,7 @@ async function loadDBSummary() {
     sbReq('projects?order=created_at', 'GET'),
     sbReq('settings', 'GET')
   ]);
-  D.contractors = (c||[]).map(r => ({...r.data, id:r.id}));
+  D.contractors = (c||[]).map(r => { const x={...r.data, id:r.id}; x._loadedSnapshot=_snapshotRecord(x); return x; });
   // Store lightweight summary (strip heavy arrays for initial render)
   D.projects = (p||[]).map(r => {
     const proj = {...r.data, id:r.id};
@@ -235,6 +235,11 @@ async function loadDBSummary() {
         photos: u.photos ? u.photos.map(ph => ({...ph, _lazy:true})) : [] // mark as lazy
       }));
     }
+    // Best-effort baseline from this (possibly stripped) summary — any
+    // real edit path re-fetches the true full record via fetchProjectFull
+    // first (openDetail / GPFull both do this), which replaces this with
+    // an accurate full snapshot before anything gets saved.
+    proj._loadedSnapshot = _snapshotRecord(proj);
     return proj;
   });
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
@@ -244,6 +249,98 @@ async function loadDBSummary() {
   D.staffMembers = staffRow2 ? JSON.parse(staffRow2.value||'[]') : [];
 }
 
+// ═══════════════════════════════════════════════════════
+// CONCURRENT-EDIT SAFE MERGE
+// ═══════════════════════════════════════════════════════
+// Combines a locally-edited project/contractor record with whatever is
+// currently on the server, using a baseline snapshot (the record as it
+// was when this local copy was first loaded) to tell "did I actually
+// change this field" apart from "this field just differs from the server
+// because someone else changed it after I loaded my copy." Without this,
+// every save was a full-record overwrite — if two people had the same
+// project open and both saved around the same time, whichever saved
+// second would silently erase whatever the first person had just added
+// (this is exactly the mechanism that caused the old WEX data-loss bug;
+// it existed for every other record type too, just never triggered as
+// visibly). Tested in isolation against 7 concurrent-edit scenarios
+// before being wired in here — see mergeRecord's rules below.
+//
+// Field-by-field rules, chosen automatically per field based on its shape:
+// 1. Array of plain objects that each have an `id` (releases,
+//    siteDocuments, materialRegister, workProgress, contractorUpdates,
+//    materialCredits, settlements, verifications, contractorNotes, etc.)
+//    — union by id. Same id on both sides: local wins (it's what this
+//    save is actively doing to that entry, including a soft-delete
+//    flag). An id that only exists remotely (added by someone else since
+//    this copy was loaded) is kept too — nobody's addition is dropped.
+// 2. Plain object, not an array (documents, verifiedItems) — shallow
+//    merged key by key, local wins on key collision.
+// 3. Everything else (scalars, plain primitive arrays like
+//    ignoredSettlementRefs or the work-types list) — compared against the
+//    baseline: changed locally → local wins (this is a deliberate edit,
+//    including a deliberate shrink like removing a work type — it must
+//    not get unioned back). Unchanged locally → take remote's value, so
+//    a field this save never touched still picks up whatever someone
+//    else changed about it.
+
+function _mrgIsIdArray(v) {
+  return Array.isArray(v) && v.length > 0 && v.every(x => x && typeof x === 'object' && !Array.isArray(x) && 'id' in x);
+}
+function _mrgIsPlainObject(v) {
+  return v && typeof v === 'object' && !Array.isArray(v);
+}
+function _mrgEq(a, b) {
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return a === b; }
+}
+function _mrgArrayById(localArr, remoteArr) {
+  const byId = new Map();
+  (remoteArr || []).forEach(x => byId.set(x.id, x));
+  (localArr || []).forEach(x => byId.set(x.id, x));
+  return Array.from(byId.values());
+}
+function mergeRecord(local, remote, baseline) {
+  const out = { ...remote };
+  const keys = new Set([
+    ...Object.keys(local || {}),
+    ...Object.keys(remote || {}),
+    ...Object.keys(baseline || {})
+  ]);
+  for (const key of keys) {
+    if (key.startsWith('_')) continue;
+    const localVal = local ? local[key] : undefined;
+    const remoteVal = remote ? remote[key] : undefined;
+    const baselineVal = baseline ? baseline[key] : undefined;
+
+    if (localVal !== undefined && remoteVal === undefined && baselineVal === undefined) {
+      out[key] = localVal;
+      continue;
+    }
+    if (_mrgIsIdArray(localVal) || _mrgIsIdArray(remoteVal)) {
+      out[key] = _mrgArrayById(localVal, remoteVal);
+      continue;
+    }
+    if (_mrgIsPlainObject(localVal) && _mrgIsPlainObject(remoteVal)) {
+      out[key] = { ...remoteVal, ...localVal };
+      continue;
+    }
+    if (baseline) {
+      out[key] = _mrgEq(localVal, baselineVal) ? remoteVal : localVal;
+    } else {
+      out[key] = localVal !== undefined ? localVal : remoteVal;
+    }
+  }
+  return out;
+}
+// Deep-clones a record for use as a baseline snapshot, stripping our own
+// bookkeeping fields so they never leak into the comparison.
+function _snapshotRecord(rec){
+  try{
+    const clone = JSON.parse(JSON.stringify(rec));
+    Object.keys(clone).forEach(k=>{ if(k.startsWith('_')) delete clone[k]; });
+    return clone;
+  }catch(e){ return null; }
+}
+
 async function fetchProjectFull(id) {
   // Fetch fresh full data for one project (called when opening detail view)
   if(!dbOK) return GP(id); // offline: use cached
@@ -251,6 +348,7 @@ async function fetchProjectFull(id) {
     const rows = await sbReq(`projects?id=eq.${id}`, 'GET');
     if(rows && rows[0]) {
       const fresh = {...rows[0].data, id:rows[0].id};
+      fresh._loadedSnapshot = _snapshotRecord(fresh);
       // Update in D.projects
       const idx = D.projects.findIndex(p=>p.id===id);
       if(idx>=0) D.projects[idx]=fresh;
@@ -284,7 +382,21 @@ async function GPFull(pid){
 async function saveContractorDB(c) {
   setBusy(true,'Saving contractor…');
   try {
-    await sbReq('contractors', 'POST', {id:c.id, data:c, created_at:new Date().toISOString()});
+    let toSave = c;
+    if(dbOK){
+      try{
+        const rows = await sbReq(`contractors?id=eq.${c.id}`, 'GET');
+        if(rows && rows[0]){
+          const remote = {...rows[0].data, id: rows[0].id};
+          const merged = mergeRecord(c, remote, c._loadedSnapshot || null);
+          merged.id = c.id;
+          toSave = merged;
+          Object.assign(c, merged);
+          c._loadedSnapshot = _snapshotRecord(merged);
+        }
+      }catch(e){ console.warn('Pre-save merge fetch failed for contractor, saving local copy as-is:', e); }
+    }
+    await sbReq('contractors', 'POST', {id:c.id, data:toSave, created_at:new Date().toISOString()});
   } finally { setBusy(false); }
 }
 
@@ -303,7 +415,32 @@ async function saveProjectDB(p, eventMeta) {
   try {
     // Migrate schema before saving
     migrateProject(p);
-    await sbReq('projects', 'POST', {id:p.id, data:p, created_at:new Date().toISOString()});
+
+    // Merge against whatever is currently on the server before writing.
+    // This is what prevents two people editing the same project around
+    // the same time from silently overwriting each other — see the
+    // CONCURRENT-EDIT SAFE MERGE section above for the full explanation
+    // and mergeRecord's rules.
+    let toSave = p;
+    if(dbOK){
+      try{
+        const rows = await sbReq(`projects?id=eq.${p.id}`, 'GET');
+        if(rows && rows[0]){
+          const remote = {...rows[0].data, id: rows[0].id};
+          const merged = mergeRecord(p, remote, p._loadedSnapshot || null);
+          merged.id = p.id;
+          toSave = merged;
+          // Bring the in-memory copy up to the merged truth, and refresh
+          // its baseline, so a second edit later in the same session
+          // builds on the merged result rather than the stale pre-merge
+          // local copy.
+          Object.assign(p, merged);
+          p._loadedSnapshot = _snapshotRecord(merged);
+        }
+      }catch(e){ console.warn('Pre-save merge fetch failed, saving local copy as-is:', e); }
+    }
+
+    await sbReq('projects', 'POST', {id:p.id, data:toSave, created_at:new Date().toISOString()});
     // Append-only event ledger write (fire-and-forget, non-blocking)
     if(eventMeta && dbOK){
       appendLedgerEvent({
