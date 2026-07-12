@@ -20,7 +20,7 @@ async function loadGSTData(){
 }
 
 async function saveGSTData(){
-  await saveSetting('gst_data', D.gstData);
+  D.gstData = await mergeAndSaveSetting('gst_data', D.gstData, false);
 }
 
 // ─── KEY HELPERS ─────────────────────────────────────

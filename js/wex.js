@@ -368,6 +368,7 @@ function _buildWEXModal(modal,p,existing,fy1,wv1,jvAmt,usedFYs){
         <td style="padding:4px 12px 4px 4px">
           <input type="number" step="0.001" min="0" id="wex${suffix}-${item.key}"
             value="${existingRec?.quantities?.[item.key]||''}" placeholder="—"
+            oninput="_wexAutoSaveDraft()"
             style="width:90px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;text-align:right">
         </td>
       </tr>`).join('')}`;
@@ -387,7 +388,7 @@ function _buildWEXModal(modal,p,existing,fy1,wv1,jvAmt,usedFYs){
           ${isCustomHeader
             ? `<div id="wex-remaining" style="font-size:15px;font-weight:800">${fmt(remaining)}</div>`
             : `<input type="number" id="wex-wv1" value="${wv1||''}" placeholder="${jvAmt||''}"
-                oninput="_wexValueChanged()"
+                oninput="_wexValueChanged();_wexAutoSaveDraft()"
                 style="background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.5);color:#fff;font-size:15px;font-weight:800;font-family:'Inter',sans-serif;width:130px;text-align:right">`
           }
         </div>
@@ -412,6 +413,7 @@ function _buildWEXModal(modal,p,existing,fy1,wv1,jvAmt,usedFYs){
   modal.innerHTML=`<div class="mbox" style="max-width:${showFY2?'960px':'520px'};width:95vw;max-height:90vh;display:flex;flex-direction:column">
     <div class="mhdr" style="flex-shrink:0">
       <h2>📐 ${_wexEditId?'Edit':'Add'} Work Experience Quantities</h2>
+      <span id="wex-autosave-indicator" style="font-size:11px;color:var(--text3);margin-left:auto;margin-right:10px;align-self:center"></span>
       <button class="mx" onclick="CM('modal-wex-entry')">✕</button>
     </div>
     <div style="background:var(--surface2);border-radius:var(--rs);padding:8px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);flex-shrink:0">
@@ -541,6 +543,12 @@ async function _addWEXCustomItem(label,unit,group,suffix){
   // Refresh custom types list
   const el=document.getElementById('wex-custom-types-list');
   if(el) el.innerHTML=_renderWEXCustomTypesList();
+  // Save whatever is currently typed in the form BEFORE rebuilding — the
+  // rebuild below reconstructs every input from the saved record, so
+  // without this, anything typed but not yet saved would be silently
+  // wiped out the moment a custom item is added mid-entry. This was the
+  // exact reported bug.
+  await _wexAutoSaveNow();
   // Rebuild modal so the new item appears in the quantity tables
   const p=GP(_wexPid); if(!p) return;
   const existing=_wexEditId?(D.wexData.records||[]).find(r=>r.id===_wexEditId):null;
@@ -684,11 +692,16 @@ async function _removeWEXCustomType(idx){
 }
 
 // ─── SAVE ─────────────────────────────────────────────
-async function saveWEXEntry(){
-  const p=GP(_wexPid); if(!p) return;
+// Core save logic, shared by the manual "Save Quantities" button and
+// silent auto-save. Reads whatever is currently in the form fields and
+// writes it — this is the single source of truth for "what does the form
+// currently say", used everywhere so nothing typed is ever only living in
+// the DOM and nowhere else.
+async function _wexBuildRecordsFromForm(){
+  const p=GP(_wexPid); if(!p) return null;
   const allItems=getAllWEXItems();
   const fy1=document.getElementById('wex-fy1')?.value;
-  if(!fy1){toast('Select financial year','error');return;}
+  if(!fy1) return null;
   const wv1=parseFloat(document.getElementById('wex-wv1')?.value)||0;
   const q1={};
   allItems.forEach(item=>{
@@ -704,14 +717,14 @@ async function saveWEXEntry(){
     if(v>0) q2[item.key]=Math.round(v*1000)/1000;
   });
   const hasQ1=Object.keys(q1).length>0, hasQ2=hasFY2&&Object.keys(q2).length>0;
-  if(!hasQ1&&!hasQ2){toast('Enter at least one quantity','error');return;}
+  if(!hasQ1&&!hasQ2) return {p,fy1,fy2,hasFY2,hasQ1:false,hasQ2:false};
   if(!D.wexData) D.wexData={records:[]};
   const gc=(getGenCode(p)||'').toUpperCase(), now=new Date().toISOString();
   const mkRec=(fy,qtys,wv,eid)=>({id:eid||'wex_'+uid(),genCode:gc,projectId:p.id,firm:p.firm||'RSR Constructions',fy,quantities:qtys,workValue:wv,source:'manual',updatedAt:now});
   if(hasQ1){
     const rec=mkRec(fy1,q1,wv1,_wexEditId);
     const idx=D.wexData.records.findIndex(r=>r.id===_wexEditId);
-    if(idx>=0) D.wexData.records[idx]=rec; else D.wexData.records.push(rec);
+    if(idx>=0) D.wexData.records[idx]=rec; else { D.wexData.records.push(rec); if(!_wexEditId) _wexEditId=rec.id; }
   }
   if(hasFY2&&hasQ2&&fy2){
     const jvAmt=p.jvAmount||0;
@@ -721,14 +734,54 @@ async function saveWEXEntry(){
     if(ex2){const i2=D.wexData.records.indexOf(ex2);D.wexData.records[i2]=rec2;}
     else D.wexData.records.push(rec2);
   }
+  return {p,fy1,fy2,hasFY2,hasQ1,hasQ2};
+}
+
+async function saveWEXEntry(){
+  const result = await _wexBuildRecordsFromForm();
+  if(!result){ toast('Select financial year','error'); return; }
+  if(!result.hasQ1 && !result.hasQ2){ toast('Enter at least one quantity','error'); return; }
   try{
     await saveWEXData();
-    logActivity({category:'wex',action:_wexEditId?'edit':'add',projectId:p.id,projectName:p.name,
-      description:`WEX saved FY ${fy1}${hasFY2&&fy2?' + FY '+fy2:''}`});
+    logActivity({category:'wex',action:_wexEditId?'edit':'add',projectId:result.p.id,projectName:result.p.name,
+      description:`WEX saved FY ${result.fy1}${result.hasFY2&&result.fy2?' + FY '+result.fy2:''}`});
     CM('modal-wex-entry');
     renderDetail(_wexPid);
     toast('✓ Work experience quantities saved','ok');
   }catch(e){toast('Save failed','error');}
+}
+
+// Auto-save: fires a short while after the person stops typing in any
+// quantity field, and immediately (not debounced) right before the modal
+// rebuilds for any reason (e.g. adding a custom item mid-entry). Silent —
+// no toast, no closing the modal — this exists specifically so that
+// nothing typed is ever only sitting in the browser and nowhere else,
+// even if the person never clicks "Save Quantities" at all.
+let _wexAutoSaveTimer=null;
+function _wexAutoSaveDraft(){
+  clearTimeout(_wexAutoSaveTimer);
+  const indicator=document.getElementById('wex-autosave-indicator');
+  if(indicator) indicator.textContent='Saving…';
+  _wexAutoSaveTimer=setTimeout(async ()=>{
+    try{
+      const result = await _wexBuildRecordsFromForm();
+      if(!result || (!result.hasQ1 && !result.hasQ2)) { if(indicator) indicator.textContent=''; return; }
+      await saveWEXData();
+      if(indicator) indicator.textContent='✓ Saved';
+    }catch(e){
+      if(indicator) indicator.textContent='⚠️ Save failed — will retry';
+    }
+  }, 700);
+}
+// Immediate (non-debounced) version — used right before any action that
+// rebuilds the modal's HTML, so whatever's currently typed is safely
+// persisted first and the rebuild reflects it instead of wiping it out.
+async function _wexAutoSaveNow(){
+  clearTimeout(_wexAutoSaveTimer);
+  try{
+    const result = await _wexBuildRecordsFromForm();
+    if(result && (result.hasQ1 || result.hasQ2)) await saveWEXData();
+  }catch(e){ /* best-effort — the rebuild below will still show whatever was in memory */ }
 }
 
 async function deleteWEXEntry(wexId,pid){

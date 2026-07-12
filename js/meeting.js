@@ -11,7 +11,7 @@ async function loadMeetings(){
   return D.meetings;
 }
 async function saveMeetings(){
-  await saveSetting(MEETING_KEY, D.meetings||[]);
+  D.meetings = await mergeAndSaveSetting(MEETING_KEY, D.meetings||[], true);
 }
 
 // ─── MAIN TAB RENDER ─────────────────────────────────
@@ -28,7 +28,7 @@ async function renderMeeting(){
 }
 
 function _renderMeetingList(el){
-  const meetings = (D.meetings||[]).sort((a,b)=>b.date.localeCompare(a.date));
+  const meetings = (D.meetings||[]).filter(m=>!m._archived).sort((a,b)=>b.date.localeCompare(a.date));
   const canEdit = CU&&CU.isSuperAdmin;
 
   el.innerHTML = `<div class="wrap">
@@ -90,8 +90,11 @@ async function _buildMeetingSnapshot(){
   const today = new Date();
   const projects = D.projects.filter(p=>!isArchived(p));
 
-  // Last meeting date (for "since last meeting" calculations)
-  const prevMeeting = (D.meetings||[])[0];
+  // Last meeting date (for "since last meeting" calculations) — found by
+  // actual date, not array position, since merge-safe saving no longer
+  // guarantees the newest-first insertion order survives every save.
+  const sortedMeetings = (D.meetings||[]).filter(m=>!m._archived).sort((a,b)=>b.date.localeCompare(a.date));
+  const prevMeeting = sortedMeetings[0];
   const sinceDate = prevMeeting ? new Date(prevMeeting.date) : new Date(today.getTime() - 30*86400000);
   const sinceDateStr = sinceDate.toISOString().split('T')[0];
 
@@ -395,14 +398,24 @@ async function saveMeetingNote(id, key, value){
 async function deleteMeeting(id){
   const ok = await showConfirm({title:'Delete Meeting?',message:'This will permanently delete the meeting record and all notes.',confirmLabel:'Yes, Delete'});
   if(!ok) return;
-  const backup = D.meetings;
-  D.meetings = (D.meetings||[]).filter(x=>x.id!==id);
+  const m = (D.meetings||[]).find(x=>x.id===id);
+  if(!m){ toast('Meeting not found','error'); return; }
+  // Soft delete rather than remove from the array — saveMeetings() now
+  // merges with the server copy before writing (to protect against two
+  // sessions overwriting each other's meetings), and a hard removal would
+  // be indistinguishable from "this session just doesn't know about it
+  // yet", causing the merge to silently bring it back. Marking it
+  // archived keeps the id present with the flag set, which the merge
+  // correctly preserves.
+  m._archived = true;
+  m._archivedAt = new Date().toISOString();
   try{
     await saveMeetings();
     renderMeeting();
     toast('Meeting deleted','ok');
   }catch(e){
-    D.meetings = backup;
+    m._archived = false;
+    delete m._archivedAt;
     renderMeeting();
     alert('⚠️ Delete failed to save: '+(e.message||'unknown error')+'\n\nThe meeting has NOT been deleted.');
   }

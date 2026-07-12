@@ -56,7 +56,7 @@ async function loadLabourData(){
 
 async function saveLabourData(){
   const key = LABOUR_STORAGE_KEY + '_' + (CU&&CU.id||'');
-  await saveSetting(key, D.labourData);
+  D.labourData = await mergeAndSaveSetting(key, D.labourData, false);
 }
 
 async function loadExpenseData(){
@@ -66,7 +66,7 @@ async function loadExpenseData(){
 
 async function saveExpenseData(){
   const key = EXPENSE_STORAGE_KEY + '_' + (CU&&CU.id||'');
-  await saveSetting(key, D.expenseData);
+  D.expenseData = await mergeAndSaveSetting(key, D.expenseData, false);
 }
 
 
@@ -104,7 +104,8 @@ async function saveLabourEntryFromDate(pid){
 // ─── RENDER LABOUR TAB FOR A PROJECT ─────────────────
 function renderLabourTab(pid){
   const p = GP(pid); if(!p) return '';
-  const entries = (D.labourData||{})[pid] || {};
+  const allEntries = (D.labourData||{})[pid] || {};
+  const entries = Object.fromEntries(Object.entries(allEntries).filter(([,e])=>!e._archived));
   const types = getLabourTypes();
   const today = new Date().toISOString().split('T')[0];
 
@@ -306,7 +307,7 @@ const DEFAULT_EXPENSE_CATS = [
 
 function renderExpenseTab(pid){
   const p = GP(pid); if(!p) return '';
-  const expenses = ((D.expenseData||{})[pid])||[];
+  const expenses = (((D.expenseData||{})[pid])||[]).filter(e=>!e._archived);
   const sorted = [...expenses].sort((a,b)=>b.date.localeCompare(a.date));
   const total = expenses.reduce((s,e)=>s+(e.amount||0),0);
 
@@ -411,7 +412,12 @@ async function deleteExpense(pid, idx){
   const ok2 = await showConfirm({title:'Delete Expense?',message:(expItem?'<strong>'+fmt(expItem.amount||0)+'</strong> — '+(expItem.note||expItem.cat||'Expense')+'<br><br>':'')+'Can be restored within 7 days by admin.',confirmLabel:'Yes, Delete'});
   if(!ok2) return;
   if(expItem){ saveToBin('expense_entry',{...expItem},pid,p2?p2.name:''); logActivity({category:'project',action:'expense_deleted',projectId:pid,projectName:p2?p2.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted expense '+(expItem?fmt(expItem.amount):'')+(p2?' — '+p2.name:'')}); }
-  if(D.expenseData&&D.expenseData[pid]) D.expenseData[pid].splice(idx,1);
+  // Soft delete (mark _archived) rather than remove from the array —
+  // saveExpenseData() now merges with the server copy before writing (to
+  // protect against two sessions overwriting each other's entries), and a
+  // hard removal would be indistinguishable from "this session doesn't
+  // know about it", causing the merge to silently bring it back.
+  if(expItem) expItem._archived = true;
   try{
     await saveExpenseData();
     toast('✓ Deleted','ok');
@@ -496,7 +502,10 @@ async function deleteLabourEntry(pid, date){
   const p = (typeof GP==='function')?GP(pid):null;
   saveToBin('labour_entry', {date, entry}, pid, p?p.name:'');
   logActivity({category:'project',action:'labour_deleted',projectId:pid,projectName:p?p.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted labour entry for '+fmtDate(date)+(p?' — '+p.name:'')});
-  delete D.labourData[pid][date];
+  // Soft delete rather than removing the date key entirely — see the note
+  // on deleteExpense for why a hard removal is unsafe now that saves
+  // merge with the server copy.
+  D.labourData[pid][date] = {...entry, _archived:true};
   try{
     await saveLabourData();
     const wrap = document.getElementById('labour-tab-wrap');

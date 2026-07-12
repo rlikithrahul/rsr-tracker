@@ -157,7 +157,9 @@ async function restoreDeletedItem(binId){
     } else if(item.type==='expense_entry'){
       if(!D.expenseData) D.expenseData={};
       if(!D.expenseData[item.projectId]) D.expenseData[item.projectId]=[];
-      D.expenseData[item.projectId].push(item.data);
+      const existingExp = D.expenseData[item.projectId].find(e=>e.id===item.data.id);
+      if(existingExp) delete existingExp._archived;
+      else D.expenseData[item.projectId].push(item.data);
       await saveExpenseData();
     } else if(item.type==='site_document'){
       if(!p.siteDocuments) p.siteDocuments=[];

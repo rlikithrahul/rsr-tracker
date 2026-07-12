@@ -14,7 +14,7 @@ async function loadEMIData(){
 }
 
 async function saveEMIData(){
-  await saveSetting(EMI_KEY, D.emiData);
+  D.emiData = await mergeAndSaveSetting(EMI_KEY, D.emiData, false);
 }
 
 // ─── RENDER EMI TAB ───────────────────────────────────

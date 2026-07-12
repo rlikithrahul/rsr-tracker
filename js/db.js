@@ -341,6 +341,31 @@ function _snapshotRecord(rec){
   }catch(e){ return null; }
 }
 
+// Applies the same concurrent-edit-safe merge used for projects/
+// contractors to any settings-table value: fetches whatever is currently
+// saved, merges it with the local in-memory value, and saves the merged
+// result. This closes the same class of risk for every other module that
+// stores its data as one object under a settings key (labour, expense,
+// EMI, GST, board meetings, staff) — without this, two sessions editing
+// the same contractor's labour log (or any of these) around the same
+// time could have one silently overwrite the other's entries, the exact
+// concern raised about "yesterday's entries disappearing".
+// isArray=true for values that are themselves a bare array of objects
+// with an `id` (meetings, staff); false for keyed objects (labour,
+// expense, EMI, GST), which mergeRecord already handles correctly.
+async function mergeAndSaveSetting(key, localValue, isArray=false){
+  let remoteValue = null;
+  try{ remoteValue = await getSetting(key, null); }catch(e){ /* fall through to saving local as-is */ }
+  let merged;
+  if(isArray){
+    merged = _mrgArrayById(localValue||[], remoteValue||[]);
+  } else {
+    merged = mergeRecord(localValue||{}, remoteValue||{}, null);
+  }
+  await saveSetting(key, merged);
+  return merged;
+}
+
 async function fetchProjectFull(id) {
   // Fetch fresh full data for one project (called when opening detail view)
   if(!dbOK) return GP(id); // offline: use cached
