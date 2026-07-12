@@ -191,6 +191,15 @@ function switchContractorTab(pid, tab){
 async function cOpenProj(id){
   // Lazy fetch full project data before opening
   if (dbOK) { try { await fetchProjectFull(id); } catch(e){} }
+  // Labour and expense data live in their own settings-table records (not
+  // on the project itself), and — unlike project data — nothing was ever
+  // loading them before this page rendered its Labour/Expense tabs. That
+  // meant D.labourData/D.expenseData were simply undefined on a fresh
+  // session, and the page would render "no entries yet" even though real
+  // saved data existed on the server the whole time. Load them explicitly
+  // here, every time, before building the page.
+  if(typeof loadLabourData==='function'){ try{ await loadLabourData(); }catch(e){ console.error('loadLabourData failed:',e); } }
+  if(typeof loadExpenseData==='function'){ try{ await loadExpenseData(); }catch(e){ console.error('loadExpenseData failed:',e); } }
   const p=GP(id);
   document.getElementById('cp-home').classList.add('hidden');
   document.getElementById('cp-upd').classList.add('hidden');

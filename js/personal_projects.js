@@ -108,7 +108,7 @@ async function deletePersonalProject(pid){
 }
 
 // ─── PERSONAL PROJECT DETAIL ──────────────────────────
-function openPersonalProject(pid){
+async function openPersonalProject(pid){
   const p = GP(pid); if(!p) return;
   document.getElementById('cp-personal').classList.add('hidden');
   let detail = document.getElementById('cp-personal-detail');
@@ -118,6 +118,11 @@ function openPersonalProject(pid){
     document.getElementById('cp-personal').parentNode.appendChild(detail);
   }
   detail.classList.remove('hidden');
+  // Same fix as the main contractor project view — these loaders existed
+  // but were never being called, so this page always rendered its
+  // Labour/Expense tabs from empty state on a fresh session.
+  if(typeof loadLabourData==='function'){ try{ await loadLabourData(); }catch(e){ console.error('loadLabourData failed:',e); } }
+  if(typeof loadExpenseData==='function'){ try{ await loadExpenseData(); }catch(e){ console.error('loadExpenseData failed:',e); } }
 
   detail.innerHTML = `
     <div style="margin-bottom:14px">
