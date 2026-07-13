@@ -239,12 +239,12 @@ function renderDetail(id){
     <!-- NEW HEADER: compact back + meta + project name -->
     <div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="goBack()" style="flex-shrink:0;white-space:nowrap">← Back</button>
+        <button class="btn btn-sm" onclick="history.back()" style="flex-shrink:0;white-space:nowrap">← Back</button>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px">
           ${p.tender?`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--text2)">#${p.tender}</span>`:''}
           <span style="background:#1a2744;color:var(--gold);border-radius:8px;padding:2px 8px;font-weight:700">${p.firm||'RSR'}</span>
           ${typeDisplay?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--text2)">${typeDisplay}</span>`:''}
-          ${c?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--navy);font-weight:600;cursor:pointer" onclick="ownerTab(2)">👷 ${c.name}</span>`:''}
+          ${c?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--navy);font-weight:600;cursor:pointer" onclick="ownerTab(2);openContractorProfile('${c.id}')">👷 ${c.name}</span>`:''}
           ${p.location?`<span style="color:var(--text3)">📍 ${p.location}</span>`:''}
           ${statusBadge(p)}
         </div>

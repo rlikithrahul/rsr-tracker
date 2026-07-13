@@ -37,9 +37,11 @@ function renderConts(){
 // ═══════════════════════════════════════════════════════
 // CONTRACTOR PROFILE PAGE — full detail view
 // ═══════════════════════════════════════════════════════
-function openContractorProfile(cid){
+function openContractorProfile(cid, pushHistory=true){
   const c = D.contractors.find(x=>x.id===cid && !isArchived(x));
   if(!c) return;
+
+  if(pushHistory && typeof pushContractorHistory === 'function') pushContractorHistory(cid);
 
   document.getElementById('cont-list').classList.add('hidden');
   let profileEl = document.getElementById('cont-profile');
@@ -78,7 +80,10 @@ function renderContractorProfile(cid){
 
   el.innerHTML = `
     <div style="margin-bottom:16px">
-      <button class="btn btn-sm" onclick="backToContractorList()" style="margin-bottom:12px">← All Contractors</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-sm" onclick="history.back()" title="Go back to wherever you came from (e.g. the project you opened this from)">← Back</button>
+        <button class="btn btn-sm" onclick="backToContractorList()">← All Contractors</button>
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
         <div>
           <div style="font-size:22px;font-weight:800;color:var(--navy)">${c.name}</div>

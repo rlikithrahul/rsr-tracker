@@ -300,58 +300,125 @@ function renderExpectedJVSection(allProjects){
 }
 
 
-function renderJVMonthTracker(allProjects){
+const JV_MONTHS_CLEARED_KEY = 'rsr_jv_months_cleared';
+
+async function renderJVMonthTracker(allProjects){
   const el = document.getElementById('dash-jv-tracker');
   if(!el) return;
+  if(!D.jvMonthsCleared){
+    try{
+      const raw = await getSetting(JV_MONTHS_CLEARED_KEY, {});
+      // Normalize in case of the old array-of-strings format
+      D.jvMonthsCleared = Array.isArray(raw) ? Object.fromEntries(raw.map(k=>[k,0])) : (raw||{});
+    }catch(e){ D.jvMonthsCleared = {}; }
+  }
+  const cleared = D.jvMonthsCleared||{};
   const today = new Date();
   const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const buckets = [];
-  for(let i=5;i>=0;i--){
-    const d = new Date(today.getFullYear(), today.getMonth()-i, 1);
-    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    buckets.push({key, label:mNames[d.getMonth()]+' '+d.getFullYear(), count:0, total:0, projects:[]});
-  }
+
+  // Build a bucket for every month, going back as far as the oldest
+  // unpaid (uncleared) JV — not a fixed window. A pending month is never
+  // dropped just because it's old; once you mark a month received (or
+  // dismiss an empty one) it disappears — but if new pending JVs land in
+  // that same month afterward, it reappears, since "cleared" remembers
+  // how many JVs existed at the time it was cleared, not a permanent ban.
+  const byMonth = {};
   allProjects.filter(p=>p.jvDate&&!isArchived(p)).forEach(p=>{
-    const b = buckets.find(x=>x.key===p.jvDate.substring(0,7));
-    if(b){ b.count++; b.total+=(p.jvAmount||0); b.projects.push(p); }
+    const key = p.jvDate.substring(0,7);
+    if(!byMonth[key]) byMonth[key] = {key, count:0, total:0, projects:[]};
+    byMonth[key].count++; byMonth[key].total+=(p.jvAmount||0); byMonth[key].projects.push(p);
   });
-  if(!buckets.some(b=>b.count>0)){ el.innerHTML=''; return; }
-  const grandTotal = buckets.reduce((s,b)=>s+b.total,0);
-  const grandCount = buckets.reduce((s,b)=>s+b.count,0);
+  const floorMonths = 16;
+  const floorKeys = [];
+  for(let i=floorMonths-1;i>=0;i--){
+    const d = new Date(today.getFullYear(), today.getMonth()-i, 1);
+    floorKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const allKeys = new Set([...floorKeys, ...Object.keys(byMonth)]);
+  const monthLabel = (key)=>{
+    const [y,m] = key.split('-').map(Number);
+    return mNames[m-1]+' '+y;
+  };
+  const curKey = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+
+  // Visible = current count exceeds what it was when last cleared (so
+  // genuinely new pending JVs bring a month back), and (has at least one
+  // JV OR is within the recent floor window, for context).
+  const buckets = [...allKeys]
+    .filter(k=>{
+      const curCount = byMonth[k]?.count||0;
+      const clearedAt = cleared[k];
+      if(clearedAt!==undefined && curCount<=clearedAt) return false; // still fully cleared
+      return byMonth[k] || floorKeys.includes(k);
+    })
+    .map(k=>byMonth[k] || {key:k, count:0, total:0, projects:[]})
+    .sort((a,b)=>a.key.localeCompare(b.key)); // oldest first — oldest unpaid is the one to chase next
+
+  if(!buckets.length){ el.innerHTML=''; return; }
+  const pendingBuckets = buckets.filter(b=>b.count>0);
+  const grandTotal = pendingBuckets.reduce((s,b)=>s+b.total,0);
+  const grandCount = pendingBuckets.reduce((s,b)=>s+b.count,0);
   const maxTotal = Math.max(...buckets.map(b=>b.total),1);
-  const isCur = (b,i) => i===5;
+  const oldestPending = pendingBuckets[0];
+
   let rows = '';
-  buckets.forEach((b,i)=>{
-    const cur = isCur(b,i);
+  buckets.forEach((b)=>{
+    const cur = b.key===curKey;
     const barW = b.total>0?Math.round(b.total/maxTotal*100):0;
     const clickable = b.count>0;
-    rows += '<tr style="border-bottom:1px solid var(--surface2);background:'+(cur?'var(--surface2)':'#fff')+';'+(clickable?'cursor:pointer':'')+'"'
-      +(clickable?' onclick="showJVMonthDetail(\''+b.key+'\',\''+b.label+'\')"':'')+' '
-      +(clickable?'onmouseover="this.style.opacity=\'.8\'" onmouseout="this.style.opacity=\'1\'"':'')+' >'
-      +'<td style="padding:8px;font-size:12px;font-weight:'+(cur?'700':'400')+';color:var(--navy)">'
-      +b.label+(cur?'<span style="font-size:10px;background:var(--navy);color:var(--gold);padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700">Now</span>':'')
+    rows += '<tr style="border-bottom:1px solid var(--surface2);background:'+(cur?'var(--surface2)':'#fff')+'">'
+      +'<td style="padding:8px;font-size:12px;font-weight:'+(cur?'700':'400')+';color:var(--navy);'+(clickable?'cursor:pointer':'')+'"'
+      +(clickable?' onclick="showJVMonthDetail(\''+b.key+'\',\''+monthLabel(b.key)+'\')"':'')+'>'
+      +monthLabel(b.key)+(cur?'<span style="font-size:10px;background:var(--navy);color:var(--gold);padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700">Now</span>':'')
       +'</td>'
       +'<td style="padding:8px;text-align:center;font-size:13px;font-weight:700;color:'+(b.count?'var(--navy)':'var(--text3)')+'">'+(b.count||'—')+'</td>'
       +'<td style="padding:8px;text-align:right;font-size:12px;font-weight:600;color:'+(b.total?'var(--navy)':'var(--text3)')+'">'+(b.total?fmt(b.total):'—')+'</td>'
       +'<td style="padding:8px;width:80px">'+(b.total?'<div style="background:var(--surface2);border-radius:4px;height:8px"><div style="background:var(--navy);height:100%;width:'+barW+'%;border-radius:4px"></div></div>':'')+'</td>'
+      +'<td style="padding:8px;text-align:center">'+(b.count
+        ?'<button onclick="markJVMonthReceived(\''+b.key+'\','+b.count+')" title="Mark this month\'s JVs as received/paid — removes it from this list" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✓ Mark Received</button>'
+        :'<button onclick="markJVMonthReceived(\''+b.key+'\',0)" title="No JVs this month — remove it from the list" style="background:none;border:1px solid var(--border);color:var(--text3);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">✕ Remove</button>')+'</td>'
       +'</tr>';
   });
   el.innerHTML = '<div class="card" style="padding:14px;margin-top:12px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">📋 JVs Received — Last 6 Months</div>'
-    +'<div style="font-size:12px;color:var(--text3)">'+grandCount+' JVs · '+fmt(grandTotal)+'</div></div>'
-    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:360px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">📋 JVs Received — Payment Pending</div>'
+    +'<div style="font-size:12px;color:var(--text3)">'+grandCount+' pending JV'+(grandCount!==1?'s':'')+' · '+fmt(grandTotal)+'</div></div>'
+    +(oldestPending?'<div style="font-size:11px;color:var(--amber);margin-bottom:10px">⏳ Oldest unpaid: <strong>'+monthLabel(oldestPending.key)+'</strong> — '+oldestPending.count+' JV'+(oldestPending.count!==1?'s':'')+', '+fmt(oldestPending.total)+'</div>':'<div style="margin-bottom:10px"></div>')
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:420px">'
     +'<thead><tr style="border-bottom:1px solid var(--border)">'
     +'<th style="text-align:left;padding:5px 8px;font-size:11px;color:var(--text3)">Month</th>'
     +'<th style="text-align:center;padding:5px 8px;font-size:11px;color:var(--text3)">No. of JVs</th>'
     +'<th style="text-align:right;padding:5px 8px;font-size:11px;color:var(--text3)">Total Amount</th>'
-    +'<th style="min-width:80px"></th></tr></thead>'
+    +'<th style="min-width:80px"></th><th></th></tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'<tfoot><tr style="border-top:2px solid var(--border);background:var(--surface2)">'
-    +'<td style="padding:8px;font-weight:700;font-size:12px">Total (6 months)</td>'
+    +'<td style="padding:8px;font-weight:700;font-size:12px">Total Pending ('+grandCount+' JVs)</td>'
     +'<td style="padding:8px;text-align:center;font-weight:800;font-size:13px;color:var(--navy)">'+grandCount+'</td>'
     +'<td style="padding:8px;text-align:right;font-weight:800;font-size:13px;color:var(--navy)">'+fmt(grandTotal)+'</td>'
-    +'<td></td></tr></tfoot></table></div></div>';
+    +'<td></td><td></td></tr></tfoot></table></div></div>';
+}
+
+async function markJVMonthReceived(monthKey, countAtClearing){
+  const isEmpty = !countAtClearing;
+  const ok = await showConfirm({
+    title: isEmpty ? 'Remove Empty Month?' : 'Mark Month as Received?',
+    message: isEmpty
+      ? 'This removes '+monthKey+' from the list since it has no JVs. If a JV later lands in this month, it will reappear automatically.'
+      : 'This removes '+monthKey+' from the pending list. If new JVs land in this same month later, it will reappear showing just those.',
+    confirmLabel: isEmpty ? 'Yes, Remove' : 'Yes, Mark Received'
+  });
+  if(!ok) return;
+  if(!D.jvMonthsCleared) D.jvMonthsCleared={};
+  const prev = D.jvMonthsCleared[monthKey];
+  D.jvMonthsCleared[monthKey] = countAtClearing||0;
+  try{
+    await saveSetting(JV_MONTHS_CLEARED_KEY, D.jvMonthsCleared);
+    renderJVMonthTracker(D.projects);
+    toast(isEmpty?'✓ Removed':'✓ Marked received','ok');
+  }catch(e){
+    if(prev===undefined) delete D.jvMonthsCleared[monthKey]; else D.jvMonthsCleared[monthKey]=prev;
+    toast('Save failed — try again','error');
+  }
 }
 
 function showJVMonthDetail(monthKey, monthLabel){

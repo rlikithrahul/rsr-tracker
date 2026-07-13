@@ -29,6 +29,10 @@ function initHistory(){
         document.getElementById('sec-detail')?.classList.remove('hidden');
         renderDetail(state.pid);
       }
+    } else if(state.view === 'contractor' && state.cid){
+      // Going back to a contractor profile
+      ownerTabSilent(2);
+      if(typeof openContractorProfile === 'function') openContractorProfile(state.cid, false);
     } else if(state.view === 'tab'){
       // Going back to a tab
       ownerTabSilent(state.tab);
@@ -48,6 +52,12 @@ function pushTabHistory(tabIndex){
 function pushDetailHistory(pid, pname){
   const state = { view:'detail', pid };
   history.pushState(state, '', '#project-'+pid);
+}
+
+// Push a contractor profile view to browser history
+function pushContractorHistory(cid){
+  const state = { view:'contractor', cid };
+  history.pushState(state, '', '#contractor-'+cid);
 }
 
 // Silent tab switch (no history push — used by popstate handler)

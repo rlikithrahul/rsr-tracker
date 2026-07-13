@@ -260,7 +260,7 @@ function renderMatByContractor(el){
     return `<div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
         <div>
-          <div style="font-size:15px;font-weight:800;color:var(--navy);${c.contractorId?'cursor:pointer;text-decoration:underline':''}" ${c.contractorId?`onclick="ownerTab(2)"`:''}>${c.name}</div>
+          <div style="font-size:15px;font-weight:800;color:var(--navy);${c.contractorId?'cursor:pointer;text-decoration:underline':''}" ${c.contractorId?`onclick="ownerTab(2);openContractorProfile('${c.contractorId}')"`:''}>${c.name}</div>
           <div style="font-size:12px;color:var(--text3)">${c.entries.length} invoice${c.entries.length!==1?'s':''} · ${supplierCount} supplier${supplierCount!==1?'s':''} · ${projectCount} project${projectCount!==1?'s':''}</div>
         </div>
         <div style="text-align:right">
