@@ -40,6 +40,7 @@ function getAllSuppliers(){
     s.totalPending += Math.max(0, pending);
     s.totalCleared += m.clearedAmount||0;
   });
+  suppliers.forEach(s=>s.entries.sort((a,b)=>(a.invoiceDate||'').localeCompare(b.invoiceDate||'')));
   return Array.from(suppliers.values()).sort((a,b)=>b.totalPending-a.totalPending);
 }
 
@@ -59,11 +60,12 @@ function getAllContractorsWithMaterial(){
     c.totalPending += Math.max(0, pending);
     c.totalCleared += m.clearedAmount||0;
   });
+  contractors.forEach(c=>c.entries.sort((a,b)=>(a.invoiceDate||'').localeCompare(b.invoiceDate||'')));
   return Array.from(contractors.values()).sort((a,b)=>b.totalPending-a.totalPending);
 }
 
 function getProjectMaterialSummary(p){
-  const entries = (p.materialCredits||[]).filter(m=>!isArchived(m));
+  const entries = (p.materialCredits||[]).filter(m=>!isArchived(m)).sort((a,b)=>(a.invoiceDate||'').localeCompare(b.invoiceDate||''));
   const total = entries.reduce((s,m)=>s+(m.invoiceAmount||0),0);
   const cleared = entries.reduce((s,m)=>s+(m.clearedAmount||0),0);
   const pending = Math.max(0, total - cleared);

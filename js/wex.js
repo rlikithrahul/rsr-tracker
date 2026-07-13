@@ -315,11 +315,13 @@ function renderProjectWEXSection(p){
 
 // ─── ENTRY MODAL ──────────────────────────────────────
 let _wexPid=null, _wexEditId=null;
+let _wexFY2Dismissed=false; // true once the person explicitly confirms "no second FY needed"
 
 async function openWEXEntry(pid,existingId){
   const p=GP(pid); if(!p) return;
   await loadWEXCustomTypes(); await loadWEXOverrides(); await loadWEXGroupOrder();
   _wexPid=pid; _wexEditId=existingId||null;
+  _wexFY2Dismissed=false;
   const existing=existingId?(D.wexData.records||[]).find(r=>r.id===existingId):null;
   const usedFYs=getWEXEntries(p).map(r=>r.fy).filter(fy=>!existing||fy!==existing.fy);
   const fy1=existing?.fy||getFYLabel(p.jvDate)||'2024-25';
@@ -383,14 +385,17 @@ function _buildWEXModal(modal,p,existing,fy1,wv1,jvAmt,usedFYs){
             ${fyOptHtml}
           </select>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:10px;opacity:.7;margin-bottom:2px">${isCustomHeader?'Remaining (₹)':'Work Value (₹)'}</div>
-          ${isCustomHeader
-            ? `<div id="wex-remaining" style="font-size:15px;font-weight:800">${fmt(remaining)}</div>`
-            : `<input type="number" id="wex-wv1" value="${wv1||''}" placeholder="${jvAmt||''}"
-                oninput="_wexValueChanged();_wexAutoSaveDraft()"
-                style="background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.5);color:#fff;font-size:15px;font-weight:800;font-family:'Inter',sans-serif;width:130px;text-align:right">`
-          }
+        <div style="text-align:right;display:flex;align-items:center;gap:10px">
+          <div>
+            <div style="font-size:10px;opacity:.7;margin-bottom:2px">${isCustomHeader?'Remaining (₹)':'Work Value (₹)'}</div>
+            ${isCustomHeader
+              ? `<div id="wex-remaining" style="font-size:15px;font-weight:800">${fmt(remaining)}</div>`
+              : `<input type="number" id="wex-wv1" value="${wv1||''}" placeholder="${jvAmt||''}"
+                  oninput="_wexValueChanged();_wexAutoSaveDraft()"
+                  style="background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.5);color:#fff;font-size:15px;font-weight:800;font-family:'Inter',sans-serif;width:130px;text-align:right">`
+            }
+          </div>
+          ${isCustomHeader?`<button onclick="dismissWEXFY2Panel()" title="This project has only one financial year of work — close this panel" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;font-size:14px;width:24px;height:24px;border-radius:50%;line-height:1;flex-shrink:0">✕</button>`:''}
         </div>
       </div>
       <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rs) var(--rs);overflow:hidden">
@@ -452,7 +457,7 @@ function _wexValueChanged(){
   const panel2=document.getElementById('wex-panel2');
   const mbox=panel2?.closest('.mbox');
   if(panel2){
-    if(remaining>100&&panel2.style.display==='none'){
+    if(remaining>100&&panel2.style.display==='none'&&!_wexFY2Dismissed){
       // Build FY2 panel content
       const fy1=document.getElementById('wex-fy1')?.value||getFYLabel(p.jvDate);
       const fy2=nextFY(fy1);
@@ -477,6 +482,7 @@ function _wexValueChanged(){
           <td style="padding:4px 8px;font-size:11px;color:var(--text3);text-align:center">${item.unit}</td>
           <td style="padding:4px 12px 4px 4px"><input type="number" step="0.001" min="0" id="wex_2-${item.key}"
             value="${existing2?.quantities?.[item.key]||''}" placeholder="—"
+            oninput="_wexAutoSaveDraft()"
             style="width:90px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;text-align:right"></td>
         </tr>`).join('')}`;
       }).join('');
@@ -486,8 +492,11 @@ function _wexValueChanged(){
             ${WEX_FYS.map(y=>`<option value="${y}" ${y===fy2?'selected':''}>${y}</option>`).join('')}
           </select>
         </div>
-        <div style="text-align:right"><div style="font-size:10px;opacity:.7;margin-bottom:2px">Remaining (₹)</div>
-          <div id="wex-remaining" style="font-size:15px;font-weight:800">${fmt(remaining)}</div>
+        <div style="text-align:right;display:flex;align-items:center;gap:10px">
+          <div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Remaining (₹)</div>
+            <div id="wex-remaining" style="font-size:15px;font-weight:800">${fmt(remaining)}</div>
+          </div>
+          <button onclick="dismissWEXFY2Panel()" title="This project has only one financial year of work — close this panel" style="background:rgba(255,255,255,.15);border:none;color:#fff;cursor:pointer;font-size:14px;width:24px;height:24px;border-radius:50%;line-height:1;flex-shrink:0">✕</button>
         </div>
       </div>
       <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rs) var(--rs);overflow:hidden">
@@ -512,6 +521,25 @@ function _wexValueChanged(){
 function _wexFYChanged(){
   const fy1=document.getElementById('wex-fy1')?.value; if(!fy1) return;
   const fy2sel=document.getElementById('wex-fy2'); if(fy2sel) fy2sel.value=nextFY(fy1);
+}
+
+// Lets the person close the auto-added second-FY panel when the entered
+// Work Value is genuinely the final figure for this project, even though
+// it's less than the JV amount (e.g. a partial/adjusted value) — with an
+// explicit confirmation so it can't be closed by accident.
+async function dismissWEXFY2Panel(){
+  const ok = await showConfirm({
+    title: 'Confirm Final Value of Work Done',
+    message: 'Are you sure this is the final value of work done for this project? A second financial year panel will not be shown again for the remaining amount unless you change the Work Value again.',
+    confirmLabel: 'Yes, This Is Final'
+  });
+  if(!ok) return;
+  _wexFY2Dismissed = true;
+  const panel2 = document.getElementById('wex-panel2');
+  const mbox = panel2?.closest('.mbox');
+  if(panel2){ panel2.style.display='none'; panel2.style.cssText='display:none'; }
+  if(mbox) mbox.style.maxWidth='520px';
+  toast('✓ Confirmed — this year\'s value is final','ok');
 }
 
 // ─── ADD CUSTOM TYPE ─────────────────────────────────
