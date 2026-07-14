@@ -341,8 +341,10 @@ async function renderJVMonthTracker(allProjects){
   const byMonth = {};
   allProjects.filter(p=>p.jvDate&&!isArchived(p)).forEach(p=>{
     const key = p.jvDate.substring(0,7);
-    if(!byMonth[key]) byMonth[key] = {key, count:0, total:0, projects:[]};
-    byMonth[key].count++; byMonth[key].total+=(p.jvAmount||0); byMonth[key].projects.push(p);
+    if(!byMonth[key]) byMonth[key] = {key, count:0, total:0, pending:0, projects:[]};
+    const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0);
+    const outstanding = Math.max(0, (p.jvAmount||0)-settled);
+    byMonth[key].count++; byMonth[key].total+=(p.jvAmount||0); byMonth[key].pending+=outstanding; byMonth[key].projects.push(p);
   });
   const floorMonths = 16;
   const floorKeys = [];
@@ -367,28 +369,32 @@ async function renderJVMonthTracker(allProjects){
       if(clearedAt!==undefined && curCount<=clearedAt) return false; // still fully cleared
       return byMonth[k] || floorKeys.includes(k);
     })
-    .map(k=>byMonth[k] || {key:k, count:0, total:0, projects:[]})
+    .map(k=>byMonth[k] || {key:k, count:0, total:0, pending:0, projects:[]})
     .sort((a,b)=>a.key.localeCompare(b.key)); // oldest first — oldest unpaid is the one to chase next
 
   if(!buckets.length){ el.innerHTML=''; return; }
   const pendingBuckets = buckets.filter(b=>b.count>0);
-  const grandTotal = pendingBuckets.reduce((s,b)=>s+b.total,0);
+  const grandTotal = pendingBuckets.reduce((s,b)=>s+b.pending,0);
   const grandCount = pendingBuckets.reduce((s,b)=>s+b.count,0);
-  const maxTotal = Math.max(...buckets.map(b=>b.total),1);
+  const maxTotal = Math.max(...buckets.map(b=>b.pending),1);
   const oldestPending = pendingBuckets[0];
 
   let rows = '';
   buckets.forEach((b)=>{
     const cur = b.key===curKey;
-    const barW = b.total>0?Math.round(b.total/maxTotal*100):0;
+    const barW = b.pending>0?Math.round(b.pending/maxTotal*100):0;
     const clickable = b.count>0;
+    const partiallyReceived = b.total>0 && b.pending<b.total;
     rows += '<tr style="border-bottom:1px solid var(--surface2);background:'+(cur?'var(--surface2)':'#fff')+'">'
       +'<td style="padding:8px;font-size:12px;font-weight:'+(cur?'700':'400')+';color:var(--navy);'+(clickable?'cursor:pointer':'')+'"'
       +(clickable?' onclick="showJVMonthDetail(\''+b.key+'\',\''+monthLabel(b.key)+'\')"':'')+'>'
       +monthLabel(b.key)+(cur?'<span style="font-size:10px;background:var(--navy);color:var(--gold);padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700">Now</span>':'')
       +'</td>'
       +'<td style="padding:8px;text-align:center;font-size:13px;font-weight:700;color:'+(b.count?'var(--navy)':'var(--text3)')+'">'+(b.count||'—')+'</td>'
-      +'<td style="padding:8px;text-align:right;font-size:12px;font-weight:600;color:'+(b.total?'var(--navy)':'var(--text3)')+'">'+(b.total?fmt(b.total):'—')+'</td>'
+      +'<td style="padding:8px;text-align:right;font-size:12px;font-weight:600;color:'+(b.total?'var(--navy)':'var(--text3)')+'">'
+        +(b.total?fmt(b.pending):'—')
+        +(partiallyReceived?'<div style="font-size:10px;font-weight:600;color:var(--green);margin-top:1px">of '+fmt(b.total)+' total</div>':'')
+      +'</td>'
       +'<td style="padding:8px;width:80px">'+(b.total?'<div style="background:var(--surface2);border-radius:4px;height:8px"><div style="background:var(--navy);height:100%;width:'+barW+'%;border-radius:4px"></div></div>':'')+'</td>'
       +'<td style="padding:8px;text-align:center">'+(b.count
         ?'<button onclick="markJVMonthReceived(\''+b.key+'\','+b.count+')" title="Mark this month\'s JVs as received/paid — removes it from this list" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✓ Mark Received</button>'
@@ -399,12 +405,12 @@ async function renderJVMonthTracker(allProjects){
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">📋 JVs Received — Payment Pending</div>'
     +'<div style="font-size:12px;color:var(--text3)">'+grandCount+' pending JV'+(grandCount!==1?'s':'')+' · '+fmt(grandTotal)+'</div></div>'
-    +(oldestPending?'<div style="font-size:11px;color:var(--amber);margin-bottom:10px">⏳ Oldest unpaid: <strong>'+monthLabel(oldestPending.key)+'</strong> — '+oldestPending.count+' JV'+(oldestPending.count!==1?'s':'')+', '+fmt(oldestPending.total)+'</div>':'<div style="margin-bottom:10px"></div>')
+    +(oldestPending?'<div style="font-size:11px;color:var(--amber);margin-bottom:10px">⏳ Oldest unpaid: <strong>'+monthLabel(oldestPending.key)+'</strong> — '+oldestPending.count+' JV'+(oldestPending.count!==1?'s':'')+', '+fmt(oldestPending.pending)+' pending</div>':'<div style="margin-bottom:10px"></div>')
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:420px">'
     +'<thead><tr style="border-bottom:1px solid var(--border)">'
     +'<th style="text-align:left;padding:5px 8px;font-size:11px;color:var(--text3)">Month</th>'
     +'<th style="text-align:center;padding:5px 8px;font-size:11px;color:var(--text3)">No. of JVs</th>'
-    +'<th style="text-align:right;padding:5px 8px;font-size:11px;color:var(--text3)">Total Amount</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:11px;color:var(--text3)">Pending Amount</th>'
     +'<th style="min-width:80px"></th><th></th></tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'<tfoot><tr style="border-top:2px solid var(--border);background:var(--surface2)">'
