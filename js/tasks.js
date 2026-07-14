@@ -244,7 +244,7 @@ function renderTeamOverview(){
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">🗂️ Task Templates (${templates.length})</div>
     </div>
     ${!templates.length?'<div style="font-size:12px;color:var(--text3);font-style:italic;padding:10px 0">No task templates yet — click "+ New Task Template" above to add your first recurring task.</div>':`
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="border-bottom:1px solid var(--border)">
         <th style="text-align:left;padding:6px 8px;color:var(--text3);font-size:11px">Task</th>
         <th style="text-align:left;padding:6px 8px;color:var(--text3);font-size:11px">Frequency</th>
@@ -263,7 +263,7 @@ function renderTeamOverview(){
           <button onclick="deleteTaskTemplate('${t.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Delete">🗑️</button>
         </td>
       </tr>`).join('')}</tbody>
-    </table>`}
+    </table></div>`}
   </div>`;
 }
 

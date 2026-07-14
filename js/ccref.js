@@ -122,7 +122,7 @@ function _drawCCRef(modal){
   if(fil.length===0){
     h+='<div style="text-align:center;padding:50px;color:var(--text3)">No projects match your search.</div>';
   } else {
-    h+='<div style="overflow-y:auto;flex:1">';
+    h+='<div style="overflow-y:auto;overflow-x:auto;flex:1">';
     h+='<table style="width:100%;border-collapse:collapse">';
     h+='<thead style="position:sticky;top:0;background:#fff;box-shadow:0 1px 0 var(--border)">';
     h+='<tr>';

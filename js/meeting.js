@@ -303,7 +303,7 @@ function _renderJVsReceived(sn){
   if(!jvs.length) return '<div style="color:var(--text3);font-style:italic">No JVs received since last meeting.</div>';
   const total = jvs.reduce((s,j)=>s+(j.jvAmount||0),0);
   return `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${jvs.length} JV${jvs.length>1?'s':''} · Total value: <strong>${fmt(total)}</strong></div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:var(--surface2)"><th style="padding:5px 8px;text-align:left">Project</th><th style="padding:5px 8px;text-align:left">Contractor</th><th style="padding:5px 8px;text-align:left">JV Date</th><th style="padding:5px 8px;text-align:right">JV Amount</th></tr></thead>
       <tbody>${jvs.map(j=>`<tr style="border-bottom:1px solid var(--surface2)">
         <td style="padding:5px 8px;font-weight:600">${j.name.substring(0,45)}</td>
@@ -311,7 +311,7 @@ function _renderJVsReceived(sn){
         <td style="padding:5px 8px">${fmtDate(j.jvDate)}</td>
         <td style="padding:5px 8px;text-align:right;font-weight:700">${fmt(j.jvAmount||0)}</td>
       </tr>`).join('')}</tbody>
-    </table>`;
+    </table></div>`;
 }
 
 function _renderExpectedJVs(sn){

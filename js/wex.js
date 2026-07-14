@@ -965,7 +965,7 @@ function _renderWEXTab(el){
       }).join('');
       return `<div style="margin-bottom:10px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;padding:4px 10px">${g}</div>
-        <table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>
+        <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table></div>
       </div>`;
     }).join('');
     return `<div class="card" style="margin-bottom:14px">

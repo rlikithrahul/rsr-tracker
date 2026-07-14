@@ -152,7 +152,7 @@ function renderGSTQuarterlyCard(){
           <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:13px;color:var(--navy)">
             <span>${firm}</span><span>${fmt(f.total)}</span>
           </div>
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
             <tbody>
               ${f.bills.map(b=>`
                 <tr style="border-bottom:1px solid var(--border)">
@@ -167,7 +167,7 @@ function renderGSTQuarterlyCard(){
                   </td>
                 </tr>`).join('')}
             </tbody>
-          </table>
+          </table></div>
         </div>`;
       }).join('')}
       ${anyBills ? `<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:2px solid var(--navy);font-weight:800;font-size:14px;color:var(--navy)">

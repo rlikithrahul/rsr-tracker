@@ -282,7 +282,7 @@ function renderExpectedJVSection(allProjects){
         +'<td style="padding:6px;text-align:right;font-weight:600;color:var(--navy);font-size:11px">'+fmt(agAmt(p))+'</td>'
         +'</tr>';
     });
-    return '<table style="width:100%;border-collapse:collapse">'
+    return '<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:1px solid var(--border)">'
       +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Project</th>'
       +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Contractor</th>'
@@ -291,7 +291,7 @@ function renderExpectedJVSection(allProjects){
       +'<tfoot><tr style="border-top:2px solid var(--border);background:var(--surface2)">'
       +'<td colspan="2" style="padding:8px 6px;font-weight:700;font-size:12px">Total ('+projects.length+' projects)</td>'
       +'<td style="padding:8px 6px;text-align:right;font-weight:800;color:var(--navy);font-size:13px">'+fmt(totalAmt)+'</td>'
-      +'</tr></tfoot></table>';
+      +'</tr></tfoot></table></div>';
   };
 
   if(!thisProjects.length && !nextProjects.length){

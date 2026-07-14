@@ -1419,7 +1419,7 @@ function _renderCCRef(modal){
     </div>
 
     <!-- Table -->
-    <div style="overflow-y:auto;flex:1">
+    <div style="overflow-y:auto;overflow-x:auto;flex:1">
       ${filtered.length===0
         ? `<div style="text-align:center;padding:50px;color:var(--text3)">No projects match your filters.</div>`
         : `<table style="width:100%;border-collapse:collapse">
