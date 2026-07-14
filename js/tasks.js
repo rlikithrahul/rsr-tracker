@@ -45,7 +45,7 @@ function getAllAssignableNames(){
 // log row doesn't already exist for (template, today), creates one.
 async function generateTodaysTasks(){
   await loadTaskTemplates(); await loadTaskLog();
-  const templates = (D.taskTemplates||[]).filter(t=>t.active!==false);
+  const templates = (D.taskTemplates||[]).filter(t=>t.active!==false && !t._archived);
   if(!templates.length) return;
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
@@ -131,7 +131,7 @@ const TASK_SEED = [
 ];
 async function seedTaskTemplatesIfEmpty(){
   await loadTaskTemplates();
-  if(D.taskTemplates && D.taskTemplates.length) return; // already set up — never overwrite
+  if(D.taskTemplates && D.taskTemplates.filter(t=>!t._archived).length) return; // already set up — never overwrite
   D.taskTemplates = TASK_SEED.map(t=>({
     id:'tmpl_'+uid(), active:true, createdAt:new Date().toISOString(),
     daysOfWeek:t.daysOfWeek||[], dayOfMonth:t.dayOfMonth||null, ...t
@@ -225,7 +225,7 @@ function renderTeamOverview(){
     return {name, overdue, todayPending, todayDone};
   });
 
-  const templates = D.taskTemplates||[];
+  const templates = (D.taskTemplates||[]).filter(t=>!t._archived);
 
   return `<div class="card" style="margin-bottom:16px">
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👥 Team Overview — Today</div>
@@ -345,8 +345,13 @@ async function deleteTaskTemplate(id){
   const t = (D.taskTemplates||[]).find(x=>x.id===id); if(!t) return;
   const ok = await showConfirm({title:'Delete Task Template?',message:'This stops future occurrences of "'+t.name+'" from being generated. Past completed/pending entries in the log are kept.',confirmLabel:'Yes, Delete'});
   if(!ok) return;
-  const backup = [...D.taskTemplates];
-  D.taskTemplates = D.taskTemplates.filter(x=>x.id!==id);
+  // Soft delete (mark _archived) rather than remove from the array —
+  // saveTaskTemplates() merges with the server copy before writing (to
+  // protect against two Super Admin sessions overwriting each other's
+  // template changes), and a hard removal is indistinguishable from "this
+  // session doesn't know about it yet", so the merge would silently bring
+  // it back — exactly the bug this caused.
+  t._archived = true; t._archivedAt = new Date().toISOString();
   try{ await saveTaskTemplates(); renderTasksTab(); toast('✓ Template deleted','ok'); }
-  catch(e){ D.taskTemplates = backup; toast('Save failed','error'); }
+  catch(e){ delete t._archived; delete t._archivedAt; toast('Save failed','error'); }
 }
