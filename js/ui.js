@@ -169,6 +169,7 @@ function renderDash(){
       </button>
     </div>
 
+    <div id="dash-tasks-section"></div>
     <div id="dash-jv-section"></div>
     <div id="dash-jv-tracker"></div>
     <div id="dash-gst-quarterly-section"></div>`;
@@ -184,6 +185,21 @@ function renderDash(){
   renderCapitalSection(allProjects);
   renderExpectedJVSection(allProjects);
   renderJVMonthTracker(allProjects);
+  // My Tasks summary (whoever is logged in — staff or owner)
+  if(typeof renderMyTasksSection === 'function' && CU && CU.name){
+    const tEl = document.getElementById('dash-tasks-section');
+    if(tEl){
+      (async()=>{
+        try{
+          if(typeof loadTaskTemplates==='function') await loadTaskTemplates();
+          if(typeof seedTaskTemplatesIfEmpty==='function') await seedTaskTemplatesIfEmpty();
+          if(typeof loadTaskLog==='function') await loadTaskLog();
+          if(typeof generateTodaysTasks==='function') await generateTodaysTasks();
+          tEl.innerHTML = renderMyTasksSection(CU.name) + `<div style="text-align:right;margin-top:-8px;margin-bottom:12px"><a onclick="ownerTab(14)" style="font-size:12px;color:var(--navy);cursor:pointer;font-weight:600">View all tasks →</a></div>`;
+        }catch(e){ console.error('Dashboard tasks card failed:', e); }
+      })();
+    }
+  }
   // GST quarterly bills-received card
   if(typeof renderGSTQuarterlyCard === 'function'){
     const qEl = document.getElementById('dash-gst-quarterly-section');
@@ -903,6 +919,7 @@ const SIDEBAR_TABS = [
   {i:7, icon:'🧾', label:'GST'},
   {i:8, icon:'🧱', label:'Material Credit'},
   {i:9, icon:'⚡', label:'Action Centre'},
+  {i:14, icon:'✅', label:'Team Tasks'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -960,7 +977,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds','sec-tasks'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -984,6 +1001,7 @@ function ownerTab(i){
   if(i===11 && typeof renderWEX==='function') renderWEX();
   if(i===12 && typeof renderMeeting==='function') renderMeeting();
   if(i===13 && typeof renderRefunds==='function') renderRefunds();
+  if(i===14 && typeof renderTasks==='function') renderTasks();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();
