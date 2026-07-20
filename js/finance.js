@@ -369,6 +369,7 @@ function renderFunds(){
         </tr>`).join('')}</tbody></table></div>`
       :'<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">No transactions imported yet. Upload a Tally file above.</div>'}
     </div>`;
+}
 
 // ─── PARSE TALLY FILE ─────────────────────────────────
 async function processTallyFile(){
@@ -1459,5 +1460,4 @@ async function exportCCRef(){
   window.XLSX.utils.book_append_sheet(wb,ws,'Cost Centres');
   window.XLSX.writeFile(wb,`RSR_Cost_Centres_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('✓ Exported','ok');
-}
 }
