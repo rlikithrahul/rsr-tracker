@@ -139,6 +139,18 @@ async function renderSettings(){
       </div>
     </div>
 
+    <!-- BACKUP HISTORY -->
+    <div class="card" style="border-top:3px solid var(--green);margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="st" style="margin-bottom:2px">💾 Automatic Daily Backup</div>
+          <div style="font-size:12px;color:var(--text2)">Runs silently the first time anyone logs in each day — a full snapshot of every project, contractor, and everything else in the app (Work Experience, GST, EMI, staff, meetings, tasks, cash register, all of it). Kept for 90 days.</div>
+        </div>
+        <button onclick="renderBackupHistory()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↻ Refresh</button>
+      </div>
+      <div id="backup-history-list"><div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">Loading…</div></div>
+    </div>
+
     <!-- DELETED BIN -->
     <div class="card" style="border-top:3px solid var(--amber);margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -169,6 +181,8 @@ async function renderSettings(){
   renderFullActivityLog();
   // Load deleted bin
   setTimeout(renderDeletedBin, 100);
+  // Load backup history
+  setTimeout(renderBackupHistory, 100);
 }
 
 function renderStaffList(){

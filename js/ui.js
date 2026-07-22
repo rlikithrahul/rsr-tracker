@@ -1307,21 +1307,108 @@ async function updateOfflineQueueBadge(){
 }
 
 // ─── BACKUP EXPORT ───────────────────────────────────
-function exportBackup(){
-  const backup = {
-    exportedAt: new Date().toISOString(),
-    version: APP_VERSION,
-    projects: D.projects,
-    contractors: D.contractors
-  };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `RSR_Backup_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('✓ Backup downloaded','ok');
+async function exportBackup(){
+  setBusy(true, 'Preparing full backup…');
+  try{
+    // Fresh, complete fetch — not D.projects/D.contractors from memory,
+    // which can be the lightweight dashboard summary with some fields
+    // stripped. A backup must always be the real, full, current data.
+    // The settings table is fetched and included WHOLESALE (every row,
+    // whatever keys exist) rather than naming specific keys one by one —
+    // that way this backup automatically covers anything the app stores
+    // there now or adds in the future (Work Experience, GST, EMI, staff,
+    // board meetings, Team Tasks, Cash Register, everything) without
+    // ever needing to be updated by hand again.
+    const [projRows, contRows, settingsRows] = await Promise.all([
+      sbReq('projects?order=created_at', 'GET'),
+      sbReq('contractors?order=created_at', 'GET'),
+      sbReq('settings', 'GET'),
+    ]);
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      version: APP_VERSION,
+      projects: (projRows||[]).map(r=>({...r.data, id:r.id})),
+      contractors: (contRows||[]).map(r=>({...r.data, id:r.id})),
+      settings: settingsRows||[],
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RSR_Full_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBusy(false);
+    toast('✓ Full backup downloaded ('+backup.projects.length+' projects, '+backup.contractors.length+' contractors, '+backup.settings.length+' settings records)','ok',5000);
+  }catch(e){
+    setBusy(false);
+    toast('Backup failed: '+e.message,'error',5000);
+  }
+}
+
+// ─── AUTOMATIC DAILY BACKUP ────────────────────────────
+// Runs once, silently, the first time an owner/staff login happens each
+// day — no manual click needed. Uploads a complete snapshot (same content
+// as the manual "Backup" button) to the same reliable file storage every
+// document/photo in this app already uses, and keeps a running history
+// list so past backups stay reachable from Settings without needing
+// Cloudflare or Supabase dashboard access at all.
+const AUTO_BACKUP_MARKER_KEY = 'rsr_last_auto_backup_date';
+const AUTO_BACKUP_HISTORY_KEY = 'rsr_auto_backup_history';
+
+async function runAutoBackupIfNeeded(){
+  try{
+    const todayStr = new Date().toISOString().split('T')[0];
+    const lastBackupDate = await getSetting(AUTO_BACKUP_MARKER_KEY, null);
+    if(lastBackupDate === todayStr) return; // already done today
+
+    const [projRows, contRows, settingsRows] = await Promise.all([
+      sbReq('projects?order=created_at', 'GET'),
+      sbReq('contractors?order=created_at', 'GET'),
+      sbReq('settings', 'GET'),
+    ]);
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      version: APP_VERSION,
+      projects: (projRows||[]).map(r=>({...r.data, id:r.id})),
+      contractors: (contRows||[]).map(r=>({...r.data, id:r.id})),
+      settings: settingsRows||[],
+    };
+    const json = JSON.stringify(backup);
+    const blob = new Blob([json], {type:'application/json'});
+    const file = new File([blob], `RSR_Full_Backup_${todayStr}.json`, {type:'application/json'});
+    const key = `backups/RSR_Full_Backup_${todayStr}_${Date.now()}.json`;
+    const url = await r2UploadViaWorker(file, R2_DOCS_BUCKET, key);
+
+    await saveSetting(AUTO_BACKUP_MARKER_KEY, todayStr);
+    const history = await getSetting(AUTO_BACKUP_HISTORY_KEY, []);
+    history.unshift({
+      date: todayStr, url, ts: new Date().toISOString(),
+      projectCount: backup.projects.length, contractorCount: backup.contractors.length, settingsCount: backup.settings.length
+    });
+    // Keep the last 90 days of history — plenty for disaster recovery,
+    // without the list growing forever.
+    await saveSetting(AUTO_BACKUP_HISTORY_KEY, history.slice(0,90));
+    console.log('Auto-backup completed for', todayStr);
+  }catch(e){
+    // Non-critical — never interrupt login over a backup hiccup, but log
+    // it so it's visible if someone checks the console.
+    console.error('Auto-backup failed:', e);
+  }
+}
+
+async function renderBackupHistory(){
+  const el = document.getElementById('backup-history-list');
+  if(!el) return;
+  const history = await getSetting(AUTO_BACKUP_HISTORY_KEY, []);
+  if(!history.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No automatic backups yet — one runs silently the next time anyone logs in.</div>';
+    return;
+  }
+  el.innerHTML = history.map(h=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--surface2);font-size:12px">
+    <span><strong>${fmtDate(h.date)}</strong> <span style="color:var(--text3)">— ${h.projectCount} projects, ${h.contractorCount} contractors, ${h.settingsCount} settings records</span></span>
+    <a href="${h.url}" download="RSR_Full_Backup_${h.date}.json" class="btn btn-sm">⬇️ Download</a>
+  </div>`).join('');
 }
 
 // ─── CONTRACTOR PERFORMANCE ──────────────────────────

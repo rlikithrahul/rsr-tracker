@@ -193,6 +193,7 @@ function enterOwner(){
     loadCustomWorkTypes().catch(e=>console.error('loadCustomWorkTypes failed:',e)),
     loadCustomLabourTypes().catch(e=>console.error('loadCustomLabourTypes failed:',e))
   ]).then(()=>{
+    if(typeof runAutoBackupIfNeeded === 'function') runAutoBackupIfNeeded();
     // Try restoring previous session position
     if(typeof restoreSessionState === 'function' && restoreSessionState()) return;
     ownerTab(0);
