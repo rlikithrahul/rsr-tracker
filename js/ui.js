@@ -359,14 +359,17 @@ async function renderJVMonthTracker(allProjects){
   };
   const curKey = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
 
-  // Visible = current count exceeds what it was when last cleared (so
-  // genuinely new pending JVs bring a month back), and (has at least one
-  // JV OR is within the recent floor window, for context).
+  // Visible = current pending amount exceeds what it was when last
+  // cleared (so genuinely new/still-outstanding pending JVs bring a
+  // month back — this is keyed on the real pending ₹ amount, not just a
+  // JV count, so a month can never go silent while it still genuinely
+  // owes money), and (has at least one JV OR is within the recent floor
+  // window, for context).
   const buckets = [...allKeys]
     .filter(k=>{
-      const curCount = byMonth[k]?.count||0;
+      const curPending = byMonth[k]?.pending||0;
       const clearedAt = cleared[k];
-      if(clearedAt!==undefined && curCount<=clearedAt) return false; // still fully cleared
+      if(clearedAt!==undefined && curPending<=clearedAt) return false; // still fully cleared
       return byMonth[k] || floorKeys.includes(k);
     })
     .map(k=>byMonth[k] || {key:k, count:0, total:0, pending:0, projects:[]})
@@ -397,7 +400,7 @@ async function renderJVMonthTracker(allProjects){
       +'</td>'
       +'<td style="padding:8px;width:80px">'+(b.total?'<div style="background:var(--surface2);border-radius:4px;height:8px"><div style="background:var(--navy);height:100%;width:'+barW+'%;border-radius:4px"></div></div>':'')+'</td>'
       +'<td style="padding:8px;text-align:center">'+(b.count
-        ?'<button onclick="markJVMonthReceived(\''+b.key+'\','+b.count+')" title="Mark this month\'s JVs as received/paid — removes it from this list" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✓ Mark Received</button>'
+        ?'<button onclick="markJVMonthReceived(\''+b.key+'\','+b.pending+')" title="Mark this month\'s JVs as received/paid — removes it from this list" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">✓ Mark Received</button>'
         :'<button onclick="markJVMonthReceived(\''+b.key+'\',0)" title="No JVs this month — remove it from the list" style="background:none;border:1px solid var(--border);color:var(--text3);border-radius:14px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">✕ Remove</button>')+'</td>'
       +'</tr>';
   });
@@ -420,19 +423,19 @@ async function renderJVMonthTracker(allProjects){
     +'<td></td><td></td></tr></tfoot></table></div></div>';
 }
 
-async function markJVMonthReceived(monthKey, countAtClearing){
-  const isEmpty = !countAtClearing;
+async function markJVMonthReceived(monthKey, pendingAtClearing){
+  const isEmpty = !pendingAtClearing;
   const ok = await showConfirm({
     title: isEmpty ? 'Remove Empty Month?' : 'Mark Month as Received?',
     message: isEmpty
-      ? 'This removes '+monthKey+' from the list since it has no JVs. If a JV later lands in this month, it will reappear automatically.'
-      : 'This removes '+monthKey+' from the pending list. If new JVs land in this same month later, it will reappear showing just those.',
+      ? 'This removes '+monthKey+' from the list since it has no pending JVs. If a JV later lands in this month, it will reappear automatically.'
+      : 'This marks <strong>'+fmt(pendingAtClearing)+'</strong> as received for '+monthKey+' and removes it from the pending list. If that figure isn\'t actually fully paid yet, click Cancel — marking it removes it from view even though it\'s still recent. If more becomes pending in this same month later, it will reappear showing just that new amount.',
     confirmLabel: isEmpty ? 'Yes, Remove' : 'Yes, Mark Received'
   });
   if(!ok) return;
   if(!D.jvMonthsCleared) D.jvMonthsCleared={};
   const prev = D.jvMonthsCleared[monthKey];
-  D.jvMonthsCleared[monthKey] = countAtClearing||0;
+  D.jvMonthsCleared[monthKey] = pendingAtClearing||0;
   try{
     await saveSetting(JV_MONTHS_CLEARED_KEY, D.jvMonthsCleared);
     renderJVMonthTracker(D.projects);
