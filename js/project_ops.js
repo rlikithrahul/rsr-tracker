@@ -1272,6 +1272,8 @@ async function saveVerification(pid){
 }
 
 // ─── FULL BOQ MODAL ────────────────────────────────────
+const RSR_LOGO_B64 = 'data:image/jpeg;base64,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';
+
 function openFullBOQModal(pid){
   const p = GP(pid); if(!p) return;
   const boq = p.boq||[];
@@ -1286,7 +1288,13 @@ function openFullBOQModal(pid){
   const totalAdjusted = total * bidMult;
 
   modal.innerHTML = `<div class="mbox" style="max-width:780px">
-    <div class="mhdr"><h2>📋 Full BOQ — ${p.name.substring(0,40)}</h2><button class="mx" onclick="CM('modal-full-boq')">✕</button></div>
+    <div class="mhdr"><h2>📋 Full BOQ — ${p.name.substring(0,40)}</h2>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm" onclick="exportBOQPDF('${pid}','print')" title="Open a print-ready version">🖨️ Print</button>
+        <button class="btn btn-sm btn-navy" onclick="exportBOQPDF('${pid}','download')" title="Download as a PDF file">⬇️ Download PDF</button>
+        <button class="mx" onclick="CM('modal-full-boq')">✕</button>
+      </div>
+    </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs)">
       Bid quoted: <strong style="color:${bidPct<0?'var(--red)':'var(--green)'}">${bidPct>0?'+':''}${bidPct}%</strong> — rates below show <strong>quoted rate</strong> with <strong style="color:var(--navy)">(actual rate after bid%)</strong> underneath
     </div>
@@ -1334,3 +1342,120 @@ function openFullBOQModal(pid){
   </div>`;
   modal.classList.add('open');
 }
+
+// ─── BOQ PDF EXPORT (Print / Download) ────────────────
+// Builds a clean, shareable PDF of a project's full BOQ — company logo,
+// project name, every item with quantity/rate/value, and the total —
+// so it can be shared with a contractor or anyone else without needing
+// to log into the government e-procurement portal to pull it again.
+// Both buttons build the identical PDF; "Print" opens it in a new tab and
+// triggers the browser's print dialog (which itself offers "Save as PDF"
+// as a destination), "Download" saves the file directly to disk in one
+// click — covering both without needing two separate documents.
+function _buildBOQPDF(pid){
+  const p = GP(pid); if(!p) return null;
+  const boq = p.boq||[];
+  if(!boq.length){ toast('No BOQ items yet — click Edit BOQ to add','error'); return null; }
+  if(typeof window.jspdf === 'undefined'){ toast('PDF library failed to load — try refreshing the page','error'); return null; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const navy = [26, 39, 68], gold = [201, 168, 76];
+
+  // Header band
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, pageW, 70, 'F');
+  try{ doc.addImage(RSR_LOGO_B64, 'JPEG', 24, 10, 50, 50); }catch(e){}
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('RSR CONSTRUCTIONS', 86, 32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.setTextColor(230,230,230);
+  doc.text('BILL OF QUANTITIES', 86, 48);
+
+  // Project info
+  let y = 92;
+  doc.setTextColor(20,20,20);
+  doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  const nameLines = doc.splitTextToSize(p.name||'—', pageW-100);
+  doc.text(nameLines, 50, y);
+  y += nameLines.length*15 + 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.setTextColor(90,90,90);
+  const meta = [
+    p.tender?('Tender ID: '+p.tender):null,
+    'Contractor: '+((GC(p.contractorId)||{}).name||'—'),
+    p.firm?('Firm: '+p.firm):null,
+    'Generated: '+fmtDate(new Date().toISOString().split('T')[0])
+  ].filter(Boolean).join('   |   ');
+  doc.text(meta, 50, y);
+  y += 16;
+
+  const bidPct = p.bidPct||0;
+  const bidMult = 1 + (bidPct/100);
+  const total = boq.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+  const totalAdjusted = total * bidMult;
+
+  const rows = boq.map(item=>{
+    const qty=item.qty||0, rate=item.rate||0, value=qty*rate;
+    const adjRate=rate*bidMult, adjValue=value*bidMult;
+    return [
+      item.desc||item.name||'—',
+      item.unit||'—',
+      String(qty),
+      bidPct!==0 ? fmt(rate)+'\n('+fmt(adjRate)+')' : fmt(rate),
+      bidPct!==0 ? fmt(value)+'\n('+fmt(adjValue)+')' : fmt(value),
+    ];
+  });
+
+  doc.autoTable({
+    startY: y+8,
+    head: [['Item Description','Unit','Qty','Rate (₹)','Value (₹)']],
+    body: rows,
+    styles: { font:'helvetica', fontSize:8.5, cellPadding:5, valign:'middle' },
+    headStyles: { fillColor: navy, textColor: [255,255,255], fontStyle:'bold' },
+    alternateRowStyles: { fillColor: [247,248,251] },
+    columnStyles: {
+      0: { cellWidth: 'auto' },
+      1: { cellWidth: 45, halign:'center' },
+      2: { cellWidth: 45, halign:'right' },
+      3: { cellWidth: 85, halign:'right' },
+      4: { cellWidth: 95, halign:'right' },
+    },
+    foot: [[
+      { content:'Total BOQ Value'+(bidPct!==0?' (rates shown as quoted, with actual-after-bid% in brackets)':''), colSpan:4, styles:{fillColor:navy,textColor:gold,fontStyle:'bold',halign:'right'} },
+      { content: bidPct!==0 ? fmt(total)+'\n('+fmt(totalAdjusted)+')' : fmt(total), styles:{fillColor:navy,textColor:[255,255,255],fontStyle:'bold',halign:'right'} },
+    ]],
+    margin: { left:50, right:50 },
+    didDrawPage: (data)=>{
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(8); doc.setTextColor(150,150,150);
+      doc.text('Page '+doc.internal.getCurrentPageInfo().pageNumber+' of '+pageCount, pageW-70, doc.internal.pageSize.getHeight()-20);
+    }
+  });
+
+  return doc;
+}
+
+function exportBOQPDF(pid, action){
+  const doc = _buildBOQPDF(pid);
+  if(!doc) return;
+  const p = GP(pid);
+  const filename = 'BOQ_'+(p.name||'project').replace(/[^a-z0-9]+/gi,'_').substring(0,50)+'.pdf';
+  if(action==='download'){
+    doc.save(filename);
+    toast('✓ PDF downloaded','ok');
+  } else {
+    // Print: open in a new tab and trigger the browser's print dialog,
+    // which itself offers "Save as PDF" as a destination too.
+    const blobUrl = doc.output('bloburl');
+    const win = window.open(blobUrl, '_blank');
+    if(win){
+      win.addEventListener('load', ()=>{ try{ win.focus(); win.print(); }catch(e){} });
+    } else {
+      toast('Please allow pop-ups to print, or use Download PDF instead','error');
+    }
+  }
+}
+

@@ -383,6 +383,10 @@ function renderBOQContractorView(p){
 
   const total = boq.reduce((s,x)=>s+x.amount,0);
   return `
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-sm" onclick="exportBOQPDF('${p.id}','print')" title="Open a print-ready version">🖨️ Print</button>
+      <button class="btn btn-sm btn-navy" onclick="exportBOQPDF('${p.id}','download')" title="Download as a PDF file">⬇️ Download PDF</button>
+    </div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
