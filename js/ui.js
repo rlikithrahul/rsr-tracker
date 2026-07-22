@@ -929,6 +929,7 @@ const SIDEBAR_TABS = [
   {i:8, icon:'🧱', label:'Material Credit'},
   {i:9, icon:'⚡', label:'Action Centre'},
   {i:14, icon:'✅', label:'Team Tasks'},
+  {i:15, icon:'🗄️', label:'Cash Register'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -986,7 +987,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds','sec-tasks'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds','sec-tasks','sec-cashreg'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -1011,6 +1012,7 @@ function ownerTab(i){
   if(i===12 && typeof renderMeeting==='function') renderMeeting();
   if(i===13 && typeof renderRefunds==='function') renderRefunds();
   if(i===14 && typeof renderTasks==='function') renderTasks();
+  if(i===15 && typeof renderCashRegister==='function') renderCashRegister();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();
