@@ -257,6 +257,24 @@ function isIncomplete(p){
 }
 
 // ─── DUPLICATE DETECTION ─────────────────────────────
+// Finds groups of releases that share the same voucher number AND amount
+// — this is what a duplicate Tally import actually looks like (the same
+// underlying transaction, imported twice, often landing on different
+// dates due to date-shift issues). Two genuinely different transactions
+// essentially never share both a voucher number and an exact amount, so
+// this is a reliable, low-false-positive signal — unlike matching on
+// amount alone, which is common for round-number payments.
+function findDuplicateVouchers(p){
+  const releases = (p.releases||[]).filter(r=>!isArchived(r) && r.ref && String(r.ref).trim());
+  const groups = {};
+  releases.forEach(r=>{
+    const key = String(r.ref).trim().toLowerCase() + '|' + Math.round((r.amount||0)*100);
+    if(!groups[key]) groups[key] = { ref:r.ref, amount:r.amount, entries:[] };
+    groups[key].entries.push(r);
+  });
+  return Object.values(groups).filter(g=>g.entries.length>1);
+}
+
 function checkDuplicateRelease(p, amount, date, excludeId){
   const releases = (p.releases||[]).filter(r=>!isArchived(r) && r.id!==excludeId && r.txType!=='receipt');
   return releases.find(r=>{

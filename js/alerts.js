@@ -137,6 +137,18 @@ function getAllAlerts(){
         }
       }
     }
+    // 9. DUPLICATE VOUCHER — same voucher number + amount appearing more
+    // than once (near-certain sign of a Tally re-import creating a
+    // duplicate payment record, not two genuinely separate transactions)
+    if(typeof findDuplicateVouchers === 'function'){
+      const dupGroups = findDuplicateVouchers(p);
+      if(dupGroups.length){
+        const totalDupAmt = dupGroups.reduce((s,g)=>s+g.amount*(g.entries.length-1),0);
+        all.push({ code:'dup_voucher', type:'red', priority:1, projectId:p.id,
+          msg:`🔴 Duplicate transaction — Vch #${dupGroups[0].ref} appears ${dupGroups[0].entries.length}× (${fmt(dupGroups[0].amount)} each) — "${p.name}"${dupGroups.length>1?` +${dupGroups.length-1} more`:''}`,
+          shortMsg:`Duplicate Vch #${dupGroups[0].ref}`, action:'Open project → Fund Releases → delete the duplicate entry' });
+      }
+    }
   });
 
   return all.sort((a,b)=>(a.priority||5)-(b.priority||5));

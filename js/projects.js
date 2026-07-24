@@ -129,7 +129,7 @@ function renderDetail(id){
       </td>
       <td style="text-align:right;font-weight:700">${fmt(item.qty*item.rate)}</td>
     </tr>`;}).join('');
-  const relLog=(p.releases||[]).slice().reverse().map(r=>`
+  const relLog=(p.releases||[]).filter(r=>!isArchived(r)).slice().reverse().map(r=>`
     <div class="fr">
       <span class="fl">${r.date}<br>
         <span style="font-size:11px">${r.notes||''} · Vch #${r.ref||'—'} · ${r.method||''}</span><br>
@@ -137,10 +137,11 @@ function renderDetail(id){
       </span>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="fv">${fmt(r.amount)}</span>
-        ${(r.source!=='tally' || (CU && CU.isSuperAdmin))?`<div class="amenu-wrap">
+        ${(CU && CU.isSuperAdmin)?`<div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('rm-${r.id}')">⋮</button>
           <div class="amenu" id="rm-${r.id}">
             <button class="amenu-item" onclick="openEditRelease('${id}','${r.id}')">✏️ Edit</button>
+            <button class="amenu-item" onclick="openTransferRelease('${id}','${r.id}')">↔️ Transfer to Another Project</button>
             <button class="amenu-item danger" onclick="deleteRelease('${id}','${r.id}')">🗑️ Delete</button>
           </div>
         </div>`:''}

@@ -398,8 +398,8 @@ async function deleteContractor(cid){
 // ═══════════════════════════════════════════════════════
 // DELETE / EDIT — FUND RELEASES
 // ═══════════════════════════════════════════════════════
-function openEditRelease(pid, rid){
-  const p=GP(pid); if(!p) return;
+async function openEditRelease(pid, rid){
+  const p=await GPFull(pid); if(!p) return;
   const r=(p.releases||[]).find(x=>x.id===rid); if(!r) return;
   editReleasePid=pid; editReleaseId=rid;
   document.getElementById('er-amt').value=r.amount;
@@ -413,7 +413,7 @@ function openEditRelease(pid, rid){
   document.getElementById('modal-edit-release').classList.add('open');
 }
 async function saveEditRelease(){
-  const p=GP(editReleasePid); if(!p) return;
+  const p=await GPFull(editReleasePid); if(!p) return;
   const r=(p.releases||[]).find(x=>x.id===editReleaseId); if(!r) return;
   const newAmt=parseFloat(document.getElementById('er-amt').value);
   if(!newAmt||newAmt<=0){alert('Enter a valid amount');return;}
@@ -436,11 +436,69 @@ async function saveEditRelease(){
 }
 async function deleteRelease(pid, rid){
   if(!confirm('Archive this transaction? Data is preserved and recoverable.')) return;
-  const p=GP(pid); if(!p) return;
+  const p=await GPFull(pid); if(!p) return;
   const r=(p.releases||[]).find(x=>x.id===rid);
   if(r){ r._archived=true; r._archivedAt=new Date().toISOString(); }
   try{ await saveProjectDB(p); renderDetail(pid); toast('✓ Transaction archived','ok'); }
   catch(e){ toast('Archive failed','error'); }
+}
+
+// ─── TRANSFER A TRANSACTION TO A DIFFERENT PROJECT ────
+// Super Admin only — moves a fund release entry from one project to
+// another entirely (not a copy). Useful when a Tally transaction got
+// matched to the wrong project by cost centre and needs correcting.
+let _transferPid=null, _transferRid=null;
+async function openTransferRelease(pid, rid){
+  if(!CU || !CU.isSuperAdmin){ toast('Only Super Admin can transfer transactions','error'); return; }
+  const p=await GPFull(pid); if(!p) return;
+  const r=(p.releases||[]).find(x=>x.id===rid); if(!r) return;
+  _transferPid=pid; _transferRid=rid;
+  const otherProjects = D.projects.filter(x=>!isArchived(x) && x.id!==pid).sort((a,b)=>a.name.localeCompare(b.name));
+  let modal = document.getElementById('modal-transfer-release');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-transfer-release'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="mbox" style="max-width:520px">
+    <div class="mhdr"><h2>↔️ Transfer Transaction</h2><button class="mx" onclick="CM('modal-transfer-release')">✕</button></div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:14px;font-size:13px">
+      <strong>${fmt(r.amount)}</strong> on ${fmtDate(r.date)} — Vch #${r.ref||'—'} — ${r.notes||'(no notes)'}<br>
+      <span style="color:var(--text3);font-size:11px">Currently on: ${p.name.substring(0,60)}</span>
+    </div>
+    <div class="fg"><label>Move to Project</label>
+      <select id="transfer-target-pid" style="width:100%">
+        <option value="">— Select target project —</option>
+        ${otherProjects.map(x=>`<option value="${x.id}">${x.name.substring(0,70)} (${(GC(x.contractorId)||{}).name||'—'})</option>`).join('')}
+      </select>
+    </div>
+    <div style="font-size:12px;color:var(--amber);margin-top:8px">⚠️ This moves the transaction entirely — it will no longer appear on the current project's Fund Releases once transferred.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="CM('modal-transfer-release')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveTransferRelease()">↔️ Transfer</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+async function saveTransferRelease(){
+  const targetPid = document.getElementById('transfer-target-pid')?.value;
+  if(!targetPid){ toast('Select a target project','error'); return; }
+  const sourceP = await GPFull(_transferPid); if(!sourceP) return;
+  const idx = (sourceP.releases||[]).findIndex(x=>x.id===_transferRid);
+  if(idx<0){ toast('Transaction not found','error'); return; }
+  const [release] = sourceP.releases.splice(idx,1);
+  const targetP = await GPFull(targetPid); if(!targetP){ toast('Target project not found','error'); return; }
+  if(!targetP.releases) targetP.releases=[];
+  targetP.releases.push(release);
+  try{
+    await saveProjectDB(sourceP);
+    await saveProjectDB(targetP);
+    logActivity({category:'project',action:'transaction_transferred',projectId:targetPid,projectName:targetP.name,
+      description:(CU?CU.name:'Super Admin')+' transferred a '+fmt(release.amount)+' transaction (Vch #'+(release.ref||'—')+') from "'+sourceP.name.substring(0,40)+'" to "'+targetP.name.substring(0,40)+'"'});
+    CM('modal-transfer-release');
+    renderDetail(_transferPid);
+    toast('✓ Transaction transferred to '+targetP.name.substring(0,40),'ok');
+  }catch(e){
+    // Best-effort rollback if the target save failed after removing from source
+    sourceP.releases.splice(idx,0,release);
+    toast('Transfer failed — try again','error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════
