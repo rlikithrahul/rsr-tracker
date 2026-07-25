@@ -266,27 +266,37 @@ function renderExpectedJVSection(allProjects){
   const thisProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&projStatus(p)!=='completed'&&(p.expectedJVMonth===thisKey||p.expectedJVMonth<thisKey));
   const nextProjects = allProjects.filter(p=>p.expectedJVMonth&&!p.jvDate&&projStatus(p)!=='completed'&&p.expectedJVMonth===nextKey);
 
+  const remainingAmt = (p) => {
+    const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0);
+    return Math.max(0, agAmt(p) - settled);
+  };
+
   const buildTable = (projects, monthKey) => {
     if(!projects.length) return '<div style="font-size:12px;color:var(--text3);padding:8px;text-align:center;font-style:italic">None tagged</div>';
-    const totalAmt = projects.reduce((s,p)=>s+agAmt(p),0);
+    const totalAmt = projects.reduce((s,p)=>s+remainingAmt(p),0);
     let rows = '';
     projects.forEach(p=>{
       const c = GC(p.contractorId);
       const carried = p.expectedJVMonth < monthKey;
+      const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0);
+      const partial = settled > 0;
       rows += '<tr style="border-bottom:1px solid var(--surface2);cursor:pointer" onclick="openProjectFromAlert(\'' + p.id + '\')">' 
         +'<td style="padding:6px;max-width:150px">'
         +'<div style="font-weight:600;color:var(--navy);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
         +(carried?'<div style="font-size:10px;color:var(--amber);font-weight:600">⚠️ Carried from prev month</div>':'')
+        +(partial?'<div style="font-size:10px;color:var(--green);font-weight:600">'+fmt(settled)+' already received</div>':'')
         +'</td>'
         +'<td style="padding:6px;font-size:11px;color:var(--text2)">'+(c?c.name:'—')+'</td>'
-        +'<td style="padding:6px;text-align:right;font-weight:600;color:var(--navy);font-size:11px">'+fmt(agAmt(p))+'</td>'
+        +'<td style="padding:6px;text-align:right;font-weight:600;color:var(--navy);font-size:11px">'+fmt(remainingAmt(p))
+        +(partial?'<div style="font-size:9px;color:var(--text3);font-weight:400">of '+fmt(agAmt(p))+' total</div>':'')
+        +'</td>'
         +'</tr>';
     });
     return '<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:1px solid var(--border)">'
       +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Project</th>'
       +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:var(--text3)">Contractor</th>'
-      +'<th style="text-align:right;padding:4px 6px;font-size:11px;color:var(--text3)">Agreement</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-size:11px;color:var(--text3)">Expected Amount</th>'
       +'</tr></thead><tbody>'+rows+'</tbody>'
       +'<tfoot><tr style="border-top:2px solid var(--border);background:var(--surface2)">'
       +'<td colspan="2" style="padding:8px 6px;font-weight:700;font-size:12px">Total ('+projects.length+' projects)</td>'

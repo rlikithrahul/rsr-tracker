@@ -286,7 +286,7 @@ function renderDetail(id){
             ['Max Fundable (70%)', fmt(max)],
             null, // separator
             ['Paid to Contractor', fmt(totPayments(p)), 'color:var(--navy)'],
-            ...(totReceipts(p)>0 ? [['Received from Govt (Tally)', '− '+fmt(totReceipts(p)), 'color:var(--green);font-weight:700']] : []),
+            ...(totReceipts(p)>0 ? [['Received from Govt (confirmed)', '− '+fmt(totReceipts(p)), 'color:var(--green);font-weight:700']] : []),
             ['Net Deployed (at risk)', fmt(rel), rel>max?'color:var(--red);font-weight:800':'color:var(--navy);font-weight:800'],
             ['Cap Used', Math.round(rel/Math.max(max,1)*100)+'%', rel/Math.max(max,1)>=0.85?'color:var(--red);font-weight:800':''],
             null, // separator

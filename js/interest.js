@@ -239,9 +239,7 @@ function canDoCompounding(c, projects){
   const log = c.compoundLog || [];
   const alreadyDoneThisFY = log.some(e=>e.fy===currentFY);
   if(alreadyDoneThisFY) return false;
-  const outstanding = projects.reduce((s,p)=>s+Math.max(0,
-    totPayments(p)-totReceipts(p)-(p.settlements||[]).filter(x=>!isArchived(x)).reduce((a,x)=>a+x.amount,0)
-  ),0);
+  const outstanding = projects.reduce((s,p)=>s+totRel(p),0);
   return outstanding > 0;
 }
 

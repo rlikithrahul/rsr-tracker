@@ -53,8 +53,19 @@ function GC(id){ return D.contractors.find(c=>c.id===id)||null; }
 function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }
 function totPayments(p){ return (p.releases||[]).filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
-function totReceipts(p){ return (p.releases||[]).filter(r=>r.txType==='receipt').reduce((s,r)=>s+r.amount,0); }
-function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p)); } // NET deployed = payments minus receipts
+// Only receipts that have been explicitly confirmed as a real government
+// settlement count toward reducing at-risk capital. A raw Tally "Receipt"
+// entry can be all sorts of things — an internal transfer between
+// contractors, a refund, anything — not necessarily money actually paid
+// back by GVMC. The Settle flow (with its settlement-detection
+// suggestions) is the explicit, human-confirmed record of what's really
+// been received from the government; that confirmed list is the only
+// thing that should count here. This directly affects Net Deployed, Cap
+// Used %, and interest accrual (interest stops only once capital is
+// genuinely confirmed recovered, not just because an unrelated receipt
+// happened to show up in Tally).
+function totReceipts(p){ return (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0); }
+function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p)); } // NET deployed = payments minus confirmed settlements
 function verPct(p){
   // Based on RSR physical verification only — controls funding
   const lv=(p.verifications||[]).slice(-1)[0]; if(!lv) return 0;
