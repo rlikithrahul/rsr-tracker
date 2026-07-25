@@ -662,6 +662,14 @@ function openSettle(pid){
     ? availableReceipts.map((r,i)=>`<option value="${i}">${r.date} · Vch #${r.ref||'—'} · ${fmt(r.amount)}${r.notes?' · '+r.notes:''}</option>`).join('')
     : '<option value="">No Tally receipt transactions available — enter manually</option>';
 
+  // Stored in a variable rather than embedded as inline JSON in the
+  // onchange attribute — embedding JSON.stringify(...) directly inside an
+  // HTML attribute breaks the moment the JSON's own double quotes collide
+  // with the attribute's double quotes, which is every single time (JSON
+  // always uses double quotes), silently truncating the handler and
+  // making the dropdown appear to do nothing when a transaction is picked.
+  _settleAvailableReceipts = availableReceipts.map(r=>({ref:r.ref,amount:r.amount,date:r.date,notes:r.notes||''}));
+
   document.getElementById('settle-summary').innerHTML=`
     <div class="calc" style="margin-bottom:14px">
       <div class="fr"><span class="fl">Total Payments (gross)</span><span class="fv">${fmt(pay)}</span></div>
@@ -673,7 +681,7 @@ function openSettle(pid){
     ${availableReceipts.length?`
     <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:10px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:6px">📥 Select from Tally Receipt Transactions</div>
-      <select id="settle-tx-select" onchange="prefillSettleFromTx(${JSON.stringify(availableReceipts.map(r=>({ref:r.ref,amount:r.amount,date:r.date,notes:r.notes||''})))})" style="width:100%;padding:7px;border:1px solid #a5d6a7;border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px">
+      <select id="settle-tx-select" onchange="prefillSettleFromTx()" style="width:100%;padding:7px;border:1px solid #a5d6a7;border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px">
         <option value="">— Select a Tally receipt transaction —</option>
         ${txOptions}
       </select>
@@ -688,12 +696,13 @@ function openSettle(pid){
   document.getElementById('modal-settle').classList.add('open');
 }
 
-function prefillSettleFromTx(txArr){
+let _settleAvailableReceipts = [];
+function prefillSettleFromTx(){
   const sel=document.getElementById('settle-tx-select');
   if(!sel||sel.value==='') return;
   const idx=parseInt(sel.value);
-  if(isNaN(idx)||!txArr[idx]) return;
-  const tx=txArr[idx];
+  const tx=_settleAvailableReceipts[idx];
+  if(!tx) return;
   document.getElementById('settle-amt').value=tx.amount;
   document.getElementById('settle-date').value=tx.date;
   document.getElementById('settle-ref').value=tx.ref||'';
