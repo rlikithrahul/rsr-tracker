@@ -746,6 +746,10 @@ async function confirmSettle(){
       meta:{ mode: document.getElementById('settle-mode').value, notes: document.getElementById('settle-notes').value }
     });
     logSettlement(p, amt, ref, date);
+    const newSettlement = p.settlements[p.settlements.length-1];
+    if(typeof registerGrowthPoolCollection === 'function'){
+      await registerGrowthPoolCollection(p, newSettlement);
+    }
     CM('modal-settle');
     renderDetail(settlePid);
     toast(`✓ Settlement of ${fmt(amt)} recorded`,'ok');
