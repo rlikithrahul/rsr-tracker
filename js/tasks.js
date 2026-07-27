@@ -173,7 +173,7 @@ function renderTasksTab(){
 function renderMyTasksSection(name){
   const log = D.taskLog||[];
   const todayStr = new Date().toISOString().split('T')[0];
-  const mine = log.filter(t=>t.assignedTo===name);
+  const mine = log.filter(t=>t.assignedTo===name && !t._archived);
   const overdue = mine.filter(t=>!t.status && t.dueDate<todayStr).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
   const today = mine.filter(t=>!t.status && t.dueDate===todayStr);
   const doneToday = mine.filter(t=>t.status && t.dueDate===todayStr);
@@ -218,23 +218,43 @@ function renderTeamOverview(){
   const todayStr = new Date().toISOString().split('T')[0];
   const names = getAllAssignableNames();
   const perPerson = names.map(name=>{
-    const mine = log.filter(t=>t.assignedTo===name);
-    const overdue = mine.filter(t=>!t.status && t.dueDate<todayStr).length;
-    const todayPending = mine.filter(t=>!t.status && t.dueDate===todayStr).length;
-    const todayDone = mine.filter(t=>t.status && t.dueDate===todayStr).length;
-    return {name, overdue, todayPending, todayDone};
+    const mine = log.filter(t=>t.assignedTo===name && !t._archived);
+    const overdueTasks = mine.filter(t=>!t.status && t.dueDate<todayStr).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+    const todayTasks = mine.filter(t=>!t.status && t.dueDate===todayStr);
+    const todayDoneTasks = mine.filter(t=>t.status && t.dueDate===todayStr);
+    return {name, overdueTasks, todayTasks, todayDoneTasks};
   });
 
   const templates = (D.taskTemplates||[]).filter(t=>!t._archived);
+  const daysOverdue = (dueDate) => Math.floor((new Date(todayStr) - new Date(dueDate)) / 86400000);
+
+  const taskRow = (t, tone) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--surface2)">
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--navy)">${t.taskName}</div>
+      <div style="font-size:10px;color:${tone==='red'?'var(--red)':'var(--text3)'}">${tone==='red'?'Due '+fmtDate(t.dueDate)+' — '+daysOverdue(t.dueDate)+' day'+(daysOverdue(t.dueDate)!==1?'s':'')+' overdue':'Due today'}</div>
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0">
+      <button onclick="_openCompleteTask('${t.id}');event.stopPropagation()" title="Mark done" style="background:none;border:1px solid var(--green);color:var(--green);border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer">✓ Done</button>
+      <button onclick="dismissOverdueTask('${t.id}');event.stopPropagation()" title="Not needed anymore — remove without marking done" style="background:none;border:1px solid var(--border);color:var(--text3);border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer">✕ Dismiss</button>
+    </div>
+  </div>`;
 
   return `<div class="card" style="margin-bottom:16px">
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👥 Team Overview — Today</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
-      ${perPerson.map(p=>`<div style="border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px">
-        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">${p.name}</div>
-        <div style="font-size:11px;color:${p.overdue?'var(--red)':'var(--text3)'}">⚠️ ${p.overdue} overdue</div>
-        <div style="font-size:11px;color:var(--text3)">${p.todayPending} pending today</div>
-        <div style="font-size:11px;color:var(--green)">✓ ${p.todayDone} done today</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      ${perPerson.map((p,i)=>`<div style="border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px">
+        <div onclick="_toggleTeamOverviewDetail(${i})" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:700;color:var(--navy)">${p.name}</div>
+          <span id="tov-caret-${i}" style="font-size:11px;color:var(--text3)">▶</span>
+        </div>
+        <div style="font-size:11px;color:${p.overdueTasks.length?'var(--red)':'var(--text3)'};margin-top:4px">⚠️ ${p.overdueTasks.length} overdue</div>
+        <div style="font-size:11px;color:var(--text3)">${p.todayTasks.length} pending today</div>
+        <div style="font-size:11px;color:var(--green)">✓ ${p.todayDoneTasks.length} done today</div>
+        <div id="tov-detail-${i}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--surface2)">
+          ${p.overdueTasks.length?`<div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px">OVERDUE</div>${p.overdueTasks.map(t=>taskRow(t,'red')).join('')}`:''}
+          ${p.todayTasks.length?`<div style="font-size:10px;font-weight:700;color:var(--text3);margin:6px 0 2px">TODAY</div>${p.todayTasks.map(t=>taskRow(t,'today')).join('')}`:''}
+          ${!p.overdueTasks.length && !p.todayTasks.length?'<div style="font-size:11px;color:var(--text3);font-style:italic">Nothing outstanding 🎉</div>':''}
+        </div>
       </div>`).join('')}
     </div>
   </div>
@@ -265,6 +285,37 @@ function renderTeamOverview(){
       </tr>`).join('')}</tbody>
     </table></div>`}
   </div>`;
+}
+
+function _toggleTeamOverviewDetail(i){
+  const detail = document.getElementById('tov-detail-'+i);
+  const caret = document.getElementById('tov-caret-'+i);
+  if(!detail) return;
+  const isOpen = detail.style.display==='block';
+  detail.style.display = isOpen ? 'none' : 'block';
+  if(caret) caret.textContent = isOpen ? '▶' : '▼';
+}
+
+// "Dismiss" — for when a specific day's task genuinely wasn't needed
+// (e.g. nothing to bank that day, site was rained out) — removes it from
+// overdue/pending counts without marking it as done, since it wasn't
+// actually done. Distinct from completing it. Soft-deleted, same as
+// everything else in this app, not a hard removal.
+async function dismissOverdueTask(logId){
+  const t = (D.taskLog||[]).find(x=>x.id===logId); if(!t) return;
+  const ok = await showConfirm({
+    title:'Dismiss this task?',
+    message:'"'+t.taskName+'" ('+fmtDate(t.dueDate)+') will be removed from overdue/pending — not marked done, just no longer counted. Use this when it genuinely wasn\'t needed that day.',
+    confirmLabel:'Yes, Dismiss'
+  });
+  if(!ok) return;
+  const backup = {...t};
+  t._archived = true; t._archivedAt = new Date().toISOString(); t._dismissedBy = CU?CU.name:'';
+  try{
+    await saveTaskLog();
+    renderTasksTab();
+    toast('✓ Dismissed','ok');
+  }catch(e){ Object.assign(t, backup); toast('Save failed','error'); }
 }
 
 // ─── TASK TEMPLATE CRUD (Super Admin) ──────────────────
