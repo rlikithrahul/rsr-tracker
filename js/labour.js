@@ -50,8 +50,10 @@ async function addCustomLabourType(label){
 
 // ─── LOAD/SAVE LABOUR DATA ────────────────────────────
 async function loadLabourData(){
+  if(D.labourData) return D.labourData;
   const key = LABOUR_STORAGE_KEY + '_' + (CU&&CU.id||'');
   D.labourData = await getSetting(key, {});
+  return D.labourData;
 }
 
 async function saveLabourData(){
@@ -60,8 +62,10 @@ async function saveLabourData(){
 }
 
 async function loadExpenseData(){
+  if(D.expenseData) return D.expenseData;
   const key = EXPENSE_STORAGE_KEY + '_' + (CU&&CU.id||'');
   D.expenseData = await getSetting(key, {});
+  return D.expenseData;
 }
 
 async function saveExpenseData(){
@@ -92,6 +96,8 @@ function refreshLabourInputs(pid){
     const inp = document.getElementById('labour_'+pid+'_'+t.id);
     if(inp) inp.value = entry[t.id]||'';
   });
+  const mestriInp = document.getElementById('labour_mestri_'+pid);
+  if(mestriInp) mestriInp.value = entry.mestriName||'';
 }
 
 // ─── SAVE LABOUR FROM DATE PICKER ─────────────────────
@@ -126,6 +132,11 @@ function renderLabourTab(pid){
           onchange="refreshLabourInputs('${pid}')"
           style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--navy);flex:1;min-width:140px">
         <span style="font-size:11px;color:var(--text3)" id="labour_date_label_${pid}">Today</span>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">👤 Mestri Name <span style="font-weight:400;color:var(--text3)">(optional — who brought this labour, if hired through a local mestri rather than your own)</span></label>
+        <input type="text" id="labour_mestri_${pid}" value="${todayEntry.mestriName||''}" placeholder="e.g. Ramarao Mestri — leave blank if own labour"
+          style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:'Inter',sans-serif">
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:12px">
@@ -181,7 +192,7 @@ function renderLabourTab(pid){
               const e = entries[d]||{};
               const total = types.reduce((s,t)=>s+(parseInt(e[t.id])||0),0);
               return `<tr style="background:${i%2===0?'#fff':'var(--surface2)'}">
-                <td style="padding:7px 8px;font-weight:600;white-space:nowrap">${fmtDate(d)}</td>
+                <td style="padding:7px 8px;font-weight:600;white-space:nowrap">${fmtDate(d)}${e.mestriName?`<div style="font-size:10px;font-weight:400;color:var(--text3)">👤 ${e.mestriName}</div>`:''}</td>
                 ${types.map(t=>`<td style="padding:7px 8px;text-align:center">${e[t.id]||'—'}</td>`).join('')}
                 <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--navy)">${total}</td>
                 <td style="padding:4px"><button onclick="deleteLabourEntry('${pid}','${d}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px">🗑️</button></td>
@@ -210,6 +221,8 @@ async function saveLabourEntry(pid, date){
     const val = parseInt(document.getElementById(`labour_${pid}_${t.id}`)?.value)||0;
     if(val>0) entry[t.id] = val;
   });
+  const mestriName = document.getElementById(`labour_mestri_${pid}`)?.value?.trim();
+  if(mestriName) entry.mestriName = mestriName;
   D.labourData[pid][date] = entry;
   try{
     await saveLabourData();

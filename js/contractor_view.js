@@ -601,7 +601,7 @@ async function submitUpd(pid){
 // ─── CONTRACTOR NOTES DIARY ───────────────────────────
 function renderContractorNotes(pid){
   const p = GP(pid); if(!p) return '';
-  const notes = p.contractorNotes || [];
+  const notes = (p.contractorNotes || []).filter(n=>!n._archived);
   
   return `<div class="card" style="margin-top:12px">
     <div class="st">📓 My Notes</div>
@@ -620,19 +620,27 @@ function renderContractorNotes(pid){
     
     <!-- Existing notes -->
     ${notes.length ? notes.slice().reverse().map(n=>`
-      <div style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface);border-radius:0 var(--rs) var(--rs) 0">
-        ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
-        <div style="font-size:13px;color:var(--text)">${n.text.replace(/\n/g,'<br>')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      <div id="note-view-${n.id}" style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface);border-radius:0 var(--rs) var(--rs) 0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
+            <div style="font-size:13px;color:var(--text)">${n.text.replace(/\n/g,'<br>')}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${n.editedAt?' · edited':''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button onclick="openEditContractorNote('${pid}','${n.id}')" title="Edit" style="background:none;border:none;color:var(--navy);cursor:pointer;font-size:13px">✏️</button>
+            <button onclick="deleteContractorNote('${pid}','${n.id}')" title="Delete" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑️</button>
+          </div>
+        </div>
       </div>`).join('') : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">No notes yet. Add your first note above.</div>'}
   </div>`;
 }
 
 async function saveContractorNote(pid){
-  const p = GP(pid); if(!p) return;
   const text = document.getElementById(`note-text-${pid}`)?.value?.trim();
   if(!text){ toast('Write something first','error'); return; }
   const date = document.getElementById(`note-date-${pid}`)?.value || '';
+  const p = await GPFull(pid); if(!p) return;
   if(!p.contractorNotes) p.contractorNotes = [];
   p.contractorNotes.push({
     id: uid(), text, date,
@@ -642,10 +650,54 @@ async function saveContractorNote(pid){
   try {
     await saveProjectDB(p);
     toast('✅ Note saved','ok');
+    document.getElementById(`note-text-${pid}`).value = '';
     // Re-render notes section
     const notesEl = document.getElementById(`contractor-notes-${pid}`);
     if(notesEl) notesEl.innerHTML = renderContractorNotes(pid);
   } catch(e){ toast('Save failed','error'); }
+}
+
+function openEditContractorNote(pid, nid){
+  const p = GP(pid); if(!p) return;
+  const n = (p.contractorNotes||[]).find(x=>x.id===nid); if(!n) return;
+  const el = document.getElementById('note-view-'+nid); if(!el) return;
+  el.innerHTML = `
+    <input type="date" id="note-edit-date-${nid}" value="${n.date||''}" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:6px;font-family:'Inter',sans-serif">
+    <textarea id="note-edit-text-${nid}" style="width:100%;min-height:70px;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;resize:vertical;box-sizing:border-box">${n.text}</textarea>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button class="btn btn-sm btn-navy" onclick="saveEditContractorNote('${pid}','${nid}')">✓ Save</button>
+      <button class="btn btn-sm" onclick="document.getElementById('contractor-notes-${pid}').innerHTML=renderContractorNotes('${pid}')">Cancel</button>
+    </div>`;
+}
+async function saveEditContractorNote(pid, nid){
+  const text = document.getElementById('note-edit-text-'+nid)?.value?.trim();
+  if(!text){ toast('Note can\'t be empty','error'); return; }
+  const date = document.getElementById('note-edit-date-'+nid)?.value||'';
+  const p = await GPFull(pid); if(!p) return;
+  const n = (p.contractorNotes||[]).find(x=>x.id===nid); if(!n) return;
+  n.text = text; n.date = date; n.editedAt = new Date().toISOString();
+  try{
+    await saveProjectDB(p);
+    const notesEl = document.getElementById(`contractor-notes-${pid}`);
+    if(notesEl) notesEl.innerHTML = renderContractorNotes(pid);
+    toast('✓ Note updated','ok');
+  }catch(e){ toast('Save failed','error'); }
+}
+async function deleteContractorNote(pid, nid){
+  const ok = await showConfirm({title:'Delete Note?', message:'This removes the note permanently.', confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  const p = await GPFull(pid); if(!p) return;
+  const n = (p.contractorNotes||[]).find(x=>x.id===nid); if(!n) return;
+  n._archived = true; n._archivedAt = new Date().toISOString();
+  try{
+    await saveProjectDB(p);
+    const notesEl = document.getElementById(`contractor-notes-${pid}`);
+    if(notesEl) notesEl.innerHTML = renderContractorNotes(pid);
+    toast('✓ Note deleted','ok');
+  }catch(e){
+    delete n._archived; delete n._archivedAt;
+    toast('Save failed','error');
+  }
 }
 
 // ─── UPDATE HISTORY FOR CONTRACTOR ────────────────────
