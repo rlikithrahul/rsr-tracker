@@ -502,8 +502,10 @@ function buildLifecycleTimeline(p, id){
       actions: hasEA && !wecReceived ? (wecApplied
         ? '<button class="btn btn-sm btn-navy" onclick="markWECReceived(\''+id+'\')">✓ Mark WEC Received</button>'
           +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'wec\')">📄 Download WEC Letter</button>'
+          +letterSubmitButton(id,'wec')
         : '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markWECApplied(\''+id+'\')">✓ Mark WEC Applied</button>'
-          +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'wec\')">📄 Download WEC Letter</button>') : ''
+          +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'wec\')">📄 Download WEC Letter</button>'
+          +letterSubmitButton(id,'wec')) + letterStatusLine(p,'wec') : ''
     },
     // ASD REFUND — eligible immediately after EA number
     ...(asdAmount > 0 ? [{
@@ -517,7 +519,8 @@ function buildLifecycleTimeline(p, id){
       actions: asdEligible && !asdApplied
         ? '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markASDApplied(\''+id+'\')">✓ Mark ASD Applied</button>'
           +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'asd\')">📄 Download ASD Letter</button>'
-        : asdApplied && !asdReceived ? '<button class="btn btn-sm btn-navy" onclick="markASDReceived(\''+id+'\')">✓ Mark ASD Received</button>' : ''
+          +letterSubmitButton(id,'asd') + letterStatusLine(p,'asd')
+        : asdApplied && !asdReceived ? '<button class="btn btn-sm btn-navy" onclick="markASDReceived(\''+id+'\')">✓ Mark ASD Received</button>'+letterStatusLine(p,'asd') : ''
     }] : []),
     {
       icon:'💰', label:'Payment Received from GVMC',
@@ -548,8 +551,10 @@ function buildLifecycleTimeline(p, id){
       actions: hasJV && refundEligible && !refundApplied
         ? '<button class="btn btn-sm" style="background:var(--red);color:#fff;border:none;border-radius:var(--rs);padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif" onclick="markRefundApplied(\''+id+'\')">✓ Mark Applied</button>'
           +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'emd_fsd\')">📄 Download EMD/FSD Letter</button>'
+          +letterSubmitButton(id,'emd_fsd') + letterStatusLine(p,'emd_fsd')
         : refundApplied && !refundReceived ? '<button class="btn btn-sm btn-navy" onclick="markRefundReceived(\''+id+'\')">✓ Mark Received</button>'
-          +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'emd_fsd\')">📄 Re-Download Letter</button>' : ''
+          +'<button class="btn btn-sm" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;font-weight:700" onclick="openLetterModal(\''+id+'\',\'emd_fsd\')">📄 Re-Download Letter</button>'
+          +letterSubmitButton(id,'emd_fsd') + letterStatusLine(p,'emd_fsd') : ''
     },
     {
       icon:'✅', label:'Project Fully Closed',

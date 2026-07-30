@@ -172,11 +172,61 @@ function downloadLetter(pid){
   const docx = buildDOCX(xml, topMargin);
   triggerDownload(docx, fileName);
 
+  // Track download separately from submission — a letter can be
+  // downloaded (and re-downloaded) any number of times before it's
+  // actually walked over and handed in; only the submission date really
+  // answers "how long has this been sitting with the department."
+  const letterKey = type==='emdfsd' ? 'emdfsd' : type;
+  if(!p.letters) p.letters = {};
+  const existing = p.letters[letterKey] || {};
+  p.letters[letterKey] = {
+    downloadedAt: new Date().toISOString(), downloadedBy: CU?CU.name:'Unknown',
+    submittedAt: existing.submittedAt||null, submittedBy: existing.submittedBy||null
+  };
+  saveProjectDB(p).catch(e=>console.error('Letter tracking save failed:',e));
+
   logActivity({category:'project',action:'letter_generated',projectId:pid,projectName:p.name,
     description:(CU?CU.name:'Admin')+' downloaded '+type.toUpperCase()+' letter for '+p.name});
   CM('modal-letters');
+  if(typeof renderDetail==='function') renderDetail(pid);
   toast('✓ Letter downloaded — '+fileName,'ok');
   if(typeof haptic==='function') haptic('success');
+}
+
+// ─── LETTER SUBMISSION TRACKING ────────────────────────
+// Separate from download — this is the date it actually got walked over
+// and handed in at the department, which is what actually matters for
+// "how long has this been pending."
+function letterStatusLine(p, type){
+  const info = (p.letters||{})[type];
+  if(!info) return '';
+  const parts = [];
+  parts.push('<span style="font-size:11px;color:var(--text3)">📥 Downloaded '+fmtDate(info.downloadedAt.split('T')[0])+' by '+info.downloadedBy+'</span>');
+  if(info.submittedAt){
+    const daysSince = Math.floor((new Date()-new Date(info.submittedAt))/86400000);
+    parts.push('<span style="font-size:11px;color:var(--green);font-weight:600">✓ Submitted '+fmtDate(info.submittedAt.split('T')[0])+' ('+daysSince+' day'+(daysSince!==1?'s':'')+' ago) by '+info.submittedBy+'</span>');
+  }
+  return '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">'+parts.join('')+'</div>';
+}
+function letterSubmitButton(pid, type){
+  const p = GP(pid); if(!p) return '';
+  const info = (p.letters||{})[type];
+  if(!info || info.submittedAt) return '';
+  return '<button class="btn btn-sm" style="background:#eef2ff;color:var(--navy);border:1px solid var(--navy);font-weight:700" onclick="markLetterSubmitted(\''+pid+'\',\''+type+'\')">📮 Confirm Letter Submitted</button>';
+}
+async function markLetterSubmitted(pid, type){
+  const p = await GPFull(pid); if(!p) return;
+  if(!p.letters || !p.letters[type]){ toast('No letter downloaded yet for this','error'); return; }
+  const ok = await showConfirm({title:'Confirm Letter Submitted?', message:'This records today as the date this '+type.toUpperCase()+' letter was actually handed in at the department — separate from when it was downloaded.', confirmLabel:'Yes, Confirm'});
+  if(!ok) return;
+  p.letters[type].submittedAt = new Date().toISOString();
+  p.letters[type].submittedBy = CU?CU.name:'Unknown';
+  try{
+    await saveProjectDB(p);
+    renderDetail(pid);
+    logActivity({category:'project',action:'letter_submitted',projectId:pid,projectName:p.name,description:(CU?CU.name:'Admin')+' confirmed '+type.toUpperCase()+' letter submitted for '+p.name});
+    toast('✓ Submission recorded','ok');
+  }catch(e){ toast('Save failed','error'); }
 }
 
 // ─── XML BUILDER ─────────────────────────────────────

@@ -380,6 +380,7 @@ function renderPipeline(){
           +(def.key==='asd_to_apply'?'<button onclick="event.stopPropagation();openLetterModal(\''+p.id+'\',\'asd\')" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📄 ASD Letter</button>':'')
           +(def.key==='emd_overdue'||def.key==='emd_to_apply'||def.key==='emd_applied'?'<button onclick="event.stopPropagation();openLetterModal(\''+p.id+'\',\'emd_fsd\')" style="background:#e8f5e9;color:#16a34a;border:1px solid #86efac;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">📄 EMD/FSD Letter</button>':'')
           +'</div>'
+          +(typeof letterStatusLine==='function' ? letterStatusLine(p, def.key.startsWith('wec')?'wec':def.key.startsWith('asd')?'asd':def.key.startsWith('emd')?'emd_fsd':'') : '')
           +'</div>'
           +'<div style="font-size:12px;color:var(--navy);font-weight:700;flex-shrink:0">Open →</div>'
           +'</div>';
