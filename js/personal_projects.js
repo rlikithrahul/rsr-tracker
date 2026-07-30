@@ -173,6 +173,8 @@ async function openPersonalProject(pid){
       <div id="labour-tab-wrap">${renderLabourTab(pid)}</div>
     </div>
 
+    <div id="contractor-notes-${pid}">${typeof renderContractorNotes==='function'?renderContractorNotes(pid):''}</div>
+
     <!-- Delete project -->
     <button onclick="deletePersonalProject('${pid}')" style="width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--rs);padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;margin-bottom:20px">
       🗑️ Delete This Project
