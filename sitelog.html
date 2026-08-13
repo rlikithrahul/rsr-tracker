@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RSR Site Log</title>
+<link rel="manifest" id="sitelog-manifest">
+<meta name="theme-color" content="#1A2744">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{--navy:#1A2744;--navy2:#243258;--gold:#C9A84C;--gold2:#e0c068;--bg:#f0f2f7;--surface:#fff;--border:#dde2ee;--text:#1a2744;--text3:#8a94a8;--green:#1a7a3a;--red:#c0392b;--rs:12px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .topbar{background:var(--navy);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .topbar b{color:var(--gold);font-size:16px}
+  .wrap{padding:16px;max-width:520px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:20px;margin-bottom:14px;box-shadow:0 2px 8px rgba(26,39,68,.06)}
+  .center{text-align:center}
+  .pin-dots{display:flex;justify-content:center;gap:14px;margin:24px 0}
+  .pin-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--navy);background:transparent}
+  .pin-dot.filled{background:var(--navy)}
+  #pinInput{position:absolute;opacity:0;pointer-events:none}
+  .pin-tap-target{width:100%;padding:16px;border:2px dashed var(--border);border-radius:var(--rs);text-align:center;color:var(--text3);font-size:14px;cursor:pointer;background:var(--bg)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 18px;font-size:15px;font-weight:700;border-radius:var(--rs);cursor:pointer;border:1.5px solid var(--border);background:var(--surface);color:var(--text);width:100%;margin-bottom:10px}
+  .btn-navy{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--navy);border-color:#a8883a}
+  .btn-sm{padding:8px 12px;font-size:13px;width:auto}
+  .hub-btn{display:flex;align-items:center;gap:14px;padding:20px;border-radius:var(--rs);border:1px solid var(--border);background:var(--surface);margin-bottom:12px;cursor:pointer;font-size:17px;font-weight:700;color:var(--navy)}
+  .hub-btn .ico{font-size:28px}
+  .tap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .tap-item{padding:16px 10px;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--surface);text-align:center;cursor:pointer;font-size:14px;font-weight:600}
+  .tap-item.sel{border-color:var(--navy);background:var(--navy);color:#fff}
+  .fg{margin-bottom:14px}
+  .fg label{display:block;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+  .fg input,.fg select,.fg textarea{width:100%;padding:12px;font-size:16px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:inherit}
+  .back{color:#fff;font-size:22px;cursor:pointer;background:none;border:none;padding:0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:24px;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:100;opacity:0;transition:opacity .25s}
+  .toast.show{opacity:1}
+  .hidden{display:none!important}
+  .hist-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+  .spinner{width:36px;height:36px;border:4px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .8s linear infinite;margin:30px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .badge-off{font-size:11px;background:var(--red);color:#fff;padding:2px 8px;border-radius:10px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span id="topbarBack" class="back hidden" onclick="goHub()">←</span>
+  <b>RSR</b> <span id="topbarTitle">Site Log</span>
+</div>
+
+<div class="wrap">
+
+  <!-- PIN ENTRY -->
+  <div id="screen-pin">
+    <div class="card center">
+      <div id="pin-project-name" style="font-weight:700;font-size:16px;margin-bottom:4px">Loading…</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Enter your 4-digit site PIN</div>
+      <div class="pin-dots" id="pinDots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <div class="pin-tap-target" onclick="document.getElementById('pinInput').focus()">Tap here, then type your PIN</div>
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="pinInput" autocomplete="off">
+      <div id="pinError" style="color:var(--red);font-size:13px;margin-top:10px;display:none">✕ Wrong PIN — try again</div>
+    </div>
+  </div>
+
+  <!-- HUB -->
+  <div id="screen-hub" class="hidden">
+    <div class="card">
+      <div style="font-weight:800;font-size:17px;margin-bottom:2px" id="hub-project-name"></div>
+      <div style="font-size:12px;color:var(--text3)">What do you want to log?</div>
+    </div>
+    <div class="hub-btn" onclick="openSection('labour')"><span class="ico">👷</span> Labour</div>
+    <div class="hub-btn" onclick="openSection('materials')"><span class="ico">🧱</span> Materials</div>
+    <div class="hub-btn" onclick="openSection('expenses')"><span class="ico">💸</span> Expenses</div>
+  </div>
+
+  <!-- LABOUR -->
+  <div id="screen-labour" class="hidden">
+    <div class="card">
+      <div class="fg"><label>Date</label><input type="date" id="lab-date"></div>
+      <div id="lab-types" class="tap-grid"></div>
+      <div class="fg"><label>Mestri Name (optional)</label><input type="text" id="lab-mestri" placeholder="Who brought this labour, if not your own"></div>
+      <button class="btn btn-navy" onclick="saveLabourEntry()">✓ Save Labour Entry</button>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Recent Entries</div>
+      <div id="lab-history"></div>
+    </div>
+  </div>
+
+  <!-- MATERIALS -->
+  <div id="screen-materials" class="hidden">
+    <div class="card">
+      <div class="fg"><label>Material</label>
+        <div id="mat-types" class="tap-grid"></div>
+        <button class="btn btn-sm" onclick="addCustomType('materials')" style="margin-top:4px">+ Add Custom Material</button>
+      </div>
+      <div class="fg"><label>Quantity / Units</label><input type="number" step="0.01" id="mat-qty" placeholder="e.g. 6"></div>
+      <div class="fg"><label>Bill Amount ₹ (optional)</label><input type="number" id="mat-bill" placeholder="e.g. 12000"></div>
+      <div class="fg"><label>Paid Today ₹ (optional)</label><input type="number" id="mat-paid" placeholder="e.g. 5000"></div>
+      <div class="fg"><label>Supplier Name (optional)</label><input type="text" id="mat-supplier"></div>
+      <div class="fg"><label>Notes (optional)</label><textarea id="mat-notes" rows="2"></textarea></div>
+      <button class="btn btn-navy" onclick="saveMaterialEntry()">✓ Save Material Entry</button>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Recent Entries</div>
+      <div id="mat-history"></div>
+    </div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div id="screen-expenses" class="hidden">
+    <div class="card">
+      <div class="fg"><label>Category</label>
+        <div id="exp-types" class="tap-grid"></div>
+        <button class="btn btn-sm" onclick="addCustomType('expenses')" style="margin-top:4px">+ Add Custom Category</button>
+      </div>
+      <div class="fg"><label>Amount ₹</label><input type="number" id="exp-amount" placeholder="e.g. 500"></div>
+      <div class="fg"><label>Note (optional)</label><textarea id="exp-notes" rows="2"></textarea></div>
+      <button class="btn btn-navy" onclick="saveExpenseEntry()">✓ Save Expense</button>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Recent Entries</div>
+      <div id="exp-history"></div>
+    </div>
+  </div>
+
+  <!-- LOADING / ERROR -->
+  <div id="screen-loading">
+    <div class="spinner"></div>
+    <div class="center" style="color:var(--text3);font-size:13px">Loading site…</div>
+  </div>
+  <div id="screen-error" class="hidden card center">
+    <div style="font-size:32px;margin-bottom:8px">⚠️</div>
+    <div id="error-text" style="font-weight:700">This site link isn't active.</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">Contact the office if this seems wrong.</div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/sitelog.js"></script>
+</body>
+</html>
