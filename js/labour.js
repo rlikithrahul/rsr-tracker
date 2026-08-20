@@ -75,49 +75,44 @@ async function saveExpenseData(){
 
 
 // ─── REFRESH LABOUR INPUTS ON DATE CHANGE ─────────────
-function refreshLabourInputs(pid){
-  const dateEl = document.getElementById('labour_date_'+pid);
-  if(!dateEl) return;
-  const date = dateEl.value;
-  const today = new Date().toISOString().split('T')[0];
-  const types = getLabourTypes();
-  const entry = ((D.labourData||{})[pid]||{})[date] || {};
-
-  // Update label
-  const labelEl = document.getElementById('labour_date_label_'+pid);
-  if(labelEl){
-    if(date===today) labelEl.textContent='Today';
-    else if(date===new Date(Date.now()-86400000).toISOString().split('T')[0]) labelEl.textContent='Yesterday';
-    else labelEl.textContent=fmtDate(date);
+// ─── MIGRATION: move old contractor-scoped labour data onto the
+// project itself, once, the first time a project's labour tab loads
+// after this update. This is what actually fixes the sync gap between
+// the contractor login and the Site Log PIN page — both now read and
+// write the exact same place: p.labourLog.
+// NOTE: this can only migrate labour data that's already loaded into
+// this browser session (D.labourData, from whichever contractor is
+// currently logged in). If a different supervisor's login holds older
+// entries for this same project that were never opened in this session,
+// those specific old entries won't be pulled forward automatically —
+// worth flagging honestly rather than implying this is a complete
+// historical migration.
+async function migrateLabourLogIfNeeded(pid){
+  const p = await GPFull(pid); if(!p) return;
+  if(p.labourLog) return; // already migrated
+  p.labourLog = [];
+  p.mestriNames = p.mestriNames || [];
+  const old = (D.labourData||{})[pid];
+  if(old){
+    Object.entries(old).forEach(([date, entry])=>{
+      if(!entry || entry._archived) return;
+      const counts = {};
+      Object.keys(entry).forEach(k=>{ if(k!=='mestriName' && k!=='_archived') counts[k]=entry[k]; });
+      if(!Object.keys(counts).length && !entry.mestriName) return;
+      p.labourLog.push({ id:uid(), date, mestriName:entry.mestriName||'', counts, addedBy:'(migrated)', createdAt:new Date().toISOString(), source:'migrated' });
+      if(entry.mestriName && !p.mestriNames.includes(entry.mestriName)) p.mestriNames.push(entry.mestriName);
+    });
   }
-
-  // Update input values
-  types.forEach(t=>{
-    const inp = document.getElementById('labour_'+pid+'_'+t.id);
-    if(inp) inp.value = entry[t.id]||'';
-  });
-  const mestriInp = document.getElementById('labour_mestri_'+pid);
-  if(mestriInp) mestriInp.value = entry.mestriName||'';
-}
-
-// ─── SAVE LABOUR FROM DATE PICKER ─────────────────────
-async function saveLabourEntryFromDate(pid){
-  const dateEl = document.getElementById('labour_date_'+pid);
-  const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
-  await saveLabourEntry(pid, date);
+  try{ await saveProjectDB(p); }catch(e){ console.error('Labour migration save failed:', e); }
 }
 
 // ─── RENDER LABOUR TAB FOR A PROJECT ─────────────────
 function renderLabourTab(pid){
   const p = GP(pid); if(!p) return '';
-  const allEntries = (D.labourData||{})[pid] || {};
-  const entries = Object.fromEntries(Object.entries(allEntries).filter(([,e])=>!e._archived));
+  const log = (p.labourLog||[]).filter(e=>!e._archived).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
   const types = getLabourTypes();
   const today = new Date().toISOString().split('T')[0];
-
-  // Sort dates descending
-  const dates = Object.keys(entries).sort().reverse();
-  const todayEntry = entries[today] || {};
+  const mestriNames = p.mestriNames||[];
 
   return `<div style="padding:14px">
 
@@ -129,14 +124,13 @@ function renderLabourTab(pid){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:var(--rs);flex-wrap:wrap">
         <label style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">📅 Date:</label>
         <input type="date" id="labour_date_${pid}" value="${today}"
-          onchange="refreshLabourInputs('${pid}')"
           style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--navy);flex:1;min-width:140px">
-        <span style="font-size:11px;color:var(--text3)" id="labour_date_label_${pid}">Today</span>
       </div>
       <div style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">👤 Mestri Name <span style="font-weight:400;color:var(--text3)">(optional — who brought this labour, if hired through a local mestri rather than your own)</span></label>
-        <input type="text" id="labour_mestri_${pid}" value="${todayEntry.mestriName||''}" placeholder="e.g. Ramarao Mestri — leave blank if own labour"
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">👤 Mestri Name <span style="font-weight:400;color:var(--text3)">(optional — who brought this labour. If two mestris brought labour the same day, log them as two separate entries)</span></label>
+        <input type="text" id="labour_mestri_${pid}" list="mestri-list-${pid}" placeholder="e.g. Ramarao Mestri — leave blank if own labour"
           style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:'Inter',sans-serif">
+        <datalist id="mestri-list-${pid}">${mestriNames.map(n=>`<option value="${n}">`).join('')}</datalist>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:12px">
@@ -145,7 +139,7 @@ function renderLabourTab(pid){
             <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${t.icon} ${t.label}</div>
             <input type="number" min="0" step="1"
               id="labour_${pid}_${t.id}"
-              value="${todayEntry[t.id]||''}"
+              value=""
               placeholder="0"
               style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:700;text-align:center;font-family:'Inter',sans-serif">
           </div>`).join('')}
@@ -169,12 +163,12 @@ function renderLabourTab(pid){
           <button onclick="triggerLabourPhoto('${pid}','gallery')" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--rs);background:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif">🖼️ Gallery</button>
         </div>
         <input type="file" id="labour-photo-input-${pid}" accept="image/*" style="display:none" onchange="previewLabourPhoto('${pid}',this)">
-        <div id="labour-photo-preview-${pid}" style="margin-top:8px"></div>
+        <div id="labour-photo-preview-${pid}"></div>
       </div>
     </div>
 
     <!-- History -->
-    ${dates.length ? `
+    ${log.length ? `
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div class="st" style="margin:0;border:none;padding:0">📅 Labour History</div>
@@ -186,23 +180,24 @@ function renderLabourTab(pid){
             <th style="padding:8px;color:#fff;text-align:left">Date</th>
             ${types.map(t=>`<th style="padding:8px;color:#fff;text-align:center;white-space:nowrap">${t.label}</th>`).join('')}
             <th style="padding:8px;color:#fff;text-align:center">Total</th>
+            <th></th>
           </tr></thead>
           <tbody>
-            ${dates.slice(0,30).map((d,i)=>{
-              const e = entries[d]||{};
-              const total = types.reduce((s,t)=>s+(parseInt(e[t.id])||0),0);
+            ${log.slice(0,40).map((e,i)=>{
+              const total = types.reduce((s,t)=>s+(parseInt(e.counts[t.id])||0),0);
               return `<tr style="background:${i%2===0?'#fff':'var(--surface2)'}">
-                <td style="padding:7px 8px;font-weight:600;white-space:nowrap">${fmtDate(d)}${e.mestriName?`<div style="font-size:10px;font-weight:400;color:var(--text3)">👤 ${e.mestriName}</div>`:''}</td>
-                ${types.map(t=>`<td style="padding:7px 8px;text-align:center">${e[t.id]||'—'}</td>`).join('')}
+                <td style="padding:7px 8px;font-weight:600;white-space:nowrap">${fmtDate(e.date)}${e.mestriName?`<div style="font-size:10px;font-weight:400;color:var(--text3)">👤 ${e.mestriName}</div>`:''}</td>
+                ${types.map(t=>`<td style="padding:7px 8px;text-align:center">${e.counts[t.id]||'—'}</td>`).join('')}
                 <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--navy)">${total}</td>
-                <td style="padding:4px"><button onclick="deleteLabourEntry('${pid}','${d}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px">🗑️</button></td>
+                <td style="padding:4px"><button onclick="deleteLabourEntry('${pid}','${e.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px">🗑️</button></td>
               </tr>`;
             }).join('')}
             <!-- Totals row -->
             <tr style="background:var(--navy);font-weight:700">
               <td style="padding:8px;color:var(--gold)">TOTAL</td>
-              ${types.map(t=>`<td style="padding:8px;text-align:center;color:#fff">${dates.reduce((s,d)=>s+(parseInt((entries[d]||{})[t.id])||0),0)}</td>`).join('')}
-              <td style="padding:8px;text-align:center;color:var(--gold)">${dates.reduce((s,d)=>s+types.reduce((ss,t)=>ss+(parseInt((entries[d]||{})[t.id])||0),0),0)}</td>
+              ${types.map(t=>`<td style="padding:8px;text-align:center;color:#fff">${log.reduce((s,e)=>s+(parseInt(e.counts[t.id])||0),0)}</td>`).join('')}
+              <td style="padding:8px;text-align:center;color:var(--gold)">${log.reduce((s,e)=>s+types.reduce((ss,t)=>ss+(parseInt(e.counts[t.id])||0),0),0)}</td>
+              <td></td>
             </tr>
           </tbody>
         </table>
@@ -211,28 +206,38 @@ function renderLabourTab(pid){
   </div>`;
 }
 
-// ─── SAVE LABOUR ENTRY ────────────────────────────────
+// ─── SAVE LABOUR ENTRY (always a new entry — never overwrites an
+// existing one for that date, which is what allows multiple mestris on
+// the same day) ─────────────────────────────────────────
 async function saveLabourEntry(pid, date){
-  if(!D.labourData) D.labourData = {};
-  if(!D.labourData[pid]) D.labourData[pid] = {};
   const types = getLabourTypes();
-  const entry = {};
+  const counts = {};
   types.forEach(t=>{
     const val = parseInt(document.getElementById(`labour_${pid}_${t.id}`)?.value)||0;
-    if(val>0) entry[t.id] = val;
+    if(val>0) counts[t.id] = val;
   });
-  const mestriName = document.getElementById(`labour_mestri_${pid}`)?.value?.trim();
-  if(mestriName) entry.mestriName = mestriName;
-  D.labourData[pid][date] = entry;
+  const mestriName = document.getElementById(`labour_mestri_${pid}`)?.value?.trim()||'';
+  if(!Object.keys(counts).length){ toast('Enter at least one labour count','error'); return; }
+
   try{
-    await saveLabourData();
-    const lp = (typeof GP==='function')?GP(pid):null;
-    logActivity({category:'project',action:'labour_added',projectId:pid,projectName:lp?lp.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' added labour for '+fmtDate(date)+(lp?' — '+lp.name:'')});
+    const p = await GPFull(pid); if(!p) return;
+    if(!p.labourLog) p.labourLog = [];
+    if(!p.mestriNames) p.mestriNames = [];
+    p.labourLog.push({ id:uid(), date, mestriName, counts, addedBy:(typeof CU!=='undefined'&&CU?CU.name:'Contractor'), createdAt:new Date().toISOString(), source:'main-app' });
+    if(mestriName && !p.mestriNames.includes(mestriName)) p.mestriNames.push(mestriName);
+    await saveProjectDB(p);
+    logActivity({category:'project',action:'labour_added',projectId:pid,projectName:p.name,description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' added labour for '+fmtDate(date)+' — '+p.name});
     toast('✓ Labour saved for '+fmtDate(date),'ok');
-    // Re-render labour tab
     const wrap = document.getElementById('labour-tab-wrap');
     if(wrap) wrap.innerHTML = renderLabourTab(pid);
   }catch(e){ toast('Save failed','error'); }
+}
+
+// ─── SAVE LABOUR FROM DATE PICKER ─────────────────────
+async function saveLabourEntryFromDate(pid){
+  const dateEl = document.getElementById('labour_date_'+pid);
+  const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+  await saveLabourEntry(pid, date);
 }
 
 // ─── ADD CUSTOM LABOUR TYPE ───────────────────────────
@@ -248,8 +253,15 @@ async function showAddCustomLabour(pid){
 // ─── LABOUR REPORT MODAL ──────────────────────────────
 function showLabourReport(pid){
   const p = GP(pid); if(!p) return;
-  const entries = (D.labourData||{})[pid] || {};
+  const log = (p.labourLog||[]).filter(e=>!e._archived);
   const types = getLabourTypes();
+  // Aggregate multiple same-day entries (different mestris) into one row per date for the summary report
+  const byDate = {};
+  log.forEach(e=>{
+    if(!byDate[e.date]) byDate[e.date] = {};
+    types.forEach(t=>{ byDate[e.date][t.id] = (byDate[e.date][t.id]||0) + (parseInt(e.counts[t.id])||0); });
+  });
+  const entries = byDate;
   const dates = Object.keys(entries).sort();
 
   let modal = document.getElementById('modal-labour-report');
@@ -507,22 +519,26 @@ function clearExpensePhoto(pid){
   if(inp) inp.value='';
 }
 
-async function deleteLabourEntry(pid, date){
-  const ok = await showConfirm({title:'Delete Labour Entry?',message:'Labour entry for <strong>'+fmtDate(date)+'</strong><br><br>Can be restored within 7 days by admin.',confirmLabel:'Yes, Delete'});
+async function deleteLabourEntry(pid, entryId){
+  const p = await GPFull(pid); if(!p) return;
+  const entry = (p.labourLog||[]).find(e=>e.id===entryId);
+  if(!entry) return;
+  const ok = await showConfirm({title:'Delete Labour Entry?',message:'Labour entry for <strong>'+fmtDate(entry.date)+'</strong>'+(entry.mestriName?' ('+entry.mestriName+')':'')+'<br><br>Can be restored within 7 days by admin.',confirmLabel:'Yes, Delete'});
   if(!ok) return;
-  if(!D.labourData||!D.labourData[pid]) return;
-  const entry = D.labourData[pid][date];
-  const p = (typeof GP==='function')?GP(pid):null;
-  saveToBin('labour_entry', {date, entry}, pid, p?p.name:'');
-  logActivity({category:'project',action:'labour_deleted',projectId:pid,projectName:p?p.name:'',description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted labour entry for '+fmtDate(date)+(p?' — '+p.name:'')});
-  // Soft delete rather than removing the date key entirely — see the note
-  // on deleteExpense for why a hard removal is unsafe now that saves
-  // merge with the server copy.
-  D.labourData[pid][date] = {...entry, _archived:true};
+  saveToBin('labour_entry', {date:entry.date, entry:{...entry.counts, mestriName:entry.mestriName}}, pid, p.name);
+  logActivity({category:'project',action:'labour_deleted',projectId:pid,projectName:p.name,description:(typeof CU!=='undefined'&&CU?CU.name:'Contractor')+' deleted labour entry for '+fmtDate(entry.date)+' — '+p.name});
+  // Soft delete rather than removing the array item entirely — saves
+  // merge with the server copy, and a hard removal would be
+  // indistinguishable from "this session doesn't know about it yet",
+  // letting the merge silently bring it back.
+  entry._archived = true; entry._archivedAt = new Date().toISOString();
   try{
-    await saveLabourData();
+    await saveProjectDB(p);
     const wrap = document.getElementById('labour-tab-wrap');
     if(wrap) wrap.innerHTML = renderLabourTab(pid);
     toast('Labour entry moved to deleted bin','ok');
-  }catch(e){ toast('Failed to delete','error'); }
+  }catch(e){
+    entry._archived = false; delete entry._archivedAt;
+    toast('Failed to delete','error');
+  }
 }

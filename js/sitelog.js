@@ -30,12 +30,12 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 function show(id){
-  ['screen-pin','screen-hub','screen-labour','screen-materials','screen-expenses','screen-loading','screen-error'].forEach(s=>{
+  ['screen-pin','screen-hub','screen-labour','screen-materials','screen-expenses','screen-notes','screen-loading','screen-error'].forEach(s=>{
     document.getElementById(s).classList.toggle('hidden', s!==id);
   });
   document.getElementById('topbarBack').classList.toggle('hidden', id==='screen-pin'||id==='screen-loading'||id==='screen-error');
   document.getElementById('topbarTitle').textContent = id==='screen-hub' ? projectName.substring(0,28) :
-    id==='screen-labour' ? 'Labour' : id==='screen-materials' ? 'Materials' : id==='screen-expenses' ? 'Expenses' : 'Site Log';
+    id==='screen-labour' ? 'Labour' : id==='screen-materials' ? 'Materials' : id==='screen-expenses' ? 'Expenses' : id==='screen-notes' ? 'Notes' : 'Site Log';
 }
 function goHub(){ show('screen-hub'); }
 
@@ -152,9 +152,16 @@ function checkPin(val){
 // ─── SECTION SWITCHING ─────────────────────────────────
 async function openSection(section){
   show('screen-'+section);
-  if(section==='labour'){ document.getElementById('lab-date').value = todayStr(); renderLabourTypes(); loadLabourHistory(); }
-  if(section==='materials'){ renderTypeGrid('materials'); loadMaterialHistory(); }
+  if(section==='labour'){ document.getElementById('lab-date').value = todayStr(); renderLabourTypes(); loadLabourHistory(); loadMestriDatalist(); }
+  if(section==='materials'){ renderTypeGrid('materials'); loadMaterialHistory(); loadSupplierDatalist(); }
   if(section==='expenses'){ renderTypeGrid('expenses'); loadExpenseHistory(); }
+  if(section==='notes'){ loadNotes(); }
+}
+async function loadSupplierDatalist(){
+  const p = await getProject(projectId);
+  let dl = document.getElementById('supplier-datalist');
+  if(!dl){ dl = document.createElement('datalist'); dl.id='supplier-datalist'; document.body.appendChild(dl); document.getElementById('mat-supplier').setAttribute('list','supplier-datalist'); }
+  dl.innerHTML = (p.supplierNames||[]).map(n=>`<option value="${n}">`).join('');
 }
 
 // ─── TYPE GRIDS (materials/expenses) ──────────────────
@@ -204,38 +211,48 @@ function renderLabourTypes(){
 }
 async function saveLabourEntry(){
   const date = document.getElementById('lab-date').value || todayStr();
-  const entry = {};
+  const counts = {};
   LABOUR_ROLES.forEach(r=>{
     const v = parseInt(document.getElementById('lab-'+r.id).value)||0;
-    if(v>0) entry[r.id]=v;
+    if(v>0) counts[r.id]=v;
   });
   const mestriName = document.getElementById('lab-mestri').value.trim();
-  if(mestriName) entry.mestriName = mestriName;
-  if(!Object.keys(entry).some(k=>k!=='mestriName')){ toast('Enter at least one labour count'); return; }
+  if(!Object.keys(counts).length){ toast('Enter at least one labour count'); return; }
 
   try{
-    const key = 'rsr_sitelog_labour_'+projectId;
-    const data = await getSetting(key, {});
-    data[date] = entry;
-    try{ await sbReq('settings', 'POST', { key, value: JSON.stringify(data) }); }
-    catch(e){ await sbReq('settings?key=eq.'+encodeURIComponent(key), 'PATCH', { value: JSON.stringify(data) }); }
+    // Same place (p.labourLog on the project itself) that the main app's
+    // contractor login now writes to — always a new array entry, never
+    // overwriting an existing date, which is what allows two mestris to
+    // both log labour for the same day as separate entries.
+    await saveProjectPatch(projectId, (proj)=>{
+      if(!proj.labourLog) proj.labourLog=[];
+      if(!proj.mestriNames) proj.mestriNames=[];
+      proj.labourLog.push({ id: uid(), date, mestriName, counts, addedBy:'Site Log (PIN)', createdAt:new Date().toISOString(), source:'sitelog' });
+      if(mestriName && !proj.mestriNames.includes(mestriName)) proj.mestriNames.push(mestriName);
+    });
     toast('✓ Labour entry saved');
     LABOUR_ROLES.forEach(r=>document.getElementById('lab-'+r.id).value=0);
     document.getElementById('lab-mestri').value='';
     loadLabourHistory();
+    loadMestriDatalist();
   }catch(e){ toast('Save failed — check connection'); }
 }
 async function loadLabourHistory(){
   const el = document.getElementById('lab-history');
   el.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
-  const data = await getSetting('rsr_sitelog_labour_'+projectId, {});
-  const dates = Object.keys(data).sort().reverse().slice(0,7);
-  if(!dates.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
-  el.innerHTML = dates.map(d=>{
-    const e = data[d];
-    const total = Object.entries(e).filter(([k])=>k!=='mestriName').reduce((s,[,v])=>s+v,0);
-    return `<div class="hist-row"><span>${d}${e.mestriName?' · 👤 '+e.mestriName:''}</span><span style="font-weight:700">${total} total</span></div>`;
+  const p = await getProject(projectId);
+  const log = (p.labourLog||[]).filter(e=>!e._archived).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt)).slice(0,10);
+  if(!log.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
+  el.innerHTML = log.map(e=>{
+    const total = Object.values(e.counts||{}).reduce((s,v)=>s+v,0);
+    return `<div class="hist-row"><span>${e.date}${e.mestriName?' · 👤 '+e.mestriName:''}</span><span style="font-weight:700">${total} total</span></div>`;
   }).join('');
+}
+async function loadMestriDatalist(){
+  const p = await getProject(projectId);
+  let dl = document.getElementById('mestri-datalist');
+  if(!dl){ dl = document.createElement('datalist'); dl.id='mestri-datalist'; document.body.appendChild(dl); document.getElementById('lab-mestri').setAttribute('list','mestri-datalist'); }
+  dl.innerHTML = (p.mestriNames||[]).map(n=>`<option value="${n}">`).join('');
 }
 
 // ─── MATERIALS ─────────────────────────────────────────
@@ -252,6 +269,8 @@ async function saveMaterialEntry(){
   try{
     const p = await saveProjectPatch(projectId, (proj)=>{
       if(!proj.materialRegister) proj.materialRegister=[];
+      if(!proj.supplierNames) proj.supplierNames=[];
+      if(supplier && !proj.supplierNames.includes(supplier)) proj.supplierNames.push(supplier);
       proj.materialRegister.push({
         id: uid(), materialId: materialName.toLowerCase().replace(/\s+/g,'_'), materialName,
         qty, unit:'', date: todayStr(), supplierName: supplier, amount: bill||null, notes,
@@ -274,6 +293,7 @@ async function saveMaterialEntry(){
     document.getElementById('mat-notes').value='';
     selectType('materials', null);
     loadMaterialHistory();
+    loadSupplierDatalist();
   }catch(e){ toast('Save failed — check connection'); }
 }
 async function loadMaterialHistory(){
@@ -314,4 +334,35 @@ async function loadExpenseHistory(){
   const entries = (p.siteExpenses||[]).filter(e=>!e._archived).slice().reverse().slice(0,8);
   if(!entries.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
   el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${e.date} · ${e.category}</span><span style="font-weight:700">₹${e.amount.toLocaleString('en-IN')}</span></div>`).join('');
+}
+
+// ─── NOTES ─────────────────────────────────────────────
+// Reuses the exact same p.contractorNotes structure the main app's
+// contractor login writes to — a note added here shows up there, and
+// vice versa, same as Materials already does.
+async function saveNote(){
+  const text = document.getElementById('note-text').value.trim();
+  if(!text){ toast('Write something first'); return; }
+  const date = document.getElementById('note-date').value || '';
+  try{
+    await saveProjectPatch(projectId, (proj)=>{
+      if(!proj.contractorNotes) proj.contractorNotes=[];
+      proj.contractorNotes.push({ id: uid(), text, date, createdAt: new Date().toISOString(), by:'Site Log (PIN)', contractorId:null });
+    });
+    toast('✓ Note saved');
+    document.getElementById('note-text').value=''; document.getElementById('note-date').value='';
+    loadNotes();
+  }catch(e){ toast('Save failed — check connection'); }
+}
+async function loadNotes(){
+  const el = document.getElementById('notes-list');
+  el.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
+  const p = await getProject(projectId);
+  const notes = (p.contractorNotes||[]).filter(n=>!n._archived).slice().reverse().slice(0,10);
+  if(!notes.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No notes yet.</div>'; return; }
+  el.innerHTML = notes.map(n=>`<div style="border-left:3px solid var(--gold);padding:8px 10px;margin-bottom:8px;background:var(--bg);border-radius:0 var(--rs) var(--rs) 0">
+    ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600">📅 ${n.date}</div>`:''}
+    <div style="font-size:13px">${n.text.replace(/</g,'&lt;')}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+  </div>`).join('');
 }

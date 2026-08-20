@@ -123,6 +123,7 @@ async function openPersonalProject(pid){
   // Labour/Expense tabs from empty state on a fresh session.
   if(typeof loadLabourData==='function'){ try{ await loadLabourData(); }catch(e){ console.error('loadLabourData failed:',e); } }
   if(typeof loadExpenseData==='function'){ try{ await loadExpenseData(); }catch(e){ console.error('loadExpenseData failed:',e); } }
+  if(typeof migrateLabourLogIfNeeded==='function'){ try{ await migrateLabourLogIfNeeded(pid); }catch(e){ console.error('migrateLabourLogIfNeeded failed:',e); } }
 
   detail.innerHTML = `
     <div style="margin-bottom:14px">

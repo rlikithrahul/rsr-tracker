@@ -76,6 +76,20 @@
     <div class="hub-btn" onclick="openSection('labour')"><span class="ico">👷</span> Labour</div>
     <div class="hub-btn" onclick="openSection('materials')"><span class="ico">🧱</span> Materials</div>
     <div class="hub-btn" onclick="openSection('expenses')"><span class="ico">💸</span> Expenses</div>
+    <div class="hub-btn" onclick="openSection('notes')"><span class="ico">📓</span> Notes</div>
+  </div>
+
+  <!-- NOTES -->
+  <div id="screen-notes" class="hidden">
+    <div class="card">
+      <div class="fg"><label>Date (optional)</label><input type="date" id="note-date"></div>
+      <div class="fg"><label>Note</label><textarea id="note-text" rows="4" placeholder="Write anything you want to remember for this project…"></textarea></div>
+      <button class="btn btn-navy" onclick="saveNote()">💾 Save Note</button>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Recent Notes</div>
+      <div id="notes-list"></div>
+    </div>
   </div>
 
   <!-- LABOUR -->

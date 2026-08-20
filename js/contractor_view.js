@@ -199,6 +199,7 @@ async function cOpenProj(id){
   // saved data existed on the server the whole time. Load them explicitly
   // here, every time, before building the page.
   if(typeof loadLabourData==='function'){ try{ await loadLabourData(); }catch(e){ console.error('loadLabourData failed:',e); } }
+  if(typeof migrateLabourLogIfNeeded==='function'){ try{ await migrateLabourLogIfNeeded(id); }catch(e){ console.error('migrateLabourLogIfNeeded failed:',e); } }
   if(typeof loadExpenseData==='function'){ try{ await loadExpenseData(); }catch(e){ console.error('loadExpenseData failed:',e); } }
   const p=GP(id);
   document.getElementById('cp-home').classList.add('hidden');
