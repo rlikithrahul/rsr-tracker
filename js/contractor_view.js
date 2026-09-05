@@ -915,7 +915,7 @@ function renderMaterialRegisterTab(pid){
         return '<div style="padding:10px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
           +'<div>'
           +'<div style="font-size:13px;font-weight:700">'+mat.name+'</div>'
-          +'<div style="font-size:11px;color:var(--text3)">'+e.date+' · '+e.supplierName+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'+e.date+(e.supplierName?' · '+e.supplierName:'')+'</div>'
           +(e.notes?'<div style="font-size:11px;color:var(--text2);font-style:italic">'+e.notes+'</div>':'')
           +'</div>'
           +'<div style="text-align:right;flex-shrink:0">'

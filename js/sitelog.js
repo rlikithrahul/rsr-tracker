@@ -302,7 +302,7 @@ async function loadMaterialHistory(){
   const p = await getProject(projectId);
   const entries = (p.materialRegister||[]).filter(e=>!e._archived).slice().reverse().slice(0,8);
   if(!entries.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
-  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${e.date} · ${e.materialName} — ${e.qty}</span><span style="font-weight:700">${e.amount?'₹'+e.amount.toLocaleString('en-IN'):''}</span></div>`).join('');
+  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${e.date} · ${e.materialName} — ${e.qty}${e.supplierName?' · 👤 '+e.supplierName:''}</span><span style="font-weight:700">${e.amount?'₹'+e.amount.toLocaleString('en-IN'):''}</span></div>`).join('');
 }
 
 // ─── EXPENSES ──────────────────────────────────────────
