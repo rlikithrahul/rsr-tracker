@@ -469,12 +469,14 @@ function showJVMonthDetail(monthKey, monthLabel){
     +projects.map(p=>{
       const c = GC(p.contractorId);
       const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0);
+      const eaNumber = p.eaNumber||(p.documents&&p.documents.ea)||'';
       return '<div onclick="CM(\'modal-jv-month\');openDetail(\''+p.id+'\')" style="padding:12px;background:var(--surface2);border-radius:var(--rs);cursor:pointer;border-left:3px solid var(--navy)" onmouseover="this.style.background=\'var(--border)\'" onmouseout="this.style.background=\'var(--surface2)\'">'
         +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">'+p.name+'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text2)">'
         +(c?'<span>👷 '+c.name+'</span>':'')
         +'<span>📋 JV #'+(p.jvNumber||'—')+'</span>'
         +'<span>📅 '+fmtDate(p.jvDate)+'</span>'
+        +(eaNumber?'<span>🔢 EA #'+eaNumber+'</span>':'<span style="color:var(--amber)">🔢 EA — not received yet</span>')
         +'</div>'
         +'<div style="display:flex;gap:16px;margin-top:6px;font-size:12px">'
         +'<span style="color:var(--navy);font-weight:700">JV Amount: '+fmt(p.jvAmount||0)+'</span>'

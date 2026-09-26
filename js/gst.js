@@ -86,9 +86,9 @@ function getRecentGSTQuarters(n){
   let {year, q} = cur;
   const out = [];
   for(let i=0;i<n;i++){
+    out.push({year, q, key:`${year}-Q${q}`, label:gstQuarterFYLabel(year,q)});
     q--;
     if(q<1){ q=4; year--; }
-    out.push({year, q, key:`${year}-Q${q}`, label:gstQuarterFYLabel(year,q)});
   }
   return out;
 }
@@ -120,8 +120,8 @@ function computeQuarterlyBills(year, q){
 
 function renderGSTQuarterlyCard(){
   if(!_gstQuarterlySelected){
-    const prev = getPreviousQuarter();
-    _gstQuarterlySelected = {year: prev.year, q: prev.q};
+    const cur = getCurrentQuarter();
+    _gstQuarterlySelected = {year: cur.year, q: cur.q};
   }
   const {year, q} = _gstQuarterlySelected;
   const data = computeQuarterlyBills(year, q);
@@ -234,32 +234,46 @@ function getGSTDashboardAlerts(){
   const prevQ = getPreviousQuarter();
 
   // Check if we're in a filing month (1st to end of filing month)
-  const checkQuarter = (qInfo) => {
-    if(todayMonth === qInfo.filingMonth && todayYear === qInfo.filingYear){
-      const qKey = gstQuarterKey(qInfo.year, qInfo.q);
-      GST_FIRMS.forEach(firm=>{
-        const filed = D.gstData.quarterly[`${firm}_${qKey}`];
-        if(!filed){
-          const daysUntilDue = GST_FILING_DUE_DAY - todayDay;
-          const isOverdue = todayDay > GST_FILING_DUE_DAY;
-          const isDueSoon = daysUntilDue <= 5 && daysUntilDue >= 0;
-          if(isDueSoon || isOverdue || todayDay >= 15){
-            items.push({
-              type: isOverdue ? 'red' : 'amber',
-              icon: '📋',
-              text: `GST ${qInfo.label} filing — ${firm}`,
-              sub: isOverdue ? `Overdue — enter filing details` : `Due ${GST_FILING_DUE_DAY}th`,
-              action: ()=>openGSTQuarterlyEntry(firm, qKey, qInfo.label),
-              actionLabel: 'Enter Details'
-            });
-          }
-        }
-      });
-    }
+  const isAtOrPastFilingMonth = (qInfo) =>
+    (todayYear > qInfo.filingYear) || (todayYear === qInfo.filingYear && todayMonth >= qInfo.filingMonth);
+
+  const checkQuarter = (qInfo, isCurrentQuarter) => {
+    const pastFilingMonth = isAtOrPastFilingMonth(qInfo);
+    if(!isCurrentQuarter && !pastFilingMonth) return;
+    const qKey = gstQuarterKey(qInfo.year, qInfo.q);
+    GST_FIRMS.forEach(firm=>{
+      const filed = D.gstData.quarterly[`${firm}_${qKey}`];
+      if(filed) return;
+      if(isCurrentQuarter && !pastFilingMonth){
+        items.push({
+          type: 'amber',
+          icon: '📋',
+          text: `GST ${qInfo.label} filing — ${firm}`,
+          sub: `Quarter in progress — file once the CA processes it (due ${GST_FILING_DUE_DAY}th of filing month)`,
+          action: ()=>openGSTQuarterlyEntry(firm, qKey, qInfo.label),
+          actionLabel: 'Enter Details'
+        });
+        return;
+      }
+      const isThisFilingMonth = todayMonth === qInfo.filingMonth && todayYear === qInfo.filingYear;
+      const daysUntilDue = GST_FILING_DUE_DAY - todayDay;
+      const isDueSoon = isThisFilingMonth && daysUntilDue <= 5 && daysUntilDue >= 0;
+      const isOverdue = !isThisFilingMonth || todayDay > GST_FILING_DUE_DAY;
+      if(isDueSoon || isOverdue || (isThisFilingMonth && todayDay >= 15)){
+        items.push({
+          type: isOverdue ? 'red' : 'amber',
+          icon: '📋',
+          text: `GST ${qInfo.label} filing — ${firm}`,
+          sub: isOverdue ? `Overdue — enter filing details` : `Due ${GST_FILING_DUE_DAY}th`,
+          action: ()=>openGSTQuarterlyEntry(firm, qKey, qInfo.label),
+          actionLabel: 'Enter Details'
+        });
+      }
+    });
   };
 
-  checkQuarter(currQ);
-  checkQuarter(prevQ);
+  checkQuarter(currQ, true);
+  checkQuarter(prevQ, false);
 
   if(!items.length) return '';
 
