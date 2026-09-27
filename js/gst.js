@@ -118,6 +118,58 @@ function computeQuarterlyBills(year, q){
   return {byFirm, grandTotal, start, end};
 }
 
+function printGSTQuarterly(){
+  if(!_gstQuarterlySelected) return;
+  const {year, q} = _gstQuarterlySelected;
+  const data = computeQuarterlyBills(year, q);
+  const label = gstQuarterFYLabel(year, q);
+  const firms = GST_FIRMS.concat(Object.keys(data.byFirm).filter(f=>!GST_FIRMS.includes(f)));
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>GST Filing — ${label}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px}
+    .header{border-bottom:3px solid #1a2744;padding-bottom:14px;margin-bottom:20px}
+    .header h1{font-size:20px;font-weight:800;color:#1a2744}
+    .header .meta{font-size:11px;color:#666;margin-top:4px}
+    .section{margin-bottom:24px;page-break-inside:avoid}
+    .section-title{font-size:13px;font-weight:700;color:#1a2744;padding:6px 10px;background:#f0f2f8;border-left:4px solid #1a2744;margin-bottom:10px;display:flex;justify-content:space-between}
+    table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:6px}
+    th{padding:5px 8px;background:#1a2744;color:#fff;text-align:left;font-weight:600}
+    td{padding:5px 8px;border-bottom:1px solid #f0f0f0}
+    .totalrow td{font-weight:700;border-top:2px solid #1a2744}
+    .filedby{margin-top:14px;padding:10px;border:1px dashed #999;border-radius:4px;font-size:11px}
+    .filedby .line{display:inline-block;border-bottom:1px solid #333;min-width:220px;margin-left:6px}
+    @media print{body{padding:10px}@page{margin:1.5cm;size:A4}}
+  </style>
+  </head><body>
+  <div class="header">
+    <h1>GST Filing — ${label}</h1>
+    <div class="meta">Period: ${fmtDate(data.start)} to ${fmtDate(data.end)} &nbsp;·&nbsp; Printed ${fmtDate(new Date().toISOString().split('T')[0])}</div>
+  </div>
+  ${firms.map(firm=>{
+    const f = data.byFirm[firm]||{bills:[],total:0};
+    return `<div class="section">
+      <div class="section-title"><span>${firm}</span><span>Total: ${fmt(f.total)}</span></div>
+      ${!f.bills.length ? '<div style="font-size:11px;color:#999;font-style:italic;padding:6px 0">No payments received in this quarter.</div>' : `
+      <table><thead><tr><th>Project</th><th>Contractor</th><th>Date</th><th>Amount</th></tr></thead>
+      <tbody>
+        ${f.bills.map(b=>`<tr><td>${b.projectName}</td><td>${b.contractorName}</td><td>${fmtDate(b.date)}</td><td>${fmt(b.amount)}</td></tr>`).join('')}
+        <tr class="totalrow"><td colspan="3">Total</td><td>${fmt(f.total)}</td></tr>
+      </tbody></table>`}
+      <div class="filedby">Filed by: <span class="line">&nbsp;</span> &nbsp;&nbsp; Date: <span class="line" style="min-width:100px">&nbsp;</span></div>
+    </div>`;
+  }).join('')}
+  <div style="margin-top:20px;padding-top:10px;border-top:1px solid #e0e0e0;font-size:10px;color:#999;text-align:center">
+    RSR Constructions Tracker · GST Filing · ${label} · For internal use only
+  </div>
+  </body></html>`;
+
+  const win = window.open('','_blank');
+  if(win){ win.document.write(html); win.document.close(); setTimeout(()=>win.print(),600); }
+}
+
 function renderGSTQuarterlyCard(){
   if(!_gstQuarterlySelected){
     const cur = getCurrentQuarter();
@@ -137,9 +189,12 @@ function renderGSTQuarterlyCard(){
     <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
         <div class="st">🧾 GST Filing — Bills Received</div>
-        <select onchange="_gstQuarterlySelected=JSON.parse(this.value);renderGSTQuarterlyCardInto()" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
-          ${quarters.map(qt=>`<option value='${JSON.stringify({year:qt.year,q:qt.q})}' ${qt.year===year&&qt.q===q?'selected':''}>${qt.label}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select onchange="_gstQuarterlySelected=JSON.parse(this.value);renderGSTQuarterlyCardInto()" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:'Inter',sans-serif">
+            ${quarters.map(qt=>`<option value='${JSON.stringify({year:qt.year,q:qt.q})}' ${qt.year===year&&qt.q===q?'selected':''}>${qt.label}</option>`).join('')}
+          </select>
+          <button onclick="printGSTQuarterly()" style="padding:5px 12px;border:1px solid var(--navy);color:var(--navy);background:#fff;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🖨️ Print</button>
+        </div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
         All payments received (per Settlement date) in <strong>${gstQuarterFYLabel(year,q)}</strong> — ${fmtDate(data.start)} to ${fmtDate(data.end)}. This is what needs to be filed for this quarter.

@@ -417,7 +417,10 @@ async function renderJVMonthTracker(allProjects){
   el.innerHTML = '<div class="card" style="padding:14px;margin-top:12px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">📋 JVs Received — Payment Pending</div>'
-    +'<div style="font-size:12px;color:var(--text3)">'+grandCount+' pending JV'+(grandCount!==1?'s':'')+' · '+fmt(grandTotal)+'</div></div>'
+    +'<div style="display:flex;align-items:center;gap:10px">'
+    +'<div style="font-size:12px;color:var(--text3)">'+grandCount+' pending JV'+(grandCount!==1?'s':'')+' · '+fmt(grandTotal)+'</div>'
+    +'<button onclick="printJVPending()" style="padding:4px 10px;border:1px solid var(--navy);color:var(--navy);background:#fff;border-radius:var(--rs);font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">🖨️ Print</button>'
+    +'</div></div>'
     +(oldestPending?'<div style="font-size:11px;color:var(--amber);margin-bottom:10px">⏳ Oldest unpaid: <strong>'+monthLabel(oldestPending.key)+'</strong> — '+oldestPending.count+' JV'+(oldestPending.count!==1?'s':'')+', '+fmt(oldestPending.pending)+' pending</div>':'<div style="margin-bottom:10px"></div>')
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:420px">'
     +'<thead><tr style="border-bottom:1px solid var(--border)">'
@@ -454,6 +457,64 @@ async function markJVMonthReceived(monthKey, pendingAtClearing){
     if(prev===undefined) delete D.jvMonthsCleared[monthKey]; else D.jvMonthsCleared[monthKey]=prev;
     toast('Save failed — try again','error');
   }
+}
+
+function printJVPending(){
+  const mNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const byMonth = {};
+  (D.projects||[]).filter(p=>p.jvDate&&!isArchived(p)).forEach(p=>{
+    const key = p.jvDate.substring(0,7);
+    if(!byMonth[key]) byMonth[key] = {key, pending:0, projects:[]};
+    const settled = (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0);
+    const outstanding = Math.max(0, (p.jvAmount||0)-settled);
+    if(outstanding<=0) return; // print only months/projects with real pending balance
+    byMonth[key].pending += outstanding;
+    byMonth[key].projects.push({ name:p.name, contractor:(GC(p.contractorId)||{}).name||'—', jvNumber:p.jvNumber||'—', jvAmount:p.jvAmount||0, settled, outstanding });
+  });
+  const months = Object.keys(byMonth).filter(k=>byMonth[k].projects.length).sort();
+  const grandTotal = months.reduce((s,k)=>s+byMonth[k].pending,0);
+  const grandCount = months.reduce((s,k)=>s+byMonth[k].projects.length,0);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>JVs Received — Payment Pending</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px}
+    .header{border-bottom:3px solid #1a2744;padding-bottom:14px;margin-bottom:20px}
+    .header h1{font-size:20px;font-weight:800;color:#1a2744}
+    .header .meta{font-size:11px;color:#666;margin-top:4px}
+    .month{margin-bottom:22px;page-break-inside:avoid}
+    .month-title{font-size:13px;font-weight:700;color:#1a2744;padding:6px 10px;background:#f0f2f8;border-left:4px solid #1a2744;margin-bottom:8px;display:flex;justify-content:space-between}
+    table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:4px}
+    th{padding:5px 8px;background:#1a2744;color:#fff;text-align:left;font-weight:600}
+    td{padding:5px 8px;border-bottom:1px solid #f0f0f0}
+    .totalrow td{font-weight:700;border-top:2px solid #1a2744}
+    @media print{body{padding:10px}@page{margin:1.5cm;size:A4}}
+  </style>
+  </head><body>
+  <div class="header">
+    <h1>JVs Received — Payment Pending</h1>
+    <div class="meta">${grandCount} pending JV${grandCount!==1?'s':''} across ${months.length} month${months.length!==1?'s':''} &nbsp;·&nbsp; Total pending: ${fmt(grandTotal)} &nbsp;·&nbsp; Printed ${fmtDate(new Date().toISOString().split('T')[0])}</div>
+  </div>
+  ${months.map(key=>{
+    const [y,m] = key.split('-').map(Number);
+    const m0 = byMonth[key];
+    return `<div class="month">
+      <div class="month-title"><span>${mNames[m-1]} ${y}</span><span>Pending: ${fmt(m0.pending)}</span></div>
+      <table><thead><tr><th>Project</th><th>Contractor</th><th>JV #</th><th>JV Amount</th><th>Received</th><th>Pending</th></tr></thead>
+      <tbody>
+        ${m0.projects.map(p=>`<tr><td>${p.name}</td><td>${p.contractor}</td><td>${p.jvNumber}</td><td>${fmt(p.jvAmount)}</td><td>${fmt(p.settled)}</td><td>${fmt(p.outstanding)}</td></tr>`).join('')}
+        <tr class="totalrow"><td colspan="5">Month Total</td><td>${fmt(m0.pending)}</td></tr>
+      </tbody></table>
+    </div>`;
+  }).join('')}
+  <div style="margin-top:20px;padding-top:10px;border-top:1px solid #e0e0e0;font-size:10px;color:#999;text-align:center">
+    RSR Constructions Tracker · Payment Pending Report · For internal use only
+  </div>
+  </body></html>`;
+
+  const win = window.open('','_blank');
+  if(win){ win.document.write(html); win.document.close(); setTimeout(()=>win.print(),600); }
 }
 
 function showJVMonthDetail(monthKey, monthLabel){
