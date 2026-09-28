@@ -1012,7 +1012,7 @@ function buildSidebar(isSuperAdmin){
   if(!linksEl) return;
 
   const tabs = isSuperAdmin
-    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧮', label:'GST Calc'}, {i:11, icon:'📐', label:'Work Experience'}, {i:12, icon:'📋', label:'Board Meeting'}, {i:13, icon:'🏦', label:'Deposit Refunds'}, {i:16, icon:'🌱', label:'Growth Pool'}]
+    ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧾', label:'GST Split'}, {i:11, icon:'📐', label:'Work Experience'}, {i:12, icon:'📋', label:'Board Meeting'}, {i:13, icon:'🏦', label:'Deposit Refunds'}, {i:16, icon:'🌱', label:'Growth Pool'}]
     : [...SIDEBAR_TABS, {i:11, icon:'📐', label:'Work Experience'}, {i:13, icon:'🏦', label:'Deposit Refunds'}];
 
   linksEl.innerHTML = tabs.map(t=>`
@@ -1081,7 +1081,7 @@ function ownerTab(i){
   if(i===7) renderGST();
   if(i===8) renderMatCredit();
   if(i===9) renderPipeline();
-  if(i===10) renderGSTCalc();
+  if(i===10) (typeof renderGSTSplit==='function' ? renderGSTSplit() : renderGSTCalc());
   if(i===11 && typeof renderWEX==='function') renderWEX();
   if(i===12 && typeof renderMeeting==='function') renderMeeting();
   if(i===13 && typeof renderRefunds==='function') renderRefunds();

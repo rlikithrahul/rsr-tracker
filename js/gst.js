@@ -108,7 +108,8 @@ function computeQuarterlyBills(year, q){
       if(!byFirm[firm]) byFirm[firm] = {bills:[], total:0};
       byFirm[firm].bills.push({
         projectId: p.id, projectName: p.name, contractorName: (GC(p.contractorId)||{}).name||'—',
-        amount: s.amount||0, date: s.date, ref: s.ref||'', gstFilingNote: p.gstFilingNote||''
+        amount: s.amount||0, date: s.date, ref: s.ref||'', gstFilingNote: p.gstFilingNote||'',
+        key: (typeof gsBillKey==='function' ? gsBillKey(p, s) : p.id+'|'+(s.id||'')), contractorId: p.contractorId||''
       });
       byFirm[firm].total += (s.amount||0);
       grandTotal += (s.amount||0);
@@ -153,10 +154,10 @@ function printGSTQuarterly(){
     return `<div class="section">
       <div class="section-title"><span>${firm}</span><span>Total: ${fmt(f.total)}</span></div>
       ${!f.bills.length ? '<div style="font-size:11px;color:#999;font-style:italic;padding:6px 0">No payments received in this quarter.</div>' : `
-      <table><thead><tr><th>Project</th><th>Contractor</th><th>Date</th><th>Amount</th></tr></thead>
+      <table><thead><tr><th>Project</th><th>Contractor</th><th>Date</th><th>Amount</th><th>Files GST</th></tr></thead>
       <tbody>
-        ${f.bills.map(b=>`<tr><td>${b.projectName}</td><td>${b.contractorName}</td><td>${fmtDate(b.date)}</td><td>${fmt(b.amount)}</td></tr>`).join('')}
-        <tr class="totalrow"><td colspan="3">Total</td><td>${fmt(f.total)}</td></tr>
+        ${f.bills.map(b=>`<tr><td>${b.projectName}</td><td>${b.contractorName}</td><td>${fmtDate(b.date)}</td><td>${fmt(b.amount)}</td><td>${(typeof gsGetFiler==='function' && gsGetFiler(b.key)) ? gsEsc(gsFilerName(gsGetFiler(b.key))) : '&nbsp;'}</td></tr>`).join('')}
+        <tr class="totalrow"><td colspan="3">Total</td><td>${fmt(f.total)}</td><td></td></tr>
       </tbody></table>`}
       <div class="filedby">Filed by: <span class="line">&nbsp;</span> &nbsp;&nbsp; Date: <span class="line" style="min-width:100px">&nbsp;</span></div>
     </div>`;
@@ -171,6 +172,10 @@ function printGSTQuarterly(){
 }
 
 function renderGSTQuarterlyCard(){
+  if(!D.gstFilers && typeof loadGSTFilers==='function' && !_gsWidgetLoading){
+    _gsWidgetLoading = true;
+    loadGSTFilers().then(()=>renderGSTQuarterlyCardInto()).catch(()=>{}).finally(()=>{ _gsWidgetLoading = false; });
+  }
   if(!_gstQuarterlySelected){
     const cur = getCurrentQuarter();
     _gstQuarterlySelected = {year: cur.year, q: cur.q};
@@ -216,9 +221,9 @@ function renderGSTQuarterlyCard(){
                   <td style="padding:6px 10px;color:var(--text3)">${fmtDate(b.date)}</td>
                   <td style="padding:6px 10px;text-align:right;font-weight:600">${fmt(b.amount)}</td>
                   <td style="padding:6px 10px;min-width:160px">
-                    ${CU&&CU.isSuperAdmin
-                      ? `<input type="text" value="${(b.gstFilingNote||'').replace(/"/g,'&quot;')}" placeholder="Who files this?" style="width:100%;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px" onblur="saveGSTFilingNote('${b.projectId}', this.value)">`
-                      : `<span style="font-size:11px;color:var(--text3)">${b.gstFilingNote||'—'}</span>`}
+                    ${CU&&CU.isSuperAdmin && typeof gsFilerSelectHTML==='function'
+                      ? gsFilerSelectHTML(b) + ((b.gstFilingNote && !gsGetFiler(b.key)) ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">Earlier note: ${gsEsc(b.gstFilingNote)}</div>` : '')
+                      : `<span style="font-size:11px;color:var(--text3)">${(typeof gsGetFiler==='function' && gsGetFiler(b.key)) ? gsEsc(gsFilerName(gsGetFiler(b.key))) : gsEsc(b.gstFilingNote||'—')}</span>`}
                   </td>
                 </tr>`).join('')}
             </tbody>

@@ -172,6 +172,9 @@ function renderContractorProfile(cid){
       </div>
     </div>`:''}
 
+    <!-- Bills received & GST filing (Super Admin only) -->
+    ${typeof renderContractorBillsSection==='function'?renderContractorBillsSection(c.id):''}
+
     <!-- Projects: Active -->
     ${renderContractorProjectGroup('🟢 Active Projects', active)}
     ${renderContractorProjectGroup('⏸ On Hold', onHold)}
