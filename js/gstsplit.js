@@ -18,6 +18,7 @@
 // ═══════════════════════════════════════════════════════
 
 const GST_FILER_KEY = 'rsr_gst_filer_v1';
+const GST_MANUAL_KEY = 'rsr_gst_manual_bills_v1';
 const GST_SPLIT_START = '2026-04-01';
 const GST_SPLIT_DEFAULT_TARGET = 70;
 
@@ -44,6 +45,24 @@ async function loadGSTFilers(){
   if(!v || typeof v!=='object' || Array.isArray(v)) v = {};
   D.gstFilers = v;
   return D.gstFilers;
+}
+
+async function loadGSTManualBills(){
+  if(D.gstManualBills) return D.gstManualBills;
+  let v = await getSetting(GST_MANUAL_KEY, []);
+  if(!Array.isArray(v)) v = [];
+  D.gstManualBills = v;
+  return D.gstManualBills;
+}
+let _gsManualSaveChain = Promise.resolve();
+function saveGSTManualBills(){
+  const run = async ()=>{
+    const merged = await mergeAndSaveSetting(GST_MANUAL_KEY, D.gstManualBills||[], true);
+    D.gstManualBills = merged;
+  };
+  const p = _gsManualSaveChain.catch(()=>{}).then(run);
+  _gsManualSaveChain = p;
+  return p;
 }
 
 function saveGSTFilers(){
@@ -93,6 +112,22 @@ function gsCollectBills(){
         billType: s.billType||'', jvAmount: p.jvAmount||0,
         legacyNote: p.gstFilingNote||''
       });
+    });
+  });
+  // Manually-added historical bills — ones never recorded as a proper
+  // settlement (older bills from before this was tracked in the app).
+  // Given the quarter's own start date so every existing date-range
+  // filter (quarter view, running totals, ledger) picks these up exactly
+  // like a real bill, with nothing else needing to change.
+  (D.gstManualBills||[]).filter(m=>!m._archived).forEach(m=>{
+    const [qs] = gstQuarterDateRange(m.quarterYear, m.quarterQ);
+    const c = m.contractorId ? GC(m.contractorId) : null;
+    out.push({
+      key: 'manual_'+m.id, projectId:'', projectName: m.details || 'Manually added bill',
+      contractorId: m.contractorId||'', contractorName: c ? c.name : '(no contractor)',
+      firm: 'Manually added', date: qs, amount: m.amount||0, ref:'',
+      billType:'Manual entry', jvAmount:0, legacyNote:'',
+      manual:true, manualId: m.id
     });
   });
   return out;
@@ -180,7 +215,7 @@ async function renderGSTSplit(){
     return;
   }
   el.innerHTML = '<div class="wrap"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</div></div>';
-  try{ await loadGSTFilers(); }
+  try{ await loadGSTFilers(); await loadGSTManualBills(); }
   catch(e){
     console.error(e);
     el.innerHTML = '<div class="wrap"><div class="card" style="text-align:center;padding:30px;color:var(--red)">Could not load GST filing data. Check your connection and reload.</div></div>';
@@ -221,13 +256,15 @@ function _gsDrawPage(){
     </div>
 
     <div id="gs-bills"></div>
+    <div id="gs-manual"></div>
     <div id="gs-ledger"></div>
     <div id="gs-parties"></div>
   </div>`;
 
   const [qs, qe] = gstQuarterDateRange(year, q);
-  const qBills = gsCollectBills().filter(b=>b.date>=GST_SPLIT_START && b.date>=qs && b.date<=qe);
+  const qBills = gsCollectBills().filter(b=>!b.manual && b.date>=GST_SPLIT_START && b.date>=qs && b.date<=qe);
   document.getElementById('gs-bills').innerHTML = _gsBillsSectionHTML(qBills);
+  document.getElementById('gs-manual').innerHTML = _gsManualSectionHTML();
   gsRefreshDerived();
 }
 
@@ -285,6 +322,149 @@ function _gsBillsSectionHTML(qBills){
       </table></div>
     </div>`;
   }).join('');
+}
+
+// ─── MANUALLY ADDED (HISTORICAL, NOT TRACKED) BILLS ────
+// For bills from before this was tracked in the app — Likith enters
+// them by hand so they count toward the running split, same as a real
+// bill would. Shown for the currently selected quarter only, same as
+// the tracked-bills table above it.
+function _gsManualSectionHTML(){
+  const {year, q} = _gsQuarter;
+  const entries = (D.gstManualBills||[]).filter(m=>!m._archived && m.quarterYear===year && m.quarterQ===q)
+    .sort((a,b)=>(b.addedAt||'').localeCompare(a.addedAt||''));
+  const total = entries.reduce((s,m)=>s+(m.amount||0),0);
+  return `<div class="card" style="margin-bottom:14px;border-left:4px solid #7c3aed">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="st" style="margin:0;border:none;padding:0">📎 Manually Added Bills <span style="font-size:11px;font-weight:400;color:var(--text3)">— not in the app's records, entered by hand so they still count in the split</span></div>
+      </div>
+      <button class="btn btn-sm btn-navy" onclick="openAddManualGSTBill()">+ Add Bill</button>
+    </div>
+    ${!entries.length ? '<div style="font-size:12px;color:var(--text3);padding:6px 0">None added for this quarter.</div>' : `
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr><th style="text-align:left">Contractor</th><th style="text-align:right">Amount</th><th style="text-align:left">Details</th><th style="text-align:left;min-width:200px">GST filed by</th><th></th></tr></thead>
+      <tbody>
+        ${entries.map(m=>{
+          const bill = gsCollectBills().find(b=>b.key==='manual_'+m.id);
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px">${m.contractorId ? gsEsc(gsFilerName(m.contractorId)) : '<span style="color:var(--text3)">—</span>'}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700">${fmt(m.amount)}</td>
+            <td style="padding:6px 8px;color:var(--text2)">${gsEsc(m.details||'—')}</td>
+            <td style="padding:6px 8px">${bill ? gsFilerSelectHTML(bill) : ''}</td>
+            <td style="padding:6px 8px;white-space:nowrap">
+              <button onclick="openAddManualGSTBill('${m.id}')" title="Edit" style="background:none;border:none;color:var(--navy);cursor:pointer;font-size:13px">✏️</button>
+              <button onclick="deleteManualGSTBill('${m.id}')" title="Delete" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:var(--surface2);font-weight:700"><td style="padding:6px 8px">Total</td><td style="padding:6px 8px;text-align:right">${fmt(total)}</td><td colspan="3"></td></tr>
+      </tbody>
+    </table></div>`}
+  </div>`;
+}
+
+function openAddManualGSTBill(editId){
+  const editing = editId ? (D.gstManualBills||[]).find(m=>m.id===editId) : null;
+  const conts = (D.contractors||[]).filter(c=>!isArchived(c)).sort((a,b)=>a.name.localeCompare(b.name));
+  const {year, q} = _gsQuarter;
+  const quarters = getRecentGSTQuarters(16).filter(x=>x.year>=2026);
+  const curFiler = editing ? gsGetFiler('manual_'+editing.id) : '';
+
+  let modal = document.getElementById('modal-gs-manual');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-gs-manual'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="mbox" style="max-width:460px">
+    <div class="mhdr"><h2>${editing?'Edit':'+ Add'} Manual Bill</h2><button class="mx" onclick="CM('modal-gs-manual')">✕</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">For a bill from before this was tracked — it will count toward the running split as if it were a real bill.</div>
+
+    <div class="fg"><label>Quarter</label>
+      <select id="gsm-quarter">
+        ${quarters.map(qt=>`<option value='${qt.year}|${qt.q}' ${editing ? (editing.quarterYear===qt.year&&editing.quarterQ===qt.q?'selected':'') : (year===qt.year&&q===qt.q?'selected':'')}>${qt.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg"><label>Contractor <span style="font-weight:400;color:var(--text3)">(optional — leave blank if it's purely RSR's own)</span></label>
+      <select id="gsm-contractor">
+        <option value="">— None —</option>
+        ${conts.map(c=>`<option value="${c.id}" ${editing&&editing.contractorId===c.id?'selected':''}>${gsEsc(c.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg"><label>Amount (₹)</label><input type="number" id="gsm-amount" value="${editing?editing.amount:''}" placeholder="e.g. 1600000"></div>
+    <div class="fg"><label>Bill Details <span style="font-weight:400;color:var(--text3)">(gen code, tender ID, name — whatever identifies it)</span></label><input type="text" id="gsm-details" value="${editing?gsEsc(editing.details||''):''}" placeholder="e.g. Gen code 2024-05-113, drain work Ward 63"></div>
+    <div class="fg"><label>Filed By</label>
+      <select id="gsm-filer">
+        <option value="" ${!curFiler?'selected':''}>— Not decided —</option>
+        <option value="rsr" ${curFiler==='rsr'?'selected':''}>RSR</option>
+        ${conts.map(c=>`<option value="${c.id}" ${curFiler===c.id?'selected':''}>${gsEsc(c.name)}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px">
+      ${editing?`<button class="btn" style="color:var(--red);border-color:var(--red)" onclick="CM('modal-gs-manual');deleteManualGSTBill('${editing.id}')">🗑️ Delete</button>`:'<span></span>'}
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="CM('modal-gs-manual')">Cancel</button>
+        <button class="btn btn-navy" onclick="saveManualGSTBillEntry(${editing?`'${editing.id}'`:'null'})">✓ ${editing?'Save':'Add'}</button>
+      </div>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function saveManualGSTBillEntry(editId){
+  const [quarterYear, quarterQ] = document.getElementById('gsm-quarter').value.split('|').map(Number);
+  const contractorId = document.getElementById('gsm-contractor').value;
+  const amount = parseFloat(document.getElementById('gsm-amount').value);
+  const details = document.getElementById('gsm-details').value.trim();
+  const filer = document.getElementById('gsm-filer').value;
+  if(!(amount>0)){ toast('Enter a valid amount','error'); return; }
+
+  try{ await loadGSTManualBills(); await loadGSTFilers(); }
+  catch(e){ toast('Could not load — reload and try again','error'); return; }
+
+  const id = editId || uid();
+  const prevEntry = editId ? (D.gstManualBills||[]).find(m=>m.id===editId) : null;
+  const prevBackup = prevEntry ? {...prevEntry} : null;
+  const record = { id, quarterYear, quarterQ, contractorId, amount, details, addedBy:CU?CU.name:'', addedAt: prevEntry?prevEntry.addedAt:new Date().toISOString() };
+
+  if(!D.gstManualBills) D.gstManualBills=[];
+  if(prevEntry) Object.assign(prevEntry, record);
+  else D.gstManualBills.push(record);
+
+  const filerKey = 'manual_'+id;
+  const prevFiler = D.gstFilers[filerKey] ? {...D.gstFilers[filerKey]} : undefined;
+  D.gstFilers[filerKey] = { filer: filer||'', by: CU?CU.name:'', at: new Date().toISOString() };
+
+  try{
+    await saveGSTManualBills();
+    await saveGSTFilers();
+    CM('modal-gs-manual');
+    logActivity({category:'system', action: editId?'gst_manual_bill_edited':'gst_manual_bill_added',
+      description:(CU?CU.name:'')+' '+(editId?'edited':'added')+' a manual GST bill for '+fmt(amount)+' (Q'+quarterQ+' FY'+quarterYear+')'});
+    _gsDrawPage();
+    toast('✓ Saved','ok');
+  }catch(e){
+    console.error(e);
+    if(prevBackup) Object.assign(prevEntry, prevBackup);
+    else if(!editId) D.gstManualBills = D.gstManualBills.filter(m=>m.id!==id);
+    if(prevFiler) D.gstFilers[filerKey]=prevFiler; else delete D.gstFilers[filerKey];
+    toast('Save failed — that change was not saved','error');
+  }
+}
+
+async function deleteManualGSTBill(id){
+  const m = (D.gstManualBills||[]).find(x=>x.id===id); if(!m) return;
+  const ok = await showConfirm({title:'Delete this manual bill?', message:'This removes it from the split calculation — '+fmt(m.amount)+' ('+gsEsc(m.details||'no details')+'). This cannot be undone from here.', confirmLabel:'Yes, Delete'});
+  if(!ok) return;
+  try{ await loadGSTManualBills(); }catch(e){ toast('Could not load — reload and try again','error'); return; }
+  m._archived = true; m._archivedAt = new Date().toISOString(); m._archivedBy = CU?CU.name:'';
+  try{
+    await saveGSTManualBills();
+    logActivity({category:'system', action:'gst_manual_bill_deleted', description:(CU?CU.name:'')+' deleted a manual GST bill for '+fmt(m.amount)});
+    _gsDrawPage();
+    toast('✓ Deleted','ok');
+  }catch(e){
+    delete m._archived; delete m._archivedAt; delete m._archivedBy;
+    toast('Delete failed — try again','error');
+  }
 }
 
 // Running totals per contractor (owner of the bills), cumulative from
