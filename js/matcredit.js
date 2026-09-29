@@ -75,6 +75,8 @@ function getProjectMaterialSummary(p){
 // ─── MAIN TAB RENDER ──────────────────────────────────
 let matView = 'supplier'; // 'supplier' | 'project'
 let matFilter = 'pending'; // 'pending' | 'cleared' | 'all'
+let matPage = 'main'; // 'main' | 'clearedHistory'
+let _mcSelected = new Set(); // keys 'pid|mid' of entries checked for bulk clearing
 
 function renderMatCredit(){
   const wrap = document.getElementById('matcredit-wrap') || document.getElementById('sec-matcredit');
@@ -89,7 +91,10 @@ function renderMatCredit(){
   el.innerHTML = `<div class="wrap">
     <div class="pg-hdr">
       <div class="pg-title">🧱 Material Credit</div>
-      <button class="btn btn-gold" onclick="openAddMatCredit(null)">+ Add Credit Entry</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="openMatCreditClearedHistory()">📜 Cleared History</button>
+        <button class="btn btn-gold" onclick="openAddMatCredit(null)">+ Add Credit Entry</button>
+      </div>
     </div>
 
     <!-- Summary cards -->
@@ -122,16 +127,50 @@ function renderMatCredit(){
       <div style="display:flex;gap:6px">
         ${['pending','cleared','all'].map(f=>`<button onclick="setMatFilter('${f}')" style="padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${matFilter===f?'var(--navy)':'var(--border)'};background:${matFilter===f?'var(--navy)':'#fff'};color:${matFilter===f?'#fff':'var(--text2)'}">${f==='pending'?'⏳ Pending':f==='cleared'?'✅ Cleared':'All'}</button>`).join('')}
       </div>
+      ${matFilter!=='cleared'?'<button onclick="selectAllVisibleMatCredits()" style="background:none;border:1px dashed var(--border);border-radius:16px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;color:var(--navy)">☑️ Select All Visible</button>':''}
     </div>
 
+    <div id="mat-bulk-bar"></div>
     <div id="mat-credit-body"></div>
   </div>`;
 
   renderMatCreditBody();
+  renderMatBulkBar();
 }
 
-function setMatView(v){ matView=v; renderMatCredit(); }
-function setMatFilter(f){ matFilter=f; renderMatCredit(); }
+function renderMatBulkBar(){
+  const el = document.getElementById('mat-bulk-bar');
+  if(!el) return;
+  if(!_mcSelected.size){ el.innerHTML=''; return; }
+  const all = getAllMaterialCredits();
+  let total = 0, missing = 0;
+  _mcSelected.forEach(k=>{
+    const [pid, mid] = k.split('|');
+    const e = all.find(x=>x.projectId===pid && x.id===mid);
+    if(!e){ missing++; return; }
+    total += Math.max(0,(e.invoiceAmount||0)-(e.clearedAmount||0));
+  });
+  if(missing){ [..._mcSelected].forEach(k=>{ const [pid,mid]=k.split('|'); if(!all.some(x=>x.projectId===pid&&x.id===mid)) _mcSelected.delete(k); }); }
+  el.innerHTML = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;background:#eef2fb;border:1.5px solid var(--navy)">
+    <div style="font-size:13px;font-weight:700;color:var(--navy)">☑️ ${_mcSelected.size} invoice${_mcSelected.size!==1?'s':''} selected — ${fmt(total)} pending</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="clearMatSelection()">Clear Selection</button>
+      <button class="btn" style="background:var(--green);color:#fff;border:none;font-weight:700" onclick="openBulkClearMatCredit()">💰 Bulk Clear Selected</button>
+    </div>
+  </div>`;
+}
+
+function toggleMatSelect(key){
+  if(_mcSelected.has(key)) _mcSelected.delete(key); else _mcSelected.add(key);
+  renderMatBulkBar();
+}
+function clearMatSelection(){ _mcSelected.clear(); renderMatBulkBar(); renderMatCreditBody(); }
+function selectAllVisibleMatCredits(){
+  document.querySelectorAll('#mat-credit-body input[type="checkbox"]').forEach(cb=>{ if(!cb.checked){ cb.checked=true; cb.dispatchEvent(new Event('change')); } });
+}
+
+function setMatView(v){ matView=v; _mcSelected.clear(); renderMatCredit(); }
+function setMatFilter(f){ matFilter=f; _mcSelected.clear(); renderMatCredit(); }
 
 function renderMatCreditBody(){
   const el = document.getElementById('mat-credit-body');
@@ -214,9 +253,12 @@ function renderMatEntry(e, showProject){
   const isPartial = (e.clearedAmount||0) > 0 && !isCleared;
   const daysOld = e.invoiceDate ? Math.round((new Date()-new Date(e.invoiceDate))/86400000) : 0;
   const isOverdue = daysOld > 60 && !isCleared;
+  const selKey = e.projectId+'|'+e.id;
+  const checked = _mcSelected.has(selKey);
 
-  return `<div style="padding:10px 12px;background:${isCleared?'#f0fdf4':isOverdue?'#fef2f2':'var(--surface2)'};border-radius:var(--rs);margin-bottom:8px;border-left:3px solid ${isCleared?'var(--green)':isOverdue?'var(--red)':isPartial?'var(--amber)':'var(--border)'}">
+  return `<div style="padding:10px 12px;background:${isCleared?'#f0fdf4':isOverdue?'#fef2f2':'var(--surface2)'};border-radius:var(--rs);margin-bottom:8px;border-left:3px solid ${checked?'var(--navy)':isCleared?'var(--green)':isOverdue?'var(--red)':isPartial?'var(--amber)':'var(--border)'}${checked?';box-shadow:0 0 0 1px var(--navy) inset':''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+      ${!isCleared?`<input type="checkbox" onchange="toggleMatSelect('${selKey}')" ${checked?'checked':''} style="margin-top:3px;width:16px;height:16px;cursor:pointer;flex-shrink:0">`:'<span style="width:16px;flex-shrink:0"></span>'}
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
           <span style="font-size:13px;font-weight:700">${e.supplierName}</span>
@@ -536,6 +578,99 @@ async function clearMatCredit(pid, mid){
   }catch(e){ toast('Save failed','error'); }
 }
 
+// ─── BULK CLEAR ────────────────────────────────────────
+function openBulkClearMatCredit(){
+  if(!_mcSelected.size) return;
+  const all = getAllMaterialCredits();
+  const items = [..._mcSelected].map(k=>{
+    const [pid, mid] = k.split('|');
+    return all.find(e=>e.projectId===pid && e.id===mid);
+  }).filter(Boolean);
+  if(!items.length){ toast('Selected entries are no longer available — refresh and try again','error'); return; }
+  const total = items.reduce((s,e)=>s+Math.max(0,(e.invoiceAmount||0)-(e.clearedAmount||0)),0);
+
+  let modal = document.getElementById('modal-mat-bulk-clear');
+  if(!modal){ modal=document.createElement('div'); modal.className='mov'; modal.id='modal-mat-bulk-clear'; document.body.appendChild(modal); }
+
+  modal.innerHTML = `<div class="mbox" style="max-width:480px">
+    <div class="mhdr"><h2>💰 Bulk Clear ${items.length} Invoice${items.length!==1?'s':''}</h2><button class="mx" onclick="CM('modal-mat-bulk-clear')">✕</button></div>
+
+    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:14px">
+      ${items.map(e=>{
+        const pending = Math.max(0,(e.invoiceAmount||0)-(e.clearedAmount||0));
+        return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px">
+          <div><strong>${e.supplierName}</strong> — ${e.projectName?.substring(0,35)||''}</div>
+          <div style="font-weight:700;color:var(--red)">${fmt(pending)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:700;display:flex;justify-content:space-between">
+      <span>Total to clear</span><span style="color:var(--green)">${fmt(total)}</span>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Each invoice's full remaining pending amount will be marked cleared. To clear a partial amount for just one invoice, close this and use "Mark Cleared" on that entry instead.</div>
+
+    <div class="fg"><label>Date of Payment (applied to all selected)</label><input type="date" id="mc-bulk-date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="fg"><label>Notes (applied to all selected)</label><input type="text" id="mc-bulk-notes" placeholder="e.g. Cleared together on site visit 15-Apr"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="CM('modal-mat-bulk-clear')">Cancel</button>
+      <button class="btn" style="background:var(--green);color:#fff;border:none;font-weight:700" onclick="bulkClearMatCredit()">✓ Clear All ${items.length}</button>
+    </div>
+  </div>`;
+  modal.classList.add('open');
+}
+
+async function bulkClearMatCredit(){
+  const date = document.getElementById('mc-bulk-date')?.value;
+  const notes = document.getElementById('mc-bulk-notes')?.value?.trim();
+  if(!date){ toast('Pick a date','error'); return; }
+
+  const keys = [..._mcSelected];
+  const byProject = {};
+  keys.forEach(k=>{ const [pid, mid] = k.split('|'); (byProject[pid] = byProject[pid]||[]).push(mid); });
+
+  let clearedCount = 0, clearedTotal = 0, failedProjects = [];
+
+  // One project at a time, sequentially — several selected invoices can
+  // belong to the same project, so every one of that project's clears
+  // needs to land in a single fetch-mutate-save round trip, never
+  // overlapping saves to the same project racing each other.
+  for(const pid of Object.keys(byProject)){
+    try{
+      const p = await GPFull(pid); if(!p) { failedProjects.push(pid); continue; }
+      byProject[pid].forEach(mid=>{
+        const m = (p.materialCredits||[]).find(x=>x.id===mid);
+        if(!m) return;
+        const pending = Math.max(0,(m.invoiceAmount||0)-(m.clearedAmount||0));
+        if(pending<=0) return;
+        m.clearedAmount = (m.clearedAmount||0) + pending;
+        m.clearedDate = date;
+        m.clearedNotes = notes;
+        m.status = 'cleared';
+        clearedCount++; clearedTotal += pending;
+      });
+      await saveProjectDB(p, {type:'mat_credit_bulk_cleared', amount:clearedTotal, meta:{count:byProject[pid].length, notes}});
+    }catch(e){
+      console.error('Bulk clear failed for project '+pid, e);
+      failedProjects.push(pid);
+    }
+  }
+
+  CM('modal-mat-bulk-clear');
+  _mcSelected.clear();
+  if(!document.getElementById('sec-matcredit')?.classList.contains('hidden')){
+    if(matPage==='clearedHistory') renderMatCreditClearedHistory(); else renderMatCredit();
+  }
+
+  if(failedProjects.length){
+    toast(`✓ ${clearedCount} cleared, but ${failedProjects.length} project${failedProjects.length!==1?'s':''} failed to save — check those and retry`,'error');
+  } else {
+    toast(`✓ ${clearedCount} invoice${clearedCount!==1?'s':''} cleared — ${fmt(clearedTotal)}`,'ok');
+    if(typeof haptic==='function') haptic('success');
+  }
+}
+
 async function deleteMatCredit(pid, mid){
   if(!confirm('Remove this material credit entry?')) return;
   const p = await GPFull(pid); if(!p) return;
@@ -600,5 +735,92 @@ function getMatCreditDashboardAlerts(){
       </div>
       <button onclick="ownerTab(8)" style="background:${a.type==='red'?'var(--red)':'var(--amber)'};color:#fff;border:none;border-radius:var(--rs);padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">View</button>
     </div>`).join('')}
+  </div>`;
+}
+
+// ─── CLEARED HISTORY (dedicated page) ──────────────────
+// A single place holding every material credit ever cleared, with
+// running totals per supplier and per contractor — separate from the
+// main pending-focused page rather than just another filter toggle,
+// since "how much has this supplier/contractor taken and cleared,
+// total" is a different question than "what's outstanding right now."
+function openMatCreditClearedHistory(){
+  matPage = 'clearedHistory';
+  _mcSelected.clear();
+  renderMatCreditClearedHistory();
+}
+
+function renderMatCreditClearedHistory(){
+  const wrap = document.getElementById('matcredit-wrap') || document.getElementById('sec-matcredit');
+  if(!wrap) return;
+
+  const all = getAllMaterialCredits();
+  const cleared = all.filter(e=>(e.clearedAmount||0)>0).sort((a,b)=>(b.clearedDate||'').localeCompare(a.clearedDate||''));
+  const totalCleared = cleared.reduce((s,e)=>s+(e.clearedAmount||0),0);
+  const totalTaken = cleared.reduce((s,e)=>s+(e.invoiceAmount||0),0);
+
+  const bySupplier = {};
+  const byContractor = {};
+  cleared.forEach(e=>{
+    const sKey = e.supplierName||'—';
+    bySupplier[sKey] = bySupplier[sKey] || {name:sKey, taken:0, cleared:0, count:0};
+    bySupplier[sKey].taken += e.invoiceAmount||0;
+    bySupplier[sKey].cleared += e.clearedAmount||0;
+    bySupplier[sKey].count++;
+
+    const cKey = e.contractorId || '_none';
+    byContractor[cKey] = byContractor[cKey] || {name:e.contractorName||'—', contractorId:e.contractorId, taken:0, cleared:0, count:0};
+    byContractor[cKey].taken += e.invoiceAmount||0;
+    byContractor[cKey].cleared += e.clearedAmount||0;
+    byContractor[cKey].count++;
+  });
+  const supplierRows = Object.values(bySupplier).sort((a,b)=>b.cleared-a.cleared);
+  const contractorRows = Object.values(byContractor).sort((a,b)=>b.cleared-a.cleared);
+
+  const totalsTable = (title, rows, icon, onClick)=>`<div class="card" style="margin-bottom:14px">
+    <div class="st">${icon} ${title}</div>
+    ${!rows.length ? '<div style="font-size:12px;color:var(--text3);padding:8px 0">Nothing cleared yet.</div>' : `
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:6px 8px">Name</th><th style="text-align:right;padding:6px 8px">Invoices</th>
+        <th style="text-align:right;padding:6px 8px">Total Taken</th><th style="text-align:right;padding:6px 8px">Total Cleared</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;font-weight:600;${onClick&&r.contractorId?'cursor:pointer;text-decoration:underline;color:var(--navy)':''}" ${onClick&&r.contractorId?`onclick="${onClick(r)}"`:''}>${r.name}</td>
+        <td style="padding:6px 8px;text-align:right">${r.count}</td>
+        <td style="padding:6px 8px;text-align:right">${fmt(r.taken)}</td>
+        <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--green)">${fmt(r.cleared)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`}
+  </div>`;
+
+  wrap.innerHTML = `<div class="wrap">
+    <div class="pg-hdr">
+      <div class="pg-title">📜 Cleared History</div>
+      <button class="btn btn-navy" onclick="matPage='main';renderMatCredit()">← Back to Material Credit</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+      <div class="card" style="text-align:center;padding:14px;border-top:3px solid var(--green)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;font-weight:700">Total Cleared</div>
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${fmt(totalCleared)}</div>
+      </div>
+      <div class="card" style="text-align:center;padding:14px;border-top:3px solid var(--navy)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;font-weight:700">Invoices Cleared</div>
+        <div style="font-size:20px;font-weight:800;color:var(--navy)">${cleared.length}</div>
+      </div>
+      <div class="card" style="text-align:center;padding:14px;border-top:3px solid var(--amber)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;font-weight:700">Total Credit Taken</div>
+        <div style="font-size:20px;font-weight:800;color:var(--amber)">${fmt(totalTaken)}</div>
+      </div>
+    </div>
+
+    ${totalsTable('By Supplier — Cleared Totals', supplierRows, '🏭')}
+    ${totalsTable('By Contractor — Cleared Totals', contractorRows, '👷', r=>`ownerTab(2);openContractorProfile('${r.contractorId}')`)}
+
+    <div class="card">
+      <div class="st">📋 Every Cleared Entry (${cleared.length})</div>
+      ${!cleared.length ? '<div class="empty"><div class="empty-icon">📜</div><div class="empty-text">Nothing has been cleared yet.</div></div>' : cleared.map(e=>renderMatEntry(e, true)).join('')}
+    </div>
   </div>`;
 }
