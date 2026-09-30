@@ -310,6 +310,8 @@ function renderDetail(id){
       <div>${buildLifecycleTimeline(p,id)}</div>
     </div>
 
+    ${buildFundingOpportunityPanel(p)}
+
     <!-- SECOND ROW: Fund Releases + Material Credit (both collapsed by default) -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px" class="detail-main-grid">
 
@@ -409,6 +411,55 @@ function renderDetail(id){
 
   // Restore toggle states for this project
   if(typeof applyToggleStates === 'function') applyToggleStates();
+
+// Informational only — does NOT feed into maxF()/eligR()/hdroom() or the
+// cap-used %/alert banner, which stay exactly as conservative as before.
+// This surfaces two things Likith asked for, using the same fund figures
+// as everywhere else on the page so nothing here can drift out of sync:
+//   1. Part-bill received, more of the agreement still unbilled — shows
+//      what a fresh 70% allowance on just the REMAINING unbilled scope
+//      would be (the already-billed portion is de-risked; GVMC already
+//      paid it back).
+//   2. A bill (part or final) has come in, but what was actually
+//      released to the contractor is below the 70% a bill of that size
+//      would normally support — shows that unused headroom.
+// Both are shown side by side and summed, but nothing here is an
+// enforced limit — it's Likith's own call whether to act on it.
+function buildFundingOpportunityPanel(p){
+  const agreement = agAmt(p);
+  const received = totReceipts(p);
+  const paid = totPayments(p);
+  if(received<=0) return ''; // nothing billed yet — nothing to show
+
+  const remainingScope = Math.max(0, agreement - received);
+  const fromRemainingScope = remainingScope * 0.7;
+
+  const fundableOnBilled = received * 0.7;
+  const underfundedGap = Math.max(0, fundableOnBilled - paid);
+
+  const total = fromRemainingScope + underfundedGap;
+  if(total<=0) return '';
+
+  const row = (label, value, sub, color)=>`<div style="flex:1;min-width:220px;background:var(--surface2);border-radius:var(--rs);padding:12px">
+    <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:4px">${label}</div>
+    <div style="font-size:18px;font-weight:800;color:${color||'var(--navy)'}">${fmt(value)}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>
+  </div>`;
+
+  return `<div class="card" style="margin-bottom:14px;border-top:3px solid var(--gold)">
+    <div class="st">💡 Additional Funding Opportunity <span style="font-size:11px;font-weight:400;color:var(--text3)">— informational, does not change the funding cap above</span></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      ${fromRemainingScope>0 ? row('From remaining unbilled scope', fromRemainingScope,
+          `70% of ${fmt(remainingScope)} still unbilled (agreement ${fmt(agreement)} − received ${fmt(received)})`) : ''}
+      ${underfundedGap>0 ? row('Underfunded vs. billed amount', underfundedGap,
+          `70% of ${fmt(received)} received would support ${fmt(fundableOnBilled)}; ${fmt(paid)} actually paid`, 'var(--amber)') : ''}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#fff8ec;border:1px solid var(--gold);border-radius:var(--rs);padding:10px 14px">
+      <span style="font-size:13px;font-weight:700;color:var(--navy)">Combined additional opportunity</span>
+      <span style="font-size:16px;font-weight:800;color:var(--navy)">${fmt(total)}</span>
+    </div>
+  </div>`;
+}
 
 function buildLifecycleTimeline(p, id){
   const today = new Date();
