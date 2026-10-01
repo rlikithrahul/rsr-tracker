@@ -274,11 +274,20 @@ function renderFunds(){
       <div class="card" style="border-top:4px solid var(--amber)">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
           <div class="st" style="color:var(--amber);margin:0;border:none;padding:0">⚠️ Unmatched Payments (${tallyUnmatched.length})</div>
-          <button onclick="dismissAllUnmatched(false)" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Payments</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="toggleUnmatchedBulkMode('payments')" style="background:#fff;color:var(--navy);border:1.5px solid var(--navy);border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">${_umBulkMode.payments?'✕ Cancel Selection':'☑️ Select Multiple Payments'}</button>
+            <button onclick="dismissAllUnmatched(false)" style="background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Payments</button>
+          </div>
         </div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These payment transactions did not match any project's Cost Centre. Assign what belongs to projects, then Dismiss All remaining.</div>
+        ${_umBulkMode.payments?`<div style="display:flex;justify-content:space-between;align-items:center;background:#eef2fb;border:1.5px solid var(--navy);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">${_umSelected.payments.size} selected</span>
+          <button onclick="dismissSelectedUnmatched('payments')" style="background:var(--red);color:#fff;border:none;border-radius:var(--rs);padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss Selected</button>
+        </div>`:''}
         ${tallyUnmatched.map((t,i)=>`
-          <div style="background:var(--amber-bg);border:1px solid #f5d5a0;border-radius:var(--rs);padding:12px;margin-bottom:8px">
+          <div style="background:var(--amber-bg);border:1px solid #f5d5a0;border-radius:var(--rs);padding:12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
+            ${_umBulkMode.payments?`<input type="checkbox" ${_umSelected.payments.has(i)?'checked':''} onchange="toggleUnmatchedSelection('payments',${i})" style="margin-top:6px;width:16px;height:16px;cursor:pointer;flex-shrink:0">`:''}
+            <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <div>
                 <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px">PAYMENT</span></div>
@@ -298,12 +307,13 @@ function renderFunds(){
                   onfocus="document.getElementById('um-assign-p-${i}-list').style.display='block'"
                   style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;box-sizing:border-box">
                 <div id="um-assign-p-${i}-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--rs);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)">
-                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-p-${i}','um-assign-p-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name.substring(0,55)}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}</div></div>`).join('')}
+                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-p-${i}','um-assign-p-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" data-search="${unmatchedSearchHaystack(p).replace(/"/g,'&quot;')}" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}${p.eaNumber?' · EA: '+p.eaNumber:''}${p.genCode?' · Gen: '+p.genCode:''}${p.tenderId?' · Tender: '+p.tenderId:''}</div></div>`).join('')}
                 </div>
                 <input type="hidden" id="um-assign-p-${i}" value="">
               </div>
               <button class="btn btn-sm btn-navy" onclick="assignUnmatched(${i},false)">✓ Assign</button>
               <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},false)">🗑️ Delete</button>
+            </div>
             </div>
           </div>`).join('')}
       </div>
@@ -314,11 +324,20 @@ function renderFunds(){
       <div class="card" style="border-top:4px solid var(--green)">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
           <div class="st" style="color:var(--green);margin:0;border:none;padding:0">📥 Unmatched Receipts (${tallyUnmatchedReceipts.length})</div>
-          <button onclick="dismissAllUnmatched(true)" style="background:#d1fae5;color:#065f46;border:1px solid #34d399;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Receipts</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="toggleUnmatchedBulkMode('receipts')" style="background:#fff;color:var(--navy);border:1.5px solid var(--navy);border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">${_umBulkMode.receipts?'✕ Cancel Selection':'☑️ Select Multiple Receipts'}</button>
+            <button onclick="dismissAllUnmatched(true)" style="background:#d1fae5;color:#065f46;border:1px solid #34d399;border-radius:var(--rs);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss All Receipts</button>
+          </div>
         </div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:12px">These receipt transactions did not match any project. Assign to a project or dismiss all remaining.</div>
+        ${_umBulkMode.receipts?`<div style="display:flex;justify-content:space-between;align-items:center;background:#eef2fb;border:1.5px solid var(--navy);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">${_umSelected.receipts.size} selected</span>
+          <button onclick="dismissSelectedUnmatched('receipts')" style="background:var(--red);color:#fff;border:none;border-radius:var(--rs);padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">🗑️ Dismiss Selected</button>
+        </div>`:''}
         ${tallyUnmatchedReceipts.map((t,i)=>`
-          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;margin-bottom:8px">
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
+            ${_umBulkMode.receipts?`<input type="checkbox" ${_umSelected.receipts.has(i)?'checked':''} onchange="toggleUnmatchedSelection('receipts',${i})" style="margin-top:6px;width:16px;height:16px;cursor:pointer;flex-shrink:0">`:''}
+            <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <div>
                 <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#c8e6c9;color:#2e7d32;padding:1px 6px;border-radius:3px">RECEIPT</span></div>
@@ -338,12 +357,13 @@ function renderFunds(){
                   onfocus="document.getElementById('um-assign-r-${i}-list').style.display='block'"
                   style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:13px;box-sizing:border-box">
                 <div id="um-assign-r-${i}-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--rs);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1)">
-                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-r-${i}','um-assign-r-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name.substring(0,55)}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}</div></div>`).join('')}
+                  ${D.projects.filter(p=>!isArchived(p)).map(p=>`<div onclick="selectUnmatchedProject('um-search-r-${i}','um-assign-r-${i}-list','${p.id}','${p.name.replace(/'/g,'&#39;')}')" data-search="${unmatchedSearchHaystack(p).replace(/"/g,'&quot;')}" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--surface2)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'"><div style="font-weight:600">${p.name}</div><div style="font-size:11px;color:var(--text3)">${(GC(p.contractorId)||{name:'—'}).name} · ${p.firm||'RSR'}${p.eaNumber?' · EA: '+p.eaNumber:''}${p.genCode?' · Gen: '+p.genCode:''}${p.tenderId?' · Tender: '+p.tenderId:''}</div></div>`).join('')}
                 </div>
                 <input type="hidden" id="um-assign-r-${i}" value="">
               </div>
               <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="assignUnmatched(${i},true)">✓ Assign</button>
               <button class="btn btn-sm" style="color:var(--red)" onclick="deleteUnmatched(${i},true)">🗑️ Delete</button>
+            </div>
             </div>
           </div>`).join('')}
       </div>
@@ -653,6 +673,33 @@ function parseTallyDate(val){
 
 
 // ─── DISMISS ALL UNMATCHED ────────────────────────────
+function toggleUnmatchedBulkMode(type){
+  _umBulkMode[type] = !_umBulkMode[type];
+  _umSelected[type].clear();
+  renderFunds();
+}
+function toggleUnmatchedSelection(type, i){
+  if(_umSelected[type].has(i)) _umSelected[type].delete(i); else _umSelected[type].add(i);
+  renderFunds();
+}
+async function dismissSelectedUnmatched(type){
+  const isReceipt = type==='receipts';
+  const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
+  const selected = _umSelected[type];
+  if(!selected.size){ toast('Nothing selected','ok'); return; }
+  if(!confirm(`Dismiss ${selected.size} selected unmatched ${type}? This cannot be undone.`)) return;
+  // Filter out only the checked indices — never splice one at a time,
+  // which would shift every later index and dismiss the wrong rows.
+  const remaining = queue.filter((t,i)=>!selected.has(i));
+  if(isReceipt) tallyUnmatchedReceipts = remaining; else tallyUnmatched = remaining;
+  const dismissedCount = selected.size;
+  _umSelected[type].clear();
+  _umBulkMode[type] = false;
+  await saveUnmatchedToCloud().catch(()=>{});
+  renderFunds();
+  toast(`✓ ${dismissedCount} selected ${type} dismissed`,'ok');
+}
+
 async function dismissAllUnmatched(isReceipt){
   const queue = isReceipt ? tallyUnmatchedReceipts : tallyUnmatched;
   const type = isReceipt ? 'receipts' : 'payments';
@@ -1283,14 +1330,30 @@ async function importAllMissing(){
 
 // ─── SEARCHABLE PROJECT DROPDOWN FOR UNMATCHED ───────
 function filterUnmatchedDropdown(inputId, listId){
-  const q = (document.getElementById(inputId)?.value||'').toLowerCase();
+  const q = (document.getElementById(inputId)?.value||'').toLowerCase().trim();
   const list = document.getElementById(listId);
   if(!list) return;
   list.style.display = 'block';
+  // Search a dedicated data-search attribute holding the FULL name plus
+  // contractor, EA number, gen code, tender ID and cost centre — not the
+  // visible (truncated, name-only) text. Previously this filtered on
+  // item.textContent, which only ever held the shortened display label,
+  // so anything distinguishing beyond the first ~55 characters of a long
+  // project name — or any search by EA/gen code/tender ID/contractor at
+  // all — silently never matched.
+  const terms = q.split(/\s+/).filter(Boolean);
   Array.from(list.children).forEach(item=>{
-    const text = item.textContent.toLowerCase();
-    item.style.display = text.includes(q) ? 'block' : 'none';
+    const hay = (item.dataset.search||'');
+    item.style.display = (!terms.length || terms.every(t=>hay.includes(t))) ? 'block' : 'none';
   });
+}
+
+// Full, untruncated search text for one project — every field a person
+// might reasonably search an unmatched transaction by.
+function unmatchedSearchHaystack(p){
+  const c = GC(p.contractorId)||{};
+  return [p.name, c.name, p.eaNumber, p.genCode, p.tenderId, p.costCentre]
+    .filter(Boolean).join(' ').toLowerCase();
 }
 
 function selectUnmatchedProject(inputId, listId, pid, pname){

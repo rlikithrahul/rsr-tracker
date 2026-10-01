@@ -50,6 +50,8 @@ let photos = [], gpsData = null;
 let dbOK = false, autoRefreshTimer = null, deferredInstallPrompt = null;
 let tallyUnmatched = [];
 let tallyUnmatchedReceipts = []; // NEW: unmatched receipts from Tally
+let _umBulkMode = {payments:false, receipts:false}; // "Select Multiple" toggle, per section
+let _umSelected = {payments:new Set(), receipts:new Set()}; // indices checked in bulk mode
 
 // ─── PERSIST UNMATCHED TO SUPABASE SETTINGS ──────────
 // So they survive page refresh and mobile opening
