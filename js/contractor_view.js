@@ -336,7 +336,7 @@ async function cOpenProj(id){
     </div>
     <div class="card"><div class="st">Your Previous Updates</div>
       ${myUpd.length?myUpd.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px"><span style="font-weight:700">${fmtDate(u.date)}</span><span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed by RSR':'⏳ Pending review'}</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px"><span style="font-weight:700">${u.date}</span><span class="badge ${u.reviewed?'bg-green':'bg-navy'}">${u.reviewed?'✓ Reviewed by RSR':'⏳ Pending review'}</span></div>
         ${u.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}
         ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;color:var(--navy);font-weight:600;margin-bottom:6px">Reported: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
         ${u.photos&&u.photos.length?`<div class="pgrid" style="grid-template-columns:repeat(3,1fr)">${u.photos.map(ph=>`<div class="pitem" onclick="lightbox('${ph.url}')"><img src="${ph.url}" loading="lazy" alt=""><div class="pcap">${ph.name||'photo'}</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--text3)">No photos attached</div>'}
@@ -624,7 +624,7 @@ function renderContractorNotes(pid){
       <div id="note-view-${n.id}" style="border-left:3px solid var(--gold);padding:8px 12px;margin-bottom:8px;background:var(--surface);border-radius:0 var(--rs) var(--rs) 0">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1">
-            ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${fmtDate(n.date)}</div>`:''}
+            ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
             <div style="font-size:13px;color:var(--text)">${n.text.replace(/\n/g,'<br>')}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${n.editedAt?' · edited':''}</div>
           </div>
@@ -713,7 +713,7 @@ function renderUpdateHistory(pid){
     const totalQty = Object.values(u.quantities||{}).reduce((s,v)=>s+v,0);
     return `<div style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:700;color:var(--navy)">${fmtDate(u.date)}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${u.date}</div>
         <span style="font-size:11px;font-weight:700;color:${statusColor};background:${u.reviewed?(u.rejected?'#fde8e8':'#d4edda'):'#fff3cd'};padding:2px 8px;border-radius:10px">${status}</span>
       </div>
       ${u.notes?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${u.notes}</div>`:''}

@@ -628,7 +628,7 @@ function renderArchive(){
         <div>
           <div style="font-weight:700;font-size:14px">${p.name}</div>
           <div style="font-size:12px;color:var(--text3)">
-            #${p.tender||'—'} · Archived ${p._archivedAt?fmtDate(p._archivedAt):''}
+            #${p.tender||'—'} · Archived ${p._archivedAt?new Date(p._archivedAt).toLocaleDateString('en-IN'):''}
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -957,7 +957,7 @@ function renderProjectTable(list, el){
       const rel = totRel(p);
       const max70 = maxF(p);
       const capPct = max70>0?Math.round(rel/max70*100):0;
-      const jvDate = p.jvDate || p.documents?.jv?.uploadedAt || '';
+      const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
       return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
         <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}${p.tender&&dupTenders.has((p.tender||'').toLowerCase())?' <span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">⚠️ DUP</span>':''}</td>
         <td><span style="font-size:11px;font-weight:700;color:${firmColor};white-space:nowrap">${firmShort}</span></td>
@@ -967,7 +967,7 @@ function renderProjectTable(list, el){
         <td style="white-space:nowrap">${p.agreeDate||'<span style="color:var(--text3)">Not set</span>'}</td>
         <td style="text-align:right">${fmt(boqTotal)}</td>
         <td style="text-align:right;color:${capPct>=70?'var(--red)':'var(--navy)'}">${capPct}%</td>
-        <td style="white-space:nowrap">${fmtDate(jvDate)}</td>
+        <td style="white-space:nowrap">${jvDate}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-sm" onclick="event.stopPropagation();openDetail('${p.id}')">View</button>
           <div class="amenu-wrap" style="display:inline-block;margin-left:4px">
@@ -1326,7 +1326,7 @@ function showFYReport(){
         jvByFY[fy].push(p);
       }
     }
-    const settled = (p.releases||[]).filter(r=>r.source==='settlement');
+    const settled = (p.releases||[]).filter(r=>r.source==='settlement' && !isArchived(r));
     settled.forEach(s=>{
       const fy = getFY(s.date);
       if(fy){
@@ -1359,7 +1359,7 @@ function showFYReport(){
         ${settledByFY[fy].map(s=>`
           <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;gap:4px">
             <span>${s.projectName}</span>
-            <div style="text-align:right"><div style="font-weight:700;color:var(--navy)">${fmt(s.amount)}</div><div style="font-size:11px;color:var(--text3)">${fmtDate(s.date)}</div></div>
+            <div style="text-align:right"><div style="font-weight:700;color:var(--navy)">${fmt(s.amount)}</div><div style="font-size:11px;color:var(--text3)">${s.date}</div></div>
           </div>`).join('')}
         <div style="text-align:right;font-weight:700;color:var(--navy);padding-top:8px">Total: ${fmt(settledByFY[fy].reduce((s,x)=>s+x.amount,0))}</div>` : ''}
     </div>`).join('');

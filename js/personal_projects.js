@@ -527,7 +527,7 @@ function viewContractorPersonalProject(pid){
 
     <div class="st" style="margin:14px 0 8px">🧱 Material Register</div>
     ${materials.length?materials.map(m=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px">
-      <span>${m.materialName} — ${fmtDate(m.date)}</span><span style="font-weight:700">${m.qty} ${m.unit}</span>
+      <span>${m.materialName} — ${m.date}</span><span style="font-weight:700">${m.qty} ${m.unit}</span>
     </div>`).join(''):'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">No material entries.</div>'}
 
     <div class="st" style="margin:14px 0 8px">📄 Documents</div>

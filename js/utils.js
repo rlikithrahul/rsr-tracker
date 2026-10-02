@@ -52,7 +52,13 @@ function GP(id){
 function GC(id){ return D.contractors.find(c=>c.id===id)||null; }
 function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }
-function totPayments(p){ return (p.releases||[]).filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
+// isArchived() check is critical here — without it, a deleted or
+// transferred-away release keeps counting forever, since delete/transfer
+// both soft-delete (_archived:true) rather than removing the record.
+// This single function drives Net Deployed, Cap Used %, Available, and
+// the Funding Opportunity panel, so a missing filter here silently wrongs
+// every one of those at once.
+function totPayments(p){ return (p.releases||[]).filter(r=>!isArchived(r) && r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
 // Only receipts that have been explicitly confirmed as a real government
 // settlement count toward reducing at-risk capital. A raw Tally "Receipt"
 // entry can be all sorts of things — an internal transfer between

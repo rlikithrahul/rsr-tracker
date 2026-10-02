@@ -477,7 +477,7 @@ async function exportActionCentre(format){
       catch(e){toast('Could not load Excel library','error');return;}
     }
     const wb=window.XLSX.utils.book_new();
-    const rows=[['Action Centre Export — '+fmtDate(new Date().toISOString()),'','','',''],['','','','','']];
+    const rows=[['Action Centre Export — '+new Date().toLocaleDateString('en-IN'),'','','',''],['','','','','']];
     rows.push(['Priority','Stage','Project Name','Contractor','JV Date','JV Amount (₹)','Days Waiting','Firm']);
     stageDefs.forEach(def=>{
       const list=stages[def.key];
@@ -503,7 +503,7 @@ async function exportActionCentre(format){
 
   } else {
     // Print / PDF — open a clean printable HTML in a new window
-    const dateStr=fmtDate(new Date().toISOString());
+    const dateStr=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
     const totalActions=stageDefs.reduce((s,d)=>s+stages[d.key].length,0);
 
     let body='';
