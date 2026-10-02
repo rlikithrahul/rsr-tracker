@@ -395,11 +395,11 @@ function renderInterest(){
           <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">📅 FY Compounding (31st March)</div>
           <div style="font-size:12px;color:var(--text3);margin-bottom:8px">On March 31 each year, this FY's interest (${fmt(ledger.currentFYInterest)}) is added to the outstanding principal. New FY starts on the compounded amount.</div>
           ${lastCompound?`<div style="font-size:12px;background:var(--surface2);border-radius:var(--rs);padding:8px 10px;margin-bottom:6px">
-            Last compounded: <strong>${lastCompound.date}</strong> (${lastCompound.fy}) — Added ${fmt(lastCompound.interestAdded)} → Principal became ${fmt(lastCompound.newPrincipal)}
+            Last compounded: <strong>${fmtDate(lastCompound.date)}</strong> (${lastCompound.fy}) — Added ${fmt(lastCompound.interestAdded)} → Principal became ${fmt(lastCompound.newPrincipal)}
           </div>`:'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:6px">No compounding done yet.</div>'}
           ${ledger.compoundLog.length>1?`<details><summary style="font-size:11px;cursor:pointer;color:var(--navy)">View all ${ledger.compoundLog.length} compounding entries</summary>
             <div style="margin-top:6px">
-              ${ledger.compoundLog.slice().reverse().map(e=>`<div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">${e.date} · ${e.fy} · Added ${fmt(e.interestAdded)} · Principal → ${fmt(e.newPrincipal)}</div>`).join('')}
+              ${ledger.compoundLog.slice().reverse().map(e=>`<div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">${fmtDate(e.date)} · ${e.fy} · Added ${fmt(e.interestAdded)} · Principal → ${fmt(e.newPrincipal)}</div>`).join('')}
             </div>
           </details>`:''}
         </div>

@@ -22,6 +22,17 @@ let selectedType = { materials: null, expenses: null, labour: {} };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const todayStr = () => new Date().toISOString().split('T')[0];
+// This page is deliberately independent of the main app's bundle, so it
+// needs its own copy — kept in exactly the same DD MMM YYYY format as
+// fmtDate() in the main app, so a date reads identically wherever it's
+// entered or viewed.
+function fmtDate(dateStr){
+  if(!dateStr) return '—';
+  const d = new Date(dateStr);
+  if(isNaN(d.getTime())) return dateStr;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -245,7 +256,7 @@ async function loadLabourHistory(){
   if(!log.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
   el.innerHTML = log.map(e=>{
     const total = Object.values(e.counts||{}).reduce((s,v)=>s+v,0);
-    return `<div class="hist-row"><span>${e.date}${e.mestriName?' · 👤 '+e.mestriName:''}</span><span style="font-weight:700">${total} total</span></div>`;
+    return `<div class="hist-row"><span>${fmtDate(e.date)}${e.mestriName?' · 👤 '+e.mestriName:''}</span><span style="font-weight:700">${total} total</span></div>`;
   }).join('');
 }
 async function loadMestriDatalist(){
@@ -302,7 +313,7 @@ async function loadMaterialHistory(){
   const p = await getProject(projectId);
   const entries = (p.materialRegister||[]).filter(e=>!e._archived).slice().reverse().slice(0,8);
   if(!entries.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
-  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${e.date} · ${e.materialName} — ${e.qty}${e.supplierName?' · 👤 '+e.supplierName:''}</span><span style="font-weight:700">${e.amount?'₹'+e.amount.toLocaleString('en-IN'):''}</span></div>`).join('');
+  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${fmtDate(e.date)} · ${e.materialName} — ${e.qty}${e.supplierName?' · 👤 '+e.supplierName:''}</span><span style="font-weight:700">${e.amount?'₹'+e.amount.toLocaleString('en-IN'):''}</span></div>`).join('');
 }
 
 // ─── EXPENSES ──────────────────────────────────────────
@@ -333,7 +344,7 @@ async function loadExpenseHistory(){
   const p = await getProject(projectId);
   const entries = (p.siteExpenses||[]).filter(e=>!e._archived).slice().reverse().slice(0,8);
   if(!entries.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No entries yet.</div>'; return; }
-  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${e.date} · ${e.category}</span><span style="font-weight:700">₹${e.amount.toLocaleString('en-IN')}</span></div>`).join('');
+  el.innerHTML = entries.map(e=>`<div class="hist-row"><span>${fmtDate(e.date)} · ${e.category}</span><span style="font-weight:700">₹${e.amount.toLocaleString('en-IN')}</span></div>`).join('');
 }
 
 // ─── NOTES ─────────────────────────────────────────────
@@ -361,7 +372,7 @@ async function loadNotes(){
   const notes = (p.contractorNotes||[]).filter(n=>!n._archived).slice().reverse().slice(0,10);
   if(!notes.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">No notes yet.</div>'; return; }
   el.innerHTML = notes.map(n=>`<div style="border-left:3px solid var(--gold);padding:8px 10px;margin-bottom:8px;background:var(--bg);border-radius:0 var(--rs) var(--rs) 0">
-    ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600">📅 ${n.date}</div>`:''}
+    ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600">📅 ${fmtDate(n.date)}</div>`:''}
     <div style="font-size:13px">${n.text.replace(/</g,'&lt;')}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
   </div>`).join('');

@@ -172,7 +172,7 @@ async function checkDuplicates(){
     });
   });
   if(dupes.length===0) return { pass:true, detail:'No duplicate Tally voucher entries found' };
-  const summary = dupes.map(d=>`Vch #${d.vchNo} (₹${fmt(d.amount)}, ${d.date}) in "${d.projectName}"`).join('; ');
+  const summary = dupes.map(d=>`Vch #${d.vchNo} (₹${fmt(d.amount)}, ${fmtDate(d.date)}) in "${d.projectName}"`).join('; ');
   return { pass:false, detail:`${dupes.length} possible duplicate Tally entr${dupes.length===1?'y':'ies'} detected: ${summary}`, clickable:true, clickAction:'duplicateVoucher', clickIds: dupes.map(d=>d.projectId), dupeDetail: dupes };
 }
 
@@ -203,7 +203,7 @@ function handleHealthCheckClick(resultIdx){
       ${items.map(({p,dupe})=>`
         <div onclick="CM('modal-health-picker');CM('modal-health');openDetail('${p.id}')" style="padding:10px 12px;background:var(--surface2);border-radius:var(--rs);cursor:pointer" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='var(--surface2)'">
           <div style="font-size:13px;font-weight:700;color:var(--navy)">${p.name}</div>
-          ${dupe?`<div style="font-size:11px;color:var(--red);margin-top:2px">Vch #${dupe.vchNo} · ₹${fmt(dupe.amount)} · ${dupe.date} — also seen in "${dupe.firstSeenIn}"</div>`:''}
+          ${dupe?`<div style="font-size:11px;color:var(--red);margin-top:2px">Vch #${dupe.vchNo} · ₹${fmt(dupe.amount)} · ${fmtDate(dupe.date)} — also seen in "${dupe.firstSeenIn}"</div>`:''}
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Tap to open →</div>
         </div>`).join('')}
     </div>
@@ -410,7 +410,7 @@ function openBulkDateFix(){
     (p.releases||[]).filter(r=>r.source==='tally'&&!r._dateCorrected&&r.date).forEach(r=>{
       count++;
       if(preview.length < 5){
-        preview.push(`${r.date} → ${_shiftDateByOne(r.date)} (Vch #${r.ref||'—'}, ${fmt(r.amount)})`);
+        preview.push(`${fmtDate(r.date)} → ${fmtDate(_shiftDateByOne(r.date))} (Vch #${r.ref||'—'}, ${fmt(r.amount)})`);
       }
     });
   });

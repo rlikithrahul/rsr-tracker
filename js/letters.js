@@ -14,6 +14,15 @@ const FIRM_DISPLAY = {
 function getFirmDisplay(p){ return FIRM_DISPLAY[p.firm]||'RSR CONSTRUCTIONS'; }
 function fmtINR(n){ if(!n||n<=0) return '0/-'; return Number(n).toLocaleString('en-IN')+'/-'; }
 function todayLong(){ return new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'}); }
+// Same formal, full-month style as todayLong() but for a date someone
+// actually picked, not just today's date — so a letter's date always
+// reads unambiguously, whichever path produced it.
+function formalDate(dateStr){
+  if(!dateStr) return todayLong();
+  const d = new Date(dateStr);
+  if(isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
+}
 
 // ─── MODAL ────────────────────────────────────────────
 function openLetterModal(pid, defaultType){
@@ -115,7 +124,7 @@ function updateLetterPreview(pid){
     : '';
 
   document.getElementById('ltr-preview').innerHTML = topNote +
-    `<div style="text-align:right">${date}</div>
+    `<div style="text-align:right">${formalDate(date)}</div>
      <br>To,<br>The Commissioner,<br>G.V.M.C,<br>Visakhapatnam.
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Respected Sir / Madam,
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sub:-- ${subject}
@@ -132,7 +141,7 @@ function downloadLetter(pid){
   const p = GP(pid); if(!p) return;
   const type = document.querySelector('input[name="ltr-type"]:checked')?.value||'wec';
   const firm = document.getElementById('lf-firm')?.value||getFirmDisplay(p);
-  const date = document.getElementById('lf-date')?.value||todayLong();
+  const date = formalDate(document.getElementById('lf-date')?.value);
   const ea   = document.getElementById('lf-ea')?.value||'';
   const gc   = document.getElementById('lf-gencode')?.value||'';
   const tid  = document.getElementById('lf-tender')?.value||'';

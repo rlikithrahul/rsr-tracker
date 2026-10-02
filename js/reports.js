@@ -135,7 +135,7 @@ function makeSheet(headers, rows, title){
     s: titleStyle()
   };
   ws[window.XLSX.utils.encode_cell({r:1,c:0})] = {
-    v: `Generated: ${new Date().toLocaleDateString('en-IN')} | RSR Constructions`,
+    v: `Generated: ${fmtDate(new Date().toISOString())} | RSR Constructions`,
     t:'s',
     s:{font:{sz:9,color:{rgb:'888888'}}}
   };

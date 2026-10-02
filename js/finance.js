@@ -154,7 +154,7 @@ function calDayClick(dateStr){
 
   if(uploadedDates.has(dateStr)){
     // Already uploaded — show info toast
-    toast(`✅ Daybook already imported for ${dateStr}`,'ok',2000);
+    toast(`✅ Daybook already imported for ${fmtDate(dateStr)}`,'ok',2000);
     return;
   }
 
@@ -163,14 +163,14 @@ function calDayClick(dateStr){
     setOrangeDay(dateStr, false);
     const calEl=document.getElementById('daybook-calendar');
     if(calEl) calEl.innerHTML=renderDaybookCalendar();
-    toast(`Reset ${dateStr} back to unchecked`,'ok',2000);
+    toast(`Reset ${fmtDate(dateStr)} back to unchecked`,'ok',2000);
     return;
   }
 
   // Red or grey → show options: upload daybook OR mark as checked
   const isToday = dateStr === new Date().toISOString().split('T')[0];
   const choice = confirm(
-    `📅 ${dateStr}\n\nWhat do you want to do?\n\n` +
+    `📅 ${fmtDate(dateStr)}\n\nWhat do you want to do?\n\n` +
     `• Click OK to scroll to Upload and import daybook for this date\n` +
     `• Click Cancel, then use the "Mark as Checked" button if you verified there are no transactions`
   );
@@ -184,7 +184,7 @@ function markDayChecked(dateStr){
   setOrangeDay(dateStr, true);
   const calEl=document.getElementById('daybook-calendar');
   if(calEl) calEl.innerHTML=renderDaybookCalendar();
-  toast(`🟠 ${dateStr} marked as checked — no transactions`,'ok',2000);
+  toast(`🟠 ${fmtDate(dateStr)} marked as checked — no transactions`,'ok',2000);
 }
 
 function prefillDaybookDate(dateStr){
@@ -195,7 +195,7 @@ function prefillDaybookDate(dateStr){
     uploadCard.style.outline='2px solid var(--red)';
     setTimeout(()=>{uploadCard.style.outline='';},3000);
   }
-  toast(`Upload daybook for ${dateStr}`,'ok',3000);
+  toast(`Upload daybook for ${fmtDate(dateStr)}`,'ok',3000);
 }
 
 function renderFunds(){
@@ -290,7 +290,7 @@ function renderFunds(){
             <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <div>
-                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px">PAYMENT</span></div>
+                <div style="font-weight:700;font-size:13px">${fmtDate(t.date)} · Vch #${t.vchNo} <span style="font-size:11px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px">PAYMENT</span></div>
                 <div style="font-size:12px;color:var(--text2)">${t.ledger} · CC: <span style="font-family:monospace">${t.costCentre||'(no cost centre)'}</span></div>
                 <div style="font-size:12px;color:var(--text3)">${t.narration||''}</div>
                 ${t._fuzzyMatch?`<div style="font-size:12px;background:#fffde7;border:1px solid #f9a825;border-radius:4px;padding:4px 8px;margin-top:4px">
@@ -340,7 +340,7 @@ function renderFunds(){
             <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px">
               <div>
-                <div style="font-weight:700;font-size:13px">${t.date} · Vch #${t.vchNo} <span style="font-size:11px;background:#c8e6c9;color:#2e7d32;padding:1px 6px;border-radius:3px">RECEIPT</span></div>
+                <div style="font-weight:700;font-size:13px">${fmtDate(t.date)} · Vch #${t.vchNo} <span style="font-size:11px;background:#c8e6c9;color:#2e7d32;padding:1px 6px;border-radius:3px">RECEIPT</span></div>
                 <div style="font-size:12px;color:var(--text2)">${t.ledger} · CC: <span style="font-family:monospace">${t.costCentre||'(no cost centre)'}</span></div>
                 <div style="font-size:12px;color:var(--text3)">${t.narration||''}</div>
                 ${t._fuzzyMatch?`<div style="font-size:12px;background:#fffde7;border:1px solid #f9a825;border-radius:4px;padding:4px 8px;margin-top:4px">
@@ -379,7 +379,7 @@ function renderFunds(){
       </div>
       ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Project</th><th>Contractor</th><th>Vch No</th><th>Narration</th><th style="text-align:right">Amount</th></tr></thead><tbody>
         ${all.map(r=>`<tr style="${r.txType==='receipt'?'background:#f0faf0':''}">
-          <td style="white-space:nowrap">${r.date}</td>
+          <td style="white-space:nowrap">${fmtDate(r.date)}</td>
           <td><span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;${r.txType==='receipt'?'background:#c8e6c9;color:#2e7d32':'background:#fff3cd;color:#856404'}">${r.txType==='receipt'?'RECEIPT':'PAYMENT'}</span></td>
           <td><a href="#" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td>
           <td>${r.contractor}</td>
@@ -1258,7 +1258,7 @@ async function runMonthlyVerification(transactions){
           ${missing.map((tx,i)=>`
             <div style="background:#fde8e8;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <div style="flex:1">
-                <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo} · ${tx.projectName}</div>
+                <div style="font-size:12px;font-weight:700">${fmtDate(tx.date)} · Vch #${tx.vchNo} · ${tx.projectName}</div>
                 <div style="font-size:11px;color:var(--text3)">${tx.narration||''} · CC: ${tx.costCentre}</div>
               </div>
               <div style="font-weight:800;color:var(--red)">${fmt(tx.amount)}</div>
@@ -1272,8 +1272,8 @@ async function runMonthlyVerification(transactions){
           <div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:8px">⚠️ Possible Duplicates — Same Voucher No, Different Amount/Date</div>
           ${duplicates.map(tx=>`
             <div style="background:#fff3cd;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px">
-              <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo} · ${tx.projectName}</div>
-              <div style="font-size:11px;color:var(--text3)">Monthly: ${fmt(tx.amount)} · In app: ${fmt(tx.existingAmount)} on ${tx.existingDate}</div>
+              <div style="font-size:12px;font-weight:700">${fmtDate(tx.date)} · Vch #${tx.vchNo} · ${tx.projectName}</div>
+              <div style="font-size:11px;color:var(--text3)">Monthly: ${fmt(tx.amount)} · In app: ${fmt(tx.existingAmount)} on ${fmtDate(tx.existingDate)}</div>
             </div>`).join('')}
         </div>` : ''}
 
@@ -1283,7 +1283,7 @@ async function runMonthlyVerification(transactions){
           ${unmatched.map(tx=>`
             <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
               <div>
-                <div style="font-size:12px;font-weight:700">${tx.date} · Vch #${tx.vchNo}</div>
+                <div style="font-size:12px;font-weight:700">${fmtDate(tx.date)} · Vch #${tx.vchNo}</div>
                 <div style="font-size:11px;color:var(--text3)">CC: ${tx.costCentre||'(none)'} · ${tx.narration||''}</div>
               </div>
               <div style="font-weight:700">${fmt(tx.amount)}</div>

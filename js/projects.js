@@ -59,7 +59,7 @@ function renderDetail(id){
     <div class="st" style="color:var(--navy)">📸 Contractor Updates — Needs Review (${pend.length})</div>
     ${pend.map(u=>`<div style="background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:8px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
+        <div><span style="font-weight:700;font-size:13px">${fmtDate(u.date)}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
       </div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${u.notes||'No notes'}</div>
       ${u.quantities&&Object.keys(u.quantities).length?`<div style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--navy)">Claimed: ${(p.boq||[]).filter(i=>u.quantities[i.id]).map(i=>`${i.desc}: ${u.quantities[i.id]} ${i.unit}`).join(' · ')}</div>`:''}
@@ -75,7 +75,7 @@ function renderDetail(id){
   const allUpdHtml=allUpdates.length?`<div class="card"><div class="st">All Site Updates (${allUpdates.length} total)</div>
     ${allUpdates.map(u=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-        <div><span style="font-weight:700;font-size:13px">${u.date}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
+        <div><span style="font-weight:700;font-size:13px">${fmtDate(u.date)}</span> <span style="font-size:12px;color:var(--text3)">by ${u.submittedBy||'contractor'}</span></div>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="badge ${u.rejected?'bg-red':u.reviewed?'bg-green':'bg-navy'}">${u.rejected?'✗ Rejected':u.reviewed?'✓ Approved':'⏳ Pending'}</span>
           <div class="amenu-wrap">
@@ -131,7 +131,7 @@ function renderDetail(id){
     </tr>`;}).join('');
   const relLog=(p.releases||[]).filter(r=>!isArchived(r)).slice().reverse().map(r=>`
     <div class="fr">
-      <span class="fl">${r.date}<br>
+      <span class="fl">${fmtDate(r.date)}<br>
         <span style="font-size:11px">${r.notes||''} · Vch #${r.ref||'—'} · ${r.method||''}</span><br>
         ${r.source==='tally'||r.source==='tally-manual'?'<span style="font-size:10px;background:rgba(26,39,68,.1);color:var(--navy);padding:1px 6px;border-radius:4px;font-weight:600">📂 Tally</span>':'<span style="font-size:10px;background:var(--amber-bg);color:var(--amber);padding:1px 6px;border-radius:4px;font-weight:600">✏️ Manual</span>'}
       </span>
@@ -153,13 +153,13 @@ function renderDetail(id){
     const billBadge = s.billType && s.billType!=='Final Bill'
       ? `<span style="font-size:10px;background:#7c3aed;color:#fff;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:4px">${s.billType}</span>`
       : '';
-    return `<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} ${s.notes?'· '+s.notes:''} ${billBadge}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`;
+    return `<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${fmtDate(s.date)} · ${s.mode||''} ${s.ref?'· '+s.ref:''} ${s.notes?'· '+s.notes:''} ${billBadge}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`;
   }).join('');
 
   const verLog=(p.verifications||[]).slice().reverse().map(v=>`
     <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div>
-        <div style="font-weight:700;font-size:13px">${v.date} <span style="font-size:12px;color:var(--text3)">by ${v.verifiedBy||'owner'}</span></div>
+        <div style="font-weight:700;font-size:13px">${fmtDate(v.date)} <span style="font-size:12px;color:var(--text3)">by ${v.verifiedBy||'owner'}</span></div>
         <div style="font-size:13px;color:var(--text2)">${v.notes||'—'}</div>
       </div>
       <div class="amenu-wrap">

@@ -420,7 +420,7 @@ async function saveEditRelease(){
   const newDate=document.getElementById('er-date').value;
   if(r.txType!=='receipt'){
     const dup=checkDuplicateRelease(p,newAmt,newDate,editReleaseId);
-    if(dup && !confirm(`⚠️ Similar transaction of ${fmt(dup.amount)} exists on ${dup.date}. Save anyway?`)) return;
+    if(dup && !confirm(`⚠️ Similar transaction of ${fmt(dup.amount)} exists on ${fmtDate(dup.date)}. Save anyway?`)) return;
   }
   r.amount=newAmt;
   r.date=document.getElementById('er-date').value;
@@ -659,7 +659,7 @@ function openSettle(pid){
   const availableReceipts=(p.releases||[]).filter(r=>r.txType==='receipt'&&!usedRefs.has(r.ref)&&!isArchived(r));
 
   const txOptions=availableReceipts.length
-    ? availableReceipts.map((r,i)=>`<option value="${i}">${r.date} · Vch #${r.ref||'—'} · ${fmt(r.amount)}${r.notes?' · '+r.notes:''}</option>`).join('')
+    ? availableReceipts.map((r,i)=>`<option value="${i}">${fmtDate(r.date)} · Vch #${r.ref||'—'} · ${fmt(r.amount)}${r.notes?' · '+r.notes:''}</option>`).join('')
     : '<option value="">No Tally receipt transactions available — enter manually</option>';
 
   // Stored in a variable rather than embedded as inline JSON in the
@@ -719,7 +719,7 @@ async function confirmSettle(){
   // Duplicate detection
   const dup=checkDuplicateSettlement(p,amt,date);
   if(dup){
-    if(!confirm(`⚠️ A similar settlement of ${fmt(dup.amount)} already exists on ${dup.date}. Record anyway?`)) return;
+    if(!confirm(`⚠️ A similar settlement of ${fmt(dup.amount)} already exists on ${fmtDate(dup.date)}. Record anyway?`)) return;
   }
 
   // Get tallyRef if selected from Tally transaction
