@@ -14,7 +14,7 @@ function renderConts(){
     const cap=pp.reduce((s,p)=>s+totRel(p),0);
     const active=pp.filter(p=>projStatus(p)==='active'||projStatus(p)==='onhold').length;
     const completed=pp.filter(p=>projStatus(p)==='completed').length;
-    return `<div class="card" style="cursor:pointer" onclick="openContractorProfile('${c.id}')" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
+    return `<a href="#contractor-${c.id}" class="card" style="cursor:pointer;text-decoration:none;color:inherit;display:block" onclick="openContractorProfile('${c.id}');return false" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
       <div class="card-hdr">
         <div>
           <div class="card-title">${c.name}</div>
@@ -31,7 +31,7 @@ function renderConts(){
         <span>✅ ${completed} completed</span>
         ${c.supervisors&&c.supervisors.length?`<span>👥 ${c.supervisors.length} supervisor${c.supervisors.length!==1?'s':''}</span>`:''}
       </div>
-    </div>`;}).join('');
+    </a>`;}).join('');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -196,7 +196,7 @@ function renderContractorProjectGroup(title, projects, collapsedByDefault){
         <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
       </summary>
       <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Project</th><th>Released</th><th>Verified</th><th>Status</th></tr></thead><tbody>
-        ${projects.map(p=>`<tr><td><a href="#" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td></tr>`).join('')}
+        ${projects.map(p=>`<tr><td><a href="#project-${p.id}" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td></tr>`).join('')}
       </tbody></table></div>
     </details>
   </div>`;

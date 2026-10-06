@@ -381,7 +381,7 @@ function renderFunds(){
         ${all.map(r=>`<tr style="${r.txType==='receipt'?'background:#f0faf0':''}">
           <td style="white-space:nowrap">${r.date}</td>
           <td><span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;${r.txType==='receipt'?'background:#c8e6c9;color:#2e7d32':'background:#fff3cd;color:#856404'}">${r.txType==='receipt'?'RECEIPT':'PAYMENT'}</span></td>
-          <td><a href="#" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td>
+          <td><a href="#project-${r.pid}" onclick="openDetail('${r.pid}');return false" style="color:var(--navy);font-weight:700">${r.project}</a></td>
           <td>${r.contractor}</td>
           <td style="font-family:monospace;font-size:11px">${r.ref||'—'}</td>
           <td style="font-size:12px;color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes||''}">${r.notes||'—'}</td>

@@ -11,6 +11,30 @@
 
 let _historyEnabled = false;
 
+// Reads location.hash on a fresh page load — the thing that was actually
+// missing for deep links. The app already WROTE a URL like
+// #project-<id> via pushState whenever you opened something (for the
+// back button to work), but nothing ever READ that hash back on a new
+// load, so a brand new tab opened to that exact URL just landed on the
+// dashboard and silently ignored it. Returns true if it handled the
+// hash (so the caller skips its own default view).
+function handleDeepLinkHash(){
+  const hash = location.hash || '';
+  const pMatch = hash.match(/^#project-(.+)$/);
+  const cMatch = hash.match(/^#contractor-(.+)$/);
+  if(pMatch){
+    const id = decodeURIComponent(pMatch[1]);
+    if(GP(id)){ setTimeout(()=>openDetail(id), 300); return true; }
+  } else if(cMatch){
+    const id = decodeURIComponent(cMatch[1]);
+    if(GC(id)){
+      setTimeout(()=>{ ownerTabSilent(2); if(typeof openContractorProfile==='function') openContractorProfile(id); }, 300);
+      return true;
+    }
+  }
+  return false;
+}
+
 function initHistory(){
   if(_historyEnabled) return;
   _historyEnabled = true;

@@ -312,7 +312,7 @@ function _gsBillsSectionHTML(qBills){
         <tbody>
           ${fb.map(b=>`<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:6px 8px;white-space:nowrap">${fmtDate(b.date)}</td>
-            <td style="padding:6px 8px"><a href="#" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
+            <td style="padding:6px 8px"><a href="#project-${b.projectId}" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
             <td style="padding:6px 8px;color:var(--text2)">${gsEsc(b.contractorName)}</td>
             <td style="padding:6px 8px;text-align:right;font-weight:700">${fmt(b.amount)}</td>
             <td style="padding:6px 8px;color:var(--text3)">${gsEsc(b.billType||'—')}</td>
@@ -595,7 +595,7 @@ async function fillContractorBills(cid){
         <thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Project</th>${showOther?`<th style="text-align:left">${otherLabel}</th>`:''}<th style="text-align:right">Amount</th></tr></thead>
         <tbody>${arr.map(b=>`<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 8px;white-space:nowrap">${fmtDate(b.date)}</td>
-          <td style="padding:5px 8px"><a href="#" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
+          <td style="padding:5px 8px"><a href="#project-${b.projectId}" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
           ${showOther?`<td style="padding:5px 8px;color:var(--text2)">${gsEsc(otherLabel==='Bill owner' ? b.contractorName : gsFilerName(gsGetFiler(b.key)))}</td>`:''}
           <td style="padding:5px 8px;text-align:right;font-weight:700">${fmt(b.amount)}</td>
         </tr>`).join('')}</tbody>
@@ -627,7 +627,7 @@ async function fillContractorBills(cid){
       <tbody>
         ${mine.map(b=>`<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px 8px;white-space:nowrap">${fmtDate(b.date)}</td>
-          <td style="padding:6px 8px"><a href="#" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
+          <td style="padding:6px 8px"><a href="#project-${b.projectId}" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a></td>
           <td style="padding:6px 8px;text-align:right">${b.jvAmount ? fmt(b.jvAmount) : '—'}</td>
           <td style="padding:6px 8px;text-align:right;font-weight:700">${fmt(b.amount)}</td>
           <td style="padding:6px 8px;text-align:right">${b.jvAmount>0 ? (b.amount/b.jvAmount*100).toFixed(1)+'%' : '—'}</td>

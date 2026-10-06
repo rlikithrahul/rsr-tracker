@@ -41,7 +41,19 @@ async function verifyPassword(password, storedHash, salt){
 // ═══════════════════════════════════════
 
 // ─── SESSION PERSISTENCE ──────────────────────────────
-// Keeps user logged in across page refreshes
+// Keeps user logged in across page refreshes — and, deliberately, this
+// stays sessionStorage rather than localStorage. The reason that still
+// works for "open a link in a new tab, stay logged in": when a new tab
+// is opened via a real link — middle-click, ctrl/cmd-click, or the
+// right-click "open in new tab" menu — the browser copies the opening
+// tab's sessionStorage into the new one as a one-time snapshot. That's
+// standard browser behavior, not something this app has to build. It
+// only covers tabs actually opened from a link on an already-logged-in
+// page — not a brand new tab where the URL is typed or pasted in fresh,
+// which is the correct, expected limit. sessionStorage also still clears
+// when the browser is fully closed, which is the actual behavior wanted
+// here — a login should not silently persist forever just because a tab
+// was closed without clicking Logout.
 function saveSession(u){
   try{ sessionStorage.setItem('rsr_session',JSON.stringify(u)); }catch(e){}
 }
@@ -194,6 +206,10 @@ function enterOwner(){
     loadCustomLabourTypes().catch(e=>console.error('loadCustomLabourTypes failed:',e))
   ]).then(()=>{
     if(typeof runAutoBackupIfNeeded === 'function') runAutoBackupIfNeeded();
+    // A deep link in the URL (opened in a new tab, say) takes priority
+    // over resuming wherever this tab last was — opening a specific link
+    // is a clearer, more deliberate intent than "pick up where I left off".
+    if(typeof handleDeepLinkHash === 'function' && handleDeepLinkHash()) return;
     // Try restoring previous session position
     if(typeof restoreSessionState === 'function' && restoreSessionState()) return;
     ownerTab(0);

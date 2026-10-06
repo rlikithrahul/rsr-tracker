@@ -887,7 +887,7 @@ function renderProjectCards(list, el){
     const settleBadge = hasPossibleSettlement(p) ? '<span style="font-size:9px;background:#16a34a;color:#fff;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px">💰 SETTLE?</span>' : '';
     const voucherDupBadge = (typeof findDuplicateVouchers==='function' && findDuplicateVouchers(p).length) ? '<span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:6px;font-weight:700;margin-left:4px" title="Same voucher number and amount appears more than once">⚠️ DUP TXN</span>' : '';
 
-    return '<div class="proj-card '+cardClass+'" onclick="openDetail(\''+p.id+'\')">'+
+    return '<a href="#project-'+p.id+'" class="proj-card '+cardClass+'" onclick="openDetail(\''+p.id+'\');return false" style="text-decoration:none;color:inherit;display:block">'+
       '<div class="proj-card-header">'+
         '<div class="proj-card-name">'+p.name+dupBadge+incBadge+settleBadge+voucherDupBadge+'</div>'+
         '<span class="proj-card-firm" style="background:'+firmBg+';color:#fff">'+firmShort+'</span>'+
@@ -912,7 +912,7 @@ function renderProjectCards(list, el){
       '</div>'+
       '<div class="proj-card-footer">'+
         '<div style="font-size:11px;color:var(--text3)">JV: <span style="font-weight:600;color:var(--text1)">'+jvDate+'</span></div>'+
-        '<div style="display:flex;gap:6px" onclick="event.stopPropagation()">'+
+        '<div style="display:flex;gap:6px" onclick="event.stopPropagation();event.preventDefault()">'+
           '<button class="btn btn-sm" style="padding:4px 10px;font-size:11px" onclick="openDetail(\''+p.id+'\')">View →</button>'+
           '<div class="amenu-wrap">'+
             '<button class="amenu-btn" onclick="event.stopPropagation();toggleMenu(\'pgm-'+p.id+'\')">⋮</button>'+
@@ -929,7 +929,7 @@ function renderProjectCards(list, el){
           '</div>'+
         '</div>'+
       '</div>'+
-    '</div>';
+    '</a>';
   }).join('') + '</div>';
 }
 
