@@ -72,11 +72,44 @@ function renderContractorProfile(cid){
   const onHold = projects.filter(p=>projStatus(p)==='onhold');
   const completed = projects.filter(p=>projStatus(p)==='completed');
   const expectedJVs = projects.filter(p=>p.expectedJVMonth && !p.jvDate);
-  const totalDeployed  = projects.reduce((s,p)=>s+totRel(p),0);
-  const totalJVsValue  = projects.reduce((s,p)=>s+(p.jvAmount||0),0);
-  const totalChecksRcv = projects.reduce((s,p)=>s+(p.settlements||[]).filter(s2=>!isArchived(s2)).reduce((s3,s2)=>s3+s2.amount,0),0);
-  const outstanding    = Math.max(0, totalDeployed - totalChecksRcv);
+  // Deployed = total funds released to this contractor (gross). Checks
+  // Received = confirmed payments back from the government. Outstanding =
+  // released minus received — RSR's money still out. Received money is
+  // subtracted exactly ONCE, in Outstanding. (An earlier version made
+  // "Deployed" already net of receipts and then subtracted receipts again
+  // for Outstanding, which pushed Outstanding toward zero.) The net is summed
+  // across ALL projects first and floored once at the end, so an old
+  // over-settled project offsets other work instead of being silently
+  // floored to zero on its own.
+  const totalDeployed  = projects.reduce((s,p)=>s+totPayments(p),0);
+  const totalChecksRcv = projects.reduce((s,p)=>s+totReceipts(p),0);
+  const rawNet         = totalDeployed - totalChecksRcv;
+  const outstanding    = Math.max(0, rawNet);
+  // Only JVs actually received (p.jvDate set) — p.jvAmount can exist
+  // ahead of the JV actually landing, so this is the figure that
+  // matches "JVs Received" literally rather than every known JV value.
+  const jvProjects = projects.filter(p=>p.jvDate);
+  const totalJVsValue  = jvProjects.reduce((s,p)=>s+(p.jvAmount||0),0);
+  // Check Pending — total still owed by the government against JVs
+  // already issued: for each project with a JV, whatever's left after
+  // confirmed settlements, summed across all of this contractor's work.
+  const checkPending = jvProjects.reduce((s,p)=>{
+    const settled = (p.settlements||[]).filter(s2=>!isArchived(s2)).reduce((s3,s2)=>s3+s2.amount,0);
+    return s + Math.max(0, (p.jvAmount||0) - settled);
+  },0);
   const ledger = typeof calcContractorLedger==='function' ? calcContractorLedger(c) : {currentOutstanding:0, currentFYInterest:0};
+
+  // Super Admin can edit any headline figure (and reset it to the app's own
+  // calculation). Everyone else always sees the calculation. Figures derived
+  // from others (Outstanding) follow an edit made upstream.
+  if(typeof cxEnsureLoaded==='function') cxEnsureLoaded(c.id);
+  const ef = (key, calc)=> (typeof cxEffective==='function') ? cxEffective(c.id, key, calc) : {value:calc, edited:false, calc};
+  const eDeployed = ef('deployed', totalDeployed);
+  const eJVs      = ef('jvs', totalJVsValue);
+  const eChecks   = ef('checks', totalChecksRcv);
+  const ePending  = ef('pending', checkPending);
+  const eOutst    = ef('outstanding', Math.max(0, eDeployed.value - eChecks.value));
+  const eInterest = ef('interest', ledger.currentFYInterest||0);
 
   el.innerHTML = `
     <div style="margin-bottom:16px">
@@ -130,20 +163,23 @@ function renderContractorProfile(cid){
     <!-- Financial Summary — 3 key figures + outstanding + interest -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
       ${[
-        {l:'💰 Deployed to Contractor',v:fmt(totalDeployed),c:'var(--navy)',
+        {k:'deployed',    e:eDeployed, l:'💰 Deployed to Contractor', c:'var(--navy)',
           sub:'Total funds released so far'},
-        {l:'📋 JVs Received (value)',v:totalJVsValue?fmt(totalJVsValue):'—',c:'#7c3aed',
-          sub:'Sum of all JV amounts'},
-        {l:'✅ Checks Received',v:totalChecksRcv?fmt(totalChecksRcv):'—',c:'var(--green)',
+        {k:'jvs',         e:eJVs,      l:'📋 JVs Received (value)', c:'#7c3aed',
+          sub:'Sum of all JV amounts received'},
+        {k:'checks',      e:eChecks,   l:'✅ Checks Received', c:'var(--green)',
           sub:'Total payment received'},
-        {l:'⏳ Outstanding',v:fmt(outstanding),c:outstanding>0?'var(--red)':'var(--green)',
-          sub:'Deployed minus checks received'},
-        {l:'📈 Interest (this FY)',v:fmt(ledger.currentFYInterest||0),c:'var(--amber)',
-          sub:'Accrued this financial year'},
+        {k:'pending',     e:ePending,  l:'🏦 Check Pending', c:(ePending.value>0?'var(--amber)':'var(--green)'),
+          sub:'Owed by govt. against JVs issued'},
+        {k:'outstanding', e:eOutst,    l:'⏳ Outstanding', c:(eOutst.value>0?'var(--red)':'var(--green)'),
+          sub:'Released minus checks received'},
+        {k:'interest',    e:eInterest, l:'📈 Interest (this FY)', c:'var(--amber)',
+          sub:'Accrued this financial year (app calculation)'},
       ].map(x=>`<div class="card" style="text-align:center;padding:12px;border-top:3px solid ${x.c}">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:700;margin-bottom:4px">${x.l}</div>
-        <div style="font-size:16px;font-weight:800;color:${x.c}">${x.v}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">${x.sub}</div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:700;margin-bottom:4px">${x.l}${x.e.edited?' <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 5px;font-size:9px">EDITED</span>':''}</div>
+        <div style="font-size:16px;font-weight:800;color:${x.c}">${(x.e.value||x.e.edited)?fmt(x.e.value):'—'}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">${x.e.edited?'Calculated: '+fmt(x.e.calc)+(x.e.note?' · '+x.e.note:''):x.sub}</div>
+        ${typeof cxStatControls==='function'?cxStatControls(c.id, x.k, x.l.replace(/^\S+\s/,''), x.e):''}
       </div>`).join('')}
     </div>
 
@@ -160,6 +196,9 @@ function renderContractorProfile(cid){
       </div>`).join('')}
     </div>
 
+    <!-- Tally reconciliation, earlier work, interest by FY (Super Admin only) -->
+    ${typeof renderContractorExtrasBlock==='function'?renderContractorExtrasBlock(c.id, {appNet:rawNet, ledger}):''}
+
     <!-- Expected JVs -->
     ${expectedJVs.length?`
     <div class="card" style="margin-bottom:14px;border-left:4px solid #7c3aed">
@@ -172,13 +211,15 @@ function renderContractorProfile(cid){
       </div>
     </div>`:''}
 
-    <!-- Bills received & GST filing (Super Admin only) -->
-    ${typeof renderContractorBillsSection==='function'?renderContractorBillsSection(c.id):''}
-
     <!-- Projects: Active -->
-    ${renderContractorProjectGroup('🟢 Active Projects', active)}
-    ${renderContractorProjectGroup('⏸ On Hold', onHold)}
-    ${renderContractorProjectGroup('✅ Completed', completed, true)}
+    ${renderContractorProjectGroup('🟢 Active Projects', active, false, 'running')}
+    ${renderContractorProjectGroup('⏸ On Hold', onHold, false, 'running')}
+    ${renderContractorProjectGroup('✅ Completed', completed, true, 'completed')}
+
+    <!-- Bills received & GST filing (Super Admin only) — moved below the
+         project lists so the work itself comes first, financial filing
+         detail after. -->
+    ${typeof renderContractorBillsSection==='function'?renderContractorBillsSection(c.id):''}
 
     <!-- Other Projects (non-RSR personal work) -->
     ${typeof renderContractorPersonalProjects==='function'?renderContractorPersonalProjects(c.id):''}
@@ -186,17 +227,58 @@ function renderContractorProfile(cid){
   if(typeof applyToggleStates==='function') applyToggleStates();
 }
 
-function renderContractorProjectGroup(title, projects, collapsedByDefault){
+// kind 'running': what matters while work is live — agreement, what's been
+// paid out, what's come back, what's still owed, and how much of the 70%
+// cap is used / left. kind 'completed': the finished picture — released vs
+// received side by side, the net of the two, anything still owed, and the
+// JV / EA status, so a closed project can be judged from this table
+// without opening it. Released = gross paid out (not net-of-receipts),
+// Received = confirmed checks; Net = Received − Released.
+function renderContractorProjectGroup(title, projects, collapsedByDefault, kind){
   if(!projects.length) return '';
   const toggleKey = 'contprofile-grp-'+title.replace(/[^a-z]/gi,'');
+  const rowData = projects.map(p=>{
+    const agreement = agAmt(p)||0;
+    const released = totPayments(p);
+    const received = totReceipts(p);
+    const pending = p.jvDate ? Math.max(0,(p.jvAmount||0)-received) : 0;
+    const cap = maxF(p)||0;
+    const capUsed = cap>0 ? Math.min(999, totRel(p)/cap*100) : 0;
+    const capLeft = Math.max(0, cap - totRel(p));
+    const ea = p.eaNumber || (p.documents && p.documents.ea) || '';
+    return {p, agreement, released, received, net: received-released, pending, capUsed, capLeft, ea};
+  });
+  const sum = k=>rowData.reduce((s,r)=>s+(r[k]||0),0);
+  const cols = kind==='completed'
+    ? ['Project','Agreement','Released','Received','Net (Rcvd − Rel)','Check Pending','JV date','EA','Status']
+    : ['Project','Agreement','Released','Received','Check Pending','Cap Used','Cap Left','Status'];
+  const numCols = new Set(['Agreement','Released','Received','Net (Rcvd − Rel)','Check Pending','Cap Left']);
+  const td = (v,extra)=>`<td class="fv" style="text-align:right;${extra||''}">${v}</td>`;
+  const rowHtml = ({p,agreement,released,received,net,pending,capUsed,capLeft,ea})=>{
+    const name = `<td><a href="#project-${p.id}" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td>`;
+    const pendTd = td(pending>0?fmt(pending):'—', pending>0?'color:var(--amber);font-weight:700':'');
+    if(kind==='completed'){
+      return `<tr>${name}${td(agreement?fmt(agreement):'—')}${td(fmt(released))}${td(received?fmt(received):'—')}
+        ${td((released||received)?fmt(net):'—', 'font-weight:700;color:'+(net>=0?'var(--green)':'var(--red)'))}${pendTd}
+        <td style="white-space:nowrap">${p.jvDate?fmtDate(p.jvDate):'—'}</td>
+        <td style="white-space:nowrap">${ea?'✓ '+ea:'<span style="color:var(--text3)">—</span>'}</td>
+        <td>${sBadge(pStat(p),p)}</td></tr>`;
+    }
+    return `<tr>${name}${td(agreement?fmt(agreement):'—')}${td(fmt(released))}${td(received?fmt(received):'—')}${pendTd}
+      <td>${pct(capUsed)}</td>${td(fmt(capLeft))}<td>${sBadge(pStat(p),p)}</td></tr>`;
+  };
+  const totalsRow = kind==='completed'
+    ? `<tr style="background:var(--surface2);font-weight:700"><td>Total (${rowData.length})</td>${td(fmt(sum('agreement')))}${td(fmt(sum('released')))}${td(fmt(sum('received')))}${td(fmt(sum('net')),'color:'+(sum('net')>=0?'var(--green)':'var(--red)'))}${td(sum('pending')?fmt(sum('pending')):'—')}<td colspan="3"></td></tr>`
+    : `<tr style="background:var(--surface2);font-weight:700"><td>Total (${rowData.length})</td>${td(fmt(sum('agreement')))}${td(fmt(sum('released')))}${td(fmt(sum('received')))}${td(sum('pending')?fmt(sum('pending')):'—')}<td></td>${td(fmt(sum('capLeft')))}<td></td></tr>`;
   return `<div class="card" style="margin-bottom:14px">
     <details data-toggle="${toggleKey}" ${collapsedByDefault?'':'open'}>
       <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
         <div class="st" style="margin:0;border:none;padding:0">${title} (${projects.length})</div>
         <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
       </summary>
-      <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Project</th><th>Released</th><th>Verified</th><th>Status</th></tr></thead><tbody>
-        ${projects.map(p=>`<tr><td><a href="#project-${p.id}" onclick="openDetail('${p.id}');return false" style="color:var(--navy);font-weight:700">${p.name}</a></td><td class="fv">${fmt(totRel(p))}</td><td>${pct(verPct(p))}</td><td>${sBadge(pStat(p),p)}</td></tr>`).join('')}
+      <div class="tbl-wrap" style="margin-top:10px"><table style="min-width:${kind==='completed'?'860':'760'}px"><thead><tr>${cols.map(h=>`<th${numCols.has(h)?' style="text-align:right"':''}>${h}</th>`).join('')}</tr></thead><tbody>
+        ${rowData.map(rowHtml).join('')}
+        ${totalsRow}
       </tbody></table></div>
     </details>
   </div>`;

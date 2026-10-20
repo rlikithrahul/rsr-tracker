@@ -368,7 +368,11 @@ function openAddManualGSTBill(editId){
   const editing = editId ? (D.gstManualBills||[]).find(m=>m.id===editId) : null;
   const conts = (D.contractors||[]).filter(c=>!isArchived(c)).sort((a,b)=>a.name.localeCompare(b.name));
   const {year, q} = _gsQuarter;
-  const quarters = getRecentGSTQuarters(16).filter(x=>x.year>=2026);
+  // Deliberately NOT restricted to 2026+ like the main tracked-bills
+  // selector — manual entries exist specifically for older bills from
+  // before this was tracked in the app, so that same restriction here
+  // defeated the entire point of the feature.
+  const quarters = getRecentGSTQuarters(8);
   const curFiler = editing ? gsGetFiler('manual_'+editing.id) : '';
 
   let modal = document.getElementById('modal-gs-manual');
