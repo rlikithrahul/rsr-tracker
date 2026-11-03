@@ -5,9 +5,77 @@
 // Based on project lifecycle stages
 // ═══════════════════════════════════════════════════════
 
+// ─── CUSTOM ORDER (drag to rearrange; one shared order, only Super Admin changes it) ───
+const AC_ORDER_KEY = 'rsr_action_centre_order';
+let _acDragKey = null;
+function acSortDefs(defs){
+  const ord = D.acOrder;
+  if(!Array.isArray(ord) || !ord.length) return defs;
+  const idx = k=>{ const i=ord.indexOf(k); return i<0 ? 100000 : i; };
+  return defs.map((d,i)=>({d,i})).sort((a,b)=> (idx(a.d.key)-idx(b.d.key)) || (a.i-b.i)).map(x=>x.d);
+}
+async function acLoadOrder(){
+  if(D.acOrder!==undefined || D._acLoading) return;
+  D._acLoading = true;
+  try{ const v = await getSetting(AC_ORDER_KEY, []); D.acOrder = Array.isArray(v)?v:[]; }
+  catch(e){ console.error('Action Centre order could not load — default order used', e); D.acOrder = []; }
+  D._acLoading = false;
+  if(document.getElementById('sec-pipeline')) renderPipeline();
+}
+function acArm(on, el){ const c = el.closest('[data-stage]'); if(c) c.draggable = !!on; }
+function acDragStart(ev){ const c = ev.currentTarget; _acDragKey = c.getAttribute('data-stage'); c.style.opacity = '.45'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', _acDragKey); }catch(e){} }
+function acDragOver(ev){
+  if(!_acDragKey) return; ev.preventDefault();
+  const t = ev.currentTarget; if(t.getAttribute('data-stage')===_acDragKey) return;
+  const r = t.getBoundingClientRect(), after = ev.clientY > r.top + r.height/2;
+  t.style.boxShadow = after ? '0 4px 0 0 var(--gold)' : '0 -4px 0 0 var(--gold)';
+  t.setAttribute('data-drop', after?'after':'before');
+}
+function acDragLeave(ev){ ev.currentTarget.style.boxShadow=''; }
+function acDragEnd(ev){ ev.currentTarget.style.opacity=''; ev.currentTarget.draggable=false; document.querySelectorAll('[data-stage]').forEach(c=>c.style.boxShadow=''); _acDragKey=null; }
+async function acDrop(ev){
+  ev.preventDefault();
+  const t = ev.currentTarget, from = _acDragKey, to = t.getAttribute('data-stage'), after = t.getAttribute('data-drop')==='after';
+  document.querySelectorAll('[data-stage]').forEach(c=>c.style.boxShadow='');
+  _acDragKey = null;
+  if(!from || from===to || !CU || !CU.isSuperAdmin) return;
+  const visible = [...document.querySelectorAll('[data-stage]')].map(c=>c.getAttribute('data-stage'));
+  const vis2 = visible.filter(k=>k!==from); const ti = vis2.indexOf(to); if(ti<0) return;
+  vis2.splice(after?ti+1:ti, 0, from);
+  // keep the slots of stages not currently shown (empty ones) where they were
+  const full = (D.acOrder && D.acOrder.length) ? [...D.acOrder] : [];
+  visible.forEach(k=>{ if(!full.includes(k)) full.push(k); });
+  let n = 0; const next = full.map(k=> visible.includes(k) ? vis2[n++] : k);
+  const prev = D.acOrder; D.acOrder = next; renderPipeline();
+  try{ await saveSetting(AC_ORDER_KEY, next); toast('✓ Order saved for everyone','ok'); }
+  catch(e){ console.error(e); D.acOrder = prev; renderPipeline(); toast('Could not save the order — nothing changed','error'); }
+}
+async function acResetOrder(){
+  if(!CU || !CU.isSuperAdmin) return;
+  const ok = await showConfirm({title:'Reset Action Centre order?', message:'Go back to the default order for everyone.', confirmLabel:'Yes, reset'});
+  if(!ok) return;
+  const prev = D.acOrder; D.acOrder = [];
+  try{ await saveSetting(AC_ORDER_KEY, []); renderPipeline(); toast('✓ Default order restored','ok'); }
+  catch(e){ D.acOrder = prev; renderPipeline(); toast('Could not reset — nothing changed','error'); }
+}
+
 function renderPipeline(){
   const el = document.getElementById('sec-pipeline');
   if(!el) return;
+  if(D.acOrder===undefined) acLoadOrder();
+
+  // Work-experience data drives several stages (certificate / quantities).
+  // It is loaded on demand, so wait for it rather than judging every project
+  // as "no quantities" before it has arrived.
+  if(!D.wexData){
+    el.innerHTML = '<div class="wrap"><div class="pg-hdr"><div><div class="pg-title">⚡ Action Centre</div><div style="font-size:12px;color:var(--text3)">Loading work-experience data…</div></div></div></div>';
+    if(!D._wexLoading){
+      D._wexLoading = true;
+      loadWEXData().then(()=>{ D._wexLoading=false; if(D.wexData) renderPipeline(); else el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-text">Could not load work-experience data, so the Action Centre is not shown (to avoid showing wrong lists). <a href="#" onclick="renderPipeline();return false">Try again</a></div></div></div>'; })
+        .catch(e=>{ D._wexLoading=false; console.error(e); el.innerHTML='<div class="wrap"><div class="empty"><div class="empty-text">Could not load work-experience data, so the Action Centre is not shown (to avoid showing wrong lists). <a href="#" onclick="renderPipeline();return false">Try again</a></div></div></div>'; });
+    }
+    return;
+  }
 
   const today = new Date();
   const projects = D.projects.filter(p=>!isArchived(p));
@@ -293,6 +361,8 @@ function renderPipeline(){
     },
   ];
 
+  const stageDefsOrdered = acSortDefs(stageDefs);
+
   // ── COUNT SUMMARY ─────────────────────────────────
   const urgentCount = ['asd_to_apply','wec_to_apply','gst_pending','emd_overdue']
     .reduce((s,k)=>s+stages[k].length, 0);
@@ -341,12 +411,15 @@ function renderPipeline(){
   }
 
   // Each stage
-  stageDefs.forEach(def=>{
+  const _acCan = !!(CU && CU.isSuperAdmin);
+  if(_acCan) html += '<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">↕ Drag a section by its ⠿ handle to put it where you want. The order is saved for everyone. <a href="#" onclick="acResetOrder();return false" style="color:var(--navy)">Reset to default</a></div>';
+  stageDefsOrdered.forEach(def=>{
     const list = stages[def.key];
     if(!list.length) return;
 
-    html += '<div class="card" style="margin-bottom:16px;border-top:3px solid '+def.color+'">'
+    html += '<div class="card" data-stage="'+def.key+'" '+(_acCan?'ondragstart="acDragStart(event)" ondragover="acDragOver(event)" ondragleave="acDragLeave(event)" ondrop="acDrop(event)" ondragend="acDragEnd(event)" ':'')+'style="margin-bottom:16px;border-top:3px solid '+def.color+'">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+      +(_acCan?'<div title="Drag to move this section" onmousedown="acArm(true,this)" onmouseup="acArm(false,this)" ontouchstart="acArm(true,this)" style="cursor:grab;font-size:18px;color:var(--text3);padding:0 4px;user-select:none">⠿</div>':'')
       +'<div style="width:36px;height:36px;border-radius:50%;background:'+def.bg+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+def.icon+'</div>'
       +'<div style="flex:1">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
@@ -457,6 +530,7 @@ function renderPipeline(){
 
 // ─── EXPORT ACTION CENTRE ─────────────────────────────
 async function exportActionCentre(format){
+  try{ await loadWEXData(); }catch(e){ toast('Work-experience data could not load — export stopped so it is not wrong','error'); return; }
   const today = new Date();
   const projects = D.projects.filter(p=>!isArchived(p));
 
@@ -482,6 +556,7 @@ async function exportActionCentre(format){
 
   const stages = {};
   stageDefs.forEach(d=>stages[d.key]=[]);
+  const stageDefsX = acSortDefs(stageDefs);
   if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
 
   projects.forEach(p=>{
@@ -514,7 +589,7 @@ async function exportActionCentre(format){
     const wb=window.XLSX.utils.book_new();
     const rows=[['Action Centre Export — '+new Date().toLocaleDateString('en-IN'),'','','',''],['','','','','']];
     rows.push(['Priority','Stage','Project Name','Contractor','JV Date','JV Amount (₹)','Days Waiting','Firm']);
-    stageDefs.forEach(def=>{
+    stageDefsX.forEach(def=>{
       const list=stages[def.key];
       if(!list.length) return;
       list.sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||'')).forEach(p=>{
@@ -542,7 +617,7 @@ async function exportActionCentre(format){
     const totalActions=stageDefs.reduce((s,d)=>s+stages[d.key].length,0);
 
     let body='';
-    stageDefs.forEach(def=>{
+    stageDefsX.forEach(def=>{
       const list=stages[def.key];
       if(!list.length) return;
       const sorted=list.slice().sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||''));

@@ -33,6 +33,7 @@ async function init() {
 
   try {
     await loadDBSummary();
+    try{ if(typeof loadWEXData==='function') await loadWEXData(); }catch(e){ console.error('Work Experience data did not load at start — Action Centre will retry', e); }
     dbOK = true;
     migrateAllProjects(); // silent schema migration
   } catch(e) {
@@ -68,6 +69,7 @@ function startAutoRefresh(){
     if (!CU || !dbOK || !navigator.onLine) return;
     try {
       await loadDBSummary();
+    try{ if(typeof loadWEXData==='function') await loadWEXData(); }catch(e){ console.error('Work Experience data did not load at start — Action Centre will retry', e); }
       // Re-render current view silently
       if (CU.role === 'owner') {
         if (dpid) renderDetail(dpid);

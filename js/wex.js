@@ -1094,6 +1094,7 @@ function _renderWEXTab(el){
     {key:'peak',   icon:'★', label:'Best FY per Quantity'},
     {key:'find',   icon:'🔎',label:'Find Experience'},
     {key:'findval',icon:'💰',label:'Find by Value'},
+    {key:'potential',icon:'📥',label:'From BOQ (not certified)'},
     {key:'similar',icon:'🏗️',label:'Similar Works Value'},
     {key:'flat',   icon:'📋',label:'All Records (Excel View)'},
   ];
@@ -1126,6 +1127,7 @@ function _renderWEXTab(el){
     ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
     ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
     ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
+    ${_wexTab==='potential'?(typeof renderWexPotential==='function'?renderWexPotential():''):''}
     ${_wexTab==='findval'?(typeof renderWexValueFinder==='function'?renderWexValueFinder():''):''}
     ${_wexTab==='find'?(typeof renderWexFinder==='function'?renderWexFinder():''):''}
     ${_wexTab==='flat'?(records.length?flatHTML:'<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
