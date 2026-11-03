@@ -285,5 +285,5 @@ function _wxfBody(){
   }
 
   return `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Finding experience for <strong>${wxfEsc(m.firm)}</strong> (change the firm above). Quantity-wise requirements — “X of this work, from one financial year”.</div>`
-    + step1 + step2 + step3 + step4;
+    + (typeof wexFlagsBanner==='function'?wexFlagsBanner():'') + step1 + step2 + step3 + step4;
 }

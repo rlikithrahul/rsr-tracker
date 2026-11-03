@@ -137,8 +137,39 @@ function renderPipeline(){
     }
   });
 
+  // Work-experience data gaps (shared with the Find Experience tabs)
+  stages.no_worktype = []; stages.qty_no_cert = [];
+  if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
+
   // ── STAGE DEFINITIONS ────────────────────────────
   const stageDefs = [
+    {
+      key:'no_worktype',
+      icon:'🏷️',
+      title:'Work Type Not Set',
+      color:'#6366f1',
+      bg:'#eef2ff',
+      desc:'These projects have no work type, so the “Find by Value” tender tool and Similar Works cannot place their experience.',
+      action:'Open project → Edit → tick the work type'
+    },
+    {
+      key:'qty_no_cert',
+      icon:'📎',
+      title:'Quantities Entered — Certificate Not Uploaded',
+      color:'#f59e0b',
+      bg:'#fffbeb',
+      desc:'Work-experience quantities are in the app but the certificate file is not uploaded, so these projects cannot go into a tender PDF.',
+      action:'Open project → upload the Work Experience Certificate'
+    },
+    {
+      key:'wex_pending',
+      icon:'🔢',
+      title:'Certificate Uploaded — Quantities Not Entered',
+      color:'#7c3aed',
+      bg:'#f5f3ff',
+      desc:'The certificate is uploaded but no quantities are entered, so the quantity finder cannot count these projects.',
+      action:'Open project → Work Experience → enter quantities from the certificate'
+    },
     {
       key:'completed_no_jv',
       icon:'✅',
@@ -352,6 +383,7 @@ function renderPipeline(){
           const daysSinceJV = Math.round((today-new Date(p.jvDate))/86400000);
           detail = 'JV: '+fmtDate(p.jvDate)+' · Waiting '+daysSinceJV+'d for EA';
         }
+        if(def.key==='no_worktype'||def.key==='qty_no_cert'||def.key==='wex_pending') detail = wexFlagDetail(def.key,p);
         if(def.key==='asd_to_apply') detail = 'ASD: '+fmt(p.asd||0)+' · EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—');
         if(def.key==='wec_to_apply'||def.key==='wec_applied') detail = 'EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—')+(p.wecAppliedDate?' · Applied: '+fmtDate(p.wecAppliedDate):'');
         if(def.key==='payment_pending') detail = 'WEC received: '+(p.wecReceivedDate?fmtDate(p.wecReceivedDate):'—');
@@ -438,7 +470,9 @@ async function exportActionCentre(format){
     {key:'asd_to_apply',  label:'ASD Refund — Apply Now',      priority:'🔴 Urgent'},
     {key:'wec_to_apply',  label:'Apply for WEC',               priority:'🟡 Action Needed'},
     {key:'wec_applied',   label:'WEC Applied — Awaiting',      priority:'🟡 Action Needed'},
-    {key:'wex_pending',   label:'WEX Quantities Not Entered',   priority:'🟡 Action Needed'},
+    {key:'wex_pending',   label:'Certificate Uploaded — Quantities Not Entered',   priority:'🟡 Action Needed'},
+    {key:'qty_no_cert',   label:'Quantities Entered — Certificate Not Uploaded',   priority:'🟡 Action Needed'},
+    {key:'no_worktype',   label:'Work Type Not Set',   priority:'🟡 Action Needed'},
     {key:'payment_pending',label:'Awaiting GVMC Payment',      priority:'🟡 Action Needed'},
     {key:'gst_pending',   label:'GST Filing Pending',          priority:'🟡 Action Needed'},
     {key:'emd_overdue',   label:'EMD/FSD Refund OVERDUE',      priority:'🔴 Urgent'},
@@ -448,6 +482,7 @@ async function exportActionCentre(format){
 
   const stages = {};
   stageDefs.forEach(d=>stages[d.key]=[]);
+  if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
 
   projects.forEach(p=>{
     const hasJV=!!p.jvDate;

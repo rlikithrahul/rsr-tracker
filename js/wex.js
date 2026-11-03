@@ -846,6 +846,7 @@ async function deleteWEXEntry(wexId,pid){
 let _wexTab = 'summary'; // 'summary' | 'peak' | 'similar' | 'flat'
 let _wexFirm = null; // currently-selected firm on the Work Experience page
 let _wexFlatFY = '';
+let _wexSimOpen = '';   // 'FY|worktype' whose projects are shown in Similar Works
 let _wexFlatFirm = '';
 
 async function renderWEX(){
@@ -911,9 +912,10 @@ function _renderWEXTab(el){
 
     if(!byFYWorkType[fy]) byFYWorkType[fy]={};
     workTypes.forEach(wt=>{
-      if(!byFYWorkType[fy][wt]) byFYWorkType[fy][wt]={value:0,count:0};
+      if(!byFYWorkType[fy][wt]) byFYWorkType[fy][wt]={value:0,count:0,items:[]};
       byFYWorkType[fy][wt].value+=r.workValue||0;
       byFYWorkType[fy][wt].count++;
+      byFYWorkType[fy][wt].items.push({projectId:p?p.id:null, name:projectName, contractor:contractorName, genCode:r.genCode||'—', value:r.workValue||0, hasCert:!!(p&&p.documents&&p.documents.wec&&p.documents.wec.url), alsoTypes:workTypes.filter(x=>x!==wt)});
     });
   });
 
@@ -1010,7 +1012,7 @@ function _renderWEXTab(el){
   // ─── SIMILAR WORKS VIEW ───────────────────────────────
   const similarHTML=`<div class="card" style="margin-bottom:14px;border-top:3px solid #7c3aed">
     <div style="font-size:13px;color:#6d28d9;margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border-radius:var(--rs)">
-      🏗️ <strong>Similar Nature of Work — Value per FY</strong> — when a tender asks "similar works value ≥ ₹X in any one FY for this work type", use the highlighted FY for your reference.
+      🏗️ <strong>Similar Nature of Work — Value per FY</strong> — when a tender asks "similar works value ≥ ₹X in any one FY for this work type", use the highlighted FY for your reference. <strong>Click any year’s figure to see the projects behind it.</strong> A project with several work types appears under each (its whole value in each), so type rows can add up to more than the year’s true total — to build a tender selection without double counting, use <em>Find by Value</em>.
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">
       <thead><tr style="background:#7c3aed;color:#fff">
@@ -1024,13 +1026,22 @@ function _renderWEXTab(el){
         const allFYvals=Object.entries(byFYWorkType)
           .filter(([,d])=>d[wt])
           .sort((a,b)=>a[0].localeCompare(b[0]))
-          .map(([fy,d])=>`<span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${fy===peak.fy?'#ede9fe':'var(--surface2)'};color:${fy===peak.fy?'#7c3aed':'var(--text2)'};font-weight:${fy===peak.fy?700:400};margin-right:3px;white-space:nowrap;display:inline-block;margin-bottom:2px">${fy}: ${fmt(d[wt].value)} (${d[wt].count})</span>`).join('');
+          .map(([fy,d])=>{ const open=_wexSimOpen===fy+'|'+wt; return `<span onclick="_wexSimOpen=${open?"''":`'${fy}|${wt.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}'`};_renderWEXTab(document.getElementById('sec-wex'))" title="Click to see which projects make up this figure" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:6px;background:${open?'#7c3aed':fy===peak.fy?'#ede9fe':'var(--surface2)'};color:${open?'#fff':fy===peak.fy?'#7c3aed':'var(--text2)'};font-weight:${fy===peak.fy||open?700:400};margin-right:3px;white-space:nowrap;display:inline-block;margin-bottom:2px;border:1px solid ${open?'#7c3aed':'transparent'}">${fy}: ${fmt(d[wt].value)} (${d[wt].count}) ▾</span>`; }).join('');
+        const openFy=(_wexSimOpen.split('|')[1]===wt)?_wexSimOpen.split('|')[0]:'';
+        const openData=openFy&&byFYWorkType[openFy]&&byFYWorkType[openFy][wt];
+        const detailRow=openData?`<tr style="background:#faf8ff"><td colspan="4" style="padding:8px 16px 12px">
+          <div style="font-size:12px;font-weight:700;color:#6d28d9;margin-bottom:6px">${wt} — FY ${openFy}: ${openData.count} project${openData.count!==1?'s':''}, ${fmt(openData.value)}</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${openData.items.slice().sort((a,b)=>b.value-a.value).map(it=>`<tr style="border-bottom:1px solid var(--surface2)">
+            <td style="padding:4px 8px;${it.projectId?`cursor:pointer;color:var(--navy);font-weight:600" onclick="openDetail('${it.projectId}')`:''}">${it.name}<div style="font-size:10px;color:var(--text3);font-weight:400">${it.genCode} · ${it.contractor}</div></td>
+            <td style="padding:4px 8px;font-size:11px;color:var(--text3)">${it.alsoTypes.length?'also: '+it.alsoTypes.join(', ')+' (value counted in each type)':''}</td>
+            <td style="padding:4px 8px;font-size:11px">${it.hasCert?'📕 certificate':'<span style="color:var(--amber)">no certificate</span>'}</td>
+            <td style="padding:4px 8px;text-align:right;font-weight:800">${fmt(it.value)}</td></tr>`).join('')}</tbody></table></div></td></tr>`:'';
         return `<tr style="border-bottom:1px solid var(--surface2)">
           <td style="padding:8px 12px;font-size:13px;font-weight:700;color:var(--navy)">${wt}</td>
           <td style="padding:8px 12px;text-align:center"><span style="background:#ede9fe;color:#7c3aed;font-size:12px;font-weight:800;padding:3px 12px;border-radius:8px">FY ${peak.fy}</span></td>
           <td style="padding:8px 12px;text-align:right;font-size:15px;font-weight:800;color:#7c3aed">${fmt(peak.value)}</td>
           <td style="padding:8px 12px;line-height:1.8">${allFYvals}</td>
-        </tr>`;
+        </tr>${detailRow}`;
       }).join('')}</tbody>
     </table></div>
   </div>`;
@@ -1082,6 +1093,7 @@ function _renderWEXTab(el){
     {key:'summary',icon:'📊',label:'Annual Summary'},
     {key:'peak',   icon:'★', label:'Best FY per Quantity'},
     {key:'find',   icon:'🔎',label:'Find Experience'},
+    {key:'findval',icon:'💰',label:'Find by Value'},
     {key:'similar',icon:'🏗️',label:'Similar Works Value'},
     {key:'flat',   icon:'📋',label:'All Records (Excel View)'},
   ];
@@ -1114,6 +1126,7 @@ function _renderWEXTab(el){
     ${_wexTab==='summary'?(summaryHTML||'<div class="empty"><div class="empty-icon">📐</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
     ${_wexTab==='peak'?(records.length?peakHTML:'<div class="empty"><div class="empty-icon">★</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
     ${_wexTab==='similar'?(records.length?similarHTML:'<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
+    ${_wexTab==='findval'?(typeof renderWexValueFinder==='function'?renderWexValueFinder():''):''}
     ${_wexTab==='find'?(typeof renderWexFinder==='function'?renderWexFinder():''):''}
     ${_wexTab==='flat'?(records.length?flatHTML:'<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No data yet for this firm.</div></div>'):''}
   </div>`;
