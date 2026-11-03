@@ -60,24 +60,26 @@ function openLetterModal(pid, defaultType){
     </div>
     <div class="fg"><label>JV Amount (₹)</label><input type="number" id="lf-jv" value="${p.jvAmount||''}" oninput="updateLetterPreview('${pid}')"></div>
 
+    <div id="lf-lh-wrap"></div>
+
     <!-- Preview -->
     <div style="background:#fffef0;border:1px solid #e5e0c0;border-radius:var(--rs);padding:16px;margin-top:14px;font-family:'Times New Roman',serif;font-size:13px;line-height:1.9;max-height:320px;overflow-y:auto" id="ltr-preview"></div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;align-items:center;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-right:auto;padding:8px 12px;background:var(--surface2);border-radius:var(--rs);border:1px solid var(--border)">
-        <input type="checkbox" id="lf-letterhead" onchange="updateLetterPreview('${pid}')" style="width:16px;height:16px;cursor:pointer">
-        <span>🖨️ Printing on letterhead <span style="font-size:11px;color:var(--text3)">(adds top space)</span></span>
-      </label>
       <button class="btn" onclick="CM('modal-letters')">Cancel</button>
+      <button class="btn" onclick="printLetter('${pid}')" title="Opens the print dialog — choose “Save as PDF” to get a PDF file">🖨️ Print / PDF</button>
       <button class="btn btn-navy" onclick="downloadLetter('${pid}')">⬇️ Download .docx</button>
     </div>
   </div>`;
 
+  _ltrLH = {key:null, mode:null};
   modal.classList.add('open');
   setTimeout(()=>updateLetterPreview(pid), 100);
 }
 
 // ─── LIVE PREVIEW ─────────────────────────────────────
+let _ltrLH = {key:null, mode:null};   // what the letterhead picker currently shows
+let _ltrLastHTML = '';                // the letter as HTML (used for Print / PDF)
 function updateLetterPreview(pid){
   const p = GP(pid); if(!p) return;
   const type = document.querySelector('input[name="ltr-type"]:checked')?.value||'wec';
@@ -107,15 +109,20 @@ function updateLetterPreview(pid){
     body=`I &nbsp;<b>${firm}</b>&nbsp; have successfully completed the above work and it has been more than two years since the JV date of ${p.jvDate?fmtDate(p.jvDate):'—'}. So, I am requesting You to please arrange the refund of EMD <b>Rs.${fmtINR(p.emd||0)}</b> + FSD <b>Rs.${fmtINR(p.fsd||0)}</b> = Total <b>Rs.${fmtINR(total)}</b> as early as Possible.`;
   }
 
-  const letterhead = document.getElementById('lf-letterhead')?.checked||false;
-
-  // Show letterhead space in preview
-  const topNote = letterhead
-    ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:34px 0;margin-bottom:12px;font-family:sans-serif">[ Letterhead area — ~5cm ]</div>'
+  // letterhead choice (plain / space / digital) for this firm
+  const lhKey = lhKeyFor(firm), lhM = lhMode('lf');
+  const wrap = document.getElementById('lf-lh-wrap');
+  if(wrap && (_ltrLH.key!==lhKey || _ltrLH.mode!==lhM)){
+    _ltrLH = {key:lhKey, mode:lhM};
+    wrap.innerHTML = lhPickerHTML('lf', "updateLetterPreview('"+pid+"')", lhKey, lhM);
+  }
+  const topNote = lhM==='space'
+    ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:34px 0;margin-bottom:12px;font-family:sans-serif">[ Space for your printed letterhead — ~5cm ]</div>'
+    : lhM==='digital'
+    ? '<div style="border:1px dashed var(--gold);background:#fffbeb;text-align:center;color:#92400e;font-size:11px;padding:14px 0;margin-bottom:12px;font-family:sans-serif">[ '+LH_SETS[lhKey].name+' letterhead is added automatically ]</div>'
     : '';
 
-  document.getElementById('ltr-preview').innerHTML = topNote +
-    `<div style="text-align:right">${date}</div>
+  _ltrLastHTML = `<div style="text-align:right">${date}</div>
      <br>To,<br>The Commissioner,<br>G.V.M.C,<br>Visakhapatnam.
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Respected Sir / Madam,
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sub:-- ${subject}
@@ -125,10 +132,20 @@ function updateLetterPreview(pid){
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${body}
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thanking you,
      <br><br><div style="text-align:right">Yours faithfully,<br><br><br><b>${firm}</b></div>`;
+  document.getElementById('ltr-preview').innerHTML = topNote + _ltrLastHTML;
+}
+
+// Print / Save as PDF — same letter, letterhead repeated by lhPrintHTML
+async function printLetter(pid){
+  updateLetterPreview(pid);
+  const firm = document.getElementById('lf-firm')?.value||'';
+  const mode = lhMode('lf'), key = lhKeyFor(firm);
+  const ok = await lhPrintHTML(key, mode, '<div style="font-family:\'Times New Roman\',serif;font-size:12pt;line-height:1.9">'+_ltrLastHTML+'</div>', 'Letter - '+(GP(pid)||{}).name);
+  if(ok) logActivity({category:'project',action:'letter_printed',projectId:pid,projectName:(GP(pid)||{}).name,description:(CU?CU.name:'Admin')+' printed a letter ('+mode+') for '+(GP(pid)||{}).name});
 }
 
 // ─── DOCX GENERATOR (pure XML, no CDN) ───────────────
-function downloadLetter(pid){
+async function downloadLetter(pid){
   const p = GP(pid); if(!p) return;
   const type = document.querySelector('input[name="ltr-type"]:checked')?.value||'wec';
   const firm = document.getElementById('lf-firm')?.value||getFirmDisplay(p);
@@ -164,12 +181,16 @@ function downloadLetter(pid){
   }
 
   // Build XML paragraphs
-  const letterhead = document.getElementById('lf-letterhead')?.checked||false;
-  // 5cm = 2835 twips (was 4cm = 2268 twips, increased by 1cm per request), normal = 1440 twips
-  const topMargin = letterhead ? 2835 : 1440;
+  // plain / space for a printed letterhead / digital letterhead built into the page
+  const mode = lhMode('lf'), lhKey = lhKeyFor(firm);
+  const margins = lhMargins(lhKey, mode);
 
   const xml = buildLetterXML({ firm, date, refs, work, jv, subject, body, extraLines });
-  const docx = buildDOCX(xml, topMargin);
+  const docx = buildDOCX(xml, margins);
+  if(mode==='digital'){
+    try{ docx.letterhead = await lhDocxPackage(lhKey); }
+    catch(e){ console.error(e); toast('Letterhead could not be loaded — nothing was downloaded. '+e.message,'error',7000); return; }
+  }
   triggerDownload(docx, fileName);
 
   // Track download separately from submission — a letter can be
@@ -312,8 +333,8 @@ function buildLetterXML({firm, date, refs, work, jv, subject, body, extraLines})
 }
 
 // ─── DOCX ZIP BUILDER (no library needed) ────────────
-function buildDOCX(bodyXml, topMargin){
-  const top = topMargin||1440;
+function buildDOCX(bodyXml, margins){
+  const mg = (typeof margins==='object' && margins) ? margins : {top:margins||1440,right:1440,bottom:1440,left:1800};
   // 4cm top margin = 2268 twips (1cm = 567 twips)
   const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
@@ -322,8 +343,8 @@ function buildDOCX(bodyXml, topMargin){
 <w:body>
 ${bodyXml}
 <w:sectPr>
-  <w:pgSz w:w="11906" w:h="16838"/>
-  <w:pgMar w:top="${top}" w:right="1440" w:bottom="1440" w:left="1800"/>
+  ##HDR##<w:pgSz w:w="11906" w:h="16838"/>
+  <w:pgMar w:top="${mg.top}" w:right="${mg.right}" w:bottom="${mg.bottom}" w:left="${mg.left}" w:header="0" w:footer="0" w:gutter="0"/>
 </w:sectPr>
 </w:body>
 </w:document>`;
@@ -358,17 +379,30 @@ ${bodyXml}
 </Relationships>`;
 
   // Build ZIP manually using fflate or JSZip if available, else use simple ZIP
-  return { docXml, relsXml, stylesXml, contentTypes, rootRels };
+  return { docXml, relsXml, stylesXml, contentTypes, rootRels };   // letterhead (if any) is added in triggerDownload
 }
 
 function triggerDownload(parts, fileName){
   // Use JSZip if available, otherwise load it
   function doZip(JSZip){
     const zip = new JSZip();
-    zip.file('[Content_Types].xml', parts.contentTypes);
+    let ct = parts.contentTypes, doc = parts.docXml, rels = parts.relsXml;
+    const lh = parts.letterhead;
+    if(lh){
+      ct = ct.replace('<Default Extension="xml"', `<Default Extension="${lh.ext}" ContentType="${lh.mime}"/>\n  <Default Extension="xml"`)
+             .replace('</Types>', '  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>\n</Types>');
+      doc = doc.replace('##HDR##', '<w:headerReference w:type="default" r:id="rId2"/>');
+      rels = rels.replace('</Relationships>', '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>\n</Relationships>');
+      zip.file('word/header1.xml', lh.headerXml);
+      zip.file('word/_rels/header1.xml.rels', lh.headerRels);
+      zip.file(lh.mediaName, lh.mediaBytes);
+    } else {
+      doc = doc.replace('##HDR##', '');
+    }
+    zip.file('[Content_Types].xml', ct);
     zip.file('_rels/.rels', parts.rootRels);
-    zip.file('word/document.xml', parts.docXml);
-    zip.file('word/_rels/document.xml.rels', parts.relsXml);
+    zip.file('word/document.xml', doc);
+    zip.file('word/_rels/document.xml.rels', rels);
     zip.file('word/styles.xml', parts.stylesXml);
     zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'})
       .then(blob=>{
