@@ -1007,6 +1007,7 @@ const SIDEBAR_TABS = [
   {i:14, icon:'✅', label:'Team Tasks'},
   {i:15, icon:'🗄️', label:'Cash Register'},
   {i:17, icon:'📁', label:'Tender Documents'},
+  {i:18, icon:'📒', label:'Tally Live'},
 ];
 
 function buildSidebar(isSuperAdmin){
@@ -1064,7 +1065,7 @@ function ownerTab(i){
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
   // Only switch main tabs (not detail view which is sec-detail)
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds','sec-tasks','sec-cashreg','sec-growthpool','sec-tenderdocs'];
+  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds','sec-tasks','sec-cashreg','sec-growthpool','sec-tenderdocs','sec-tally'];
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[i];
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
@@ -1092,6 +1093,7 @@ function ownerTab(i){
   if(i===15 && typeof renderCashRegister==='function') renderCashRegister();
   if(i===16 && typeof renderGrowthPool==='function') renderGrowthPool();
   if(i===17 && typeof renderTenderDocs==='function') renderTenderDocs();
+  if(i===18 && typeof renderTallyLive==='function') renderTallyLive();
   // Push to browser history + save session
   if(typeof pushTabHistory === 'function') pushTabHistory(i);
   if(typeof saveSessionState === 'function') saveSessionState();
