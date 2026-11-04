@@ -6,6 +6,17 @@
 // ═══════════════════════════════════════════════════════
 
 // ─── CUSTOM ORDER (drag to rearrange; one shared order, only Super Admin changes it) ───
+// Missing-document flags (independent of the lifecycle chain: a project can be in these AND another stage)
+function acHasDoc(p, slot){ const d=p.documents&&p.documents[slot]; return !!d; }
+function acDocFlagStages(projects){
+  const out={no_billform:[], no_workorder:[]};
+  (projects||[]).forEach(p=>{
+    const hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
+    if(hasEA && !acHasDoc(p,'billform')) out.no_billform.push(p);
+    if(p.agreeDate && !acHasDoc(p,'wo')) out.no_workorder.push(p);
+  });
+  return out;
+}
 const AC_ORDER_KEY = 'rsr_action_centre_order';
 let _acDragKey = null;
 function acSortDefs(defs){
@@ -207,10 +218,30 @@ function renderPipeline(){
 
   // Work-experience data gaps (shared with the Find Experience tabs)
   stages.no_worktype = []; stages.qty_no_cert = [];
+  stages.no_billform = []; stages.no_workorder = [];
+  { const df=acDocFlagStages(projects); stages.no_billform=df.no_billform; stages.no_workorder=df.no_workorder; }
   if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
 
   // ── STAGE DEFINITIONS ────────────────────────────
   const stageDefs = [
+    {
+      key:'no_billform',
+      icon:'🧾',
+      title:'EA Number Entered — Bill Form Not Uploaded',
+      color:'#0891b2',
+      bg:'#ecfeff',
+      desc:'EA number is entered but the Bill Form is not uploaded. Find the bill form and upload it in the project’s Documents tab.',
+      action:'Open project → Documents → upload the Bill Form'
+    },
+    {
+      key:'no_workorder',
+      icon:'📄',
+      title:'Agreement Done — Work Order Not Uploaded',
+      color:'#0d9488',
+      bg:'#f0fdfa',
+      desc:'Agreement date is in the project but the Work Order document is not uploaded. Find the work order and upload it.',
+      action:'Open project → Documents → upload the Work Order'
+    },
     {
       key:'no_worktype',
       icon:'🏷️',
@@ -457,6 +488,8 @@ function renderPipeline(){
           detail = 'JV: '+fmtDate(p.jvDate)+' · Waiting '+daysSinceJV+'d for EA';
         }
         if(def.key==='no_worktype'||def.key==='qty_no_cert'||def.key==='wex_pending') detail = wexFlagDetail(def.key,p);
+        if(def.key==='no_billform') detail = 'EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—')+' · Bill Form missing';
+        if(def.key==='no_workorder') detail = 'Agreement: '+fmtDate(p.agreeDate)+(p.tender?' · Tender '+p.tender:'')+' · Work Order missing';
         if(def.key==='asd_to_apply') detail = 'ASD: '+fmt(p.asd||0)+' · EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—');
         if(def.key==='wec_to_apply'||def.key==='wec_applied') detail = 'EA: '+(p.eaNumber||(p.documents&&p.documents.ea)||'—')+(p.wecAppliedDate?' · Applied: '+fmtDate(p.wecAppliedDate):'');
         if(def.key==='payment_pending') detail = 'WEC received: '+(p.wecReceivedDate?fmtDate(p.wecReceivedDate):'—');
@@ -546,6 +579,8 @@ async function exportActionCentre(format){
     {key:'wec_applied',   label:'WEC Applied — Awaiting',      priority:'🟡 Action Needed'},
     {key:'wex_pending',   label:'Certificate Uploaded — Quantities Not Entered',   priority:'🟡 Action Needed'},
     {key:'qty_no_cert',   label:'Quantities Entered — Certificate Not Uploaded',   priority:'🟡 Action Needed'},
+    {key:'no_billform',   label:'EA Entered — Bill Form Not Uploaded',   priority:'🟡 Action Needed'},
+    {key:'no_workorder',  label:'Agreement Done — Work Order Not Uploaded',   priority:'🟡 Action Needed'},
     {key:'no_worktype',   label:'Work Type Not Set',   priority:'🟡 Action Needed'},
     {key:'payment_pending',label:'Awaiting GVMC Payment',      priority:'🟡 Action Needed'},
     {key:'gst_pending',   label:'GST Filing Pending',          priority:'🟡 Action Needed'},
@@ -558,6 +593,7 @@ async function exportActionCentre(format){
   stageDefs.forEach(d=>stages[d.key]=[]);
   const stageDefsX = acSortDefs(stageDefs);
   if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
+  { const df=acDocFlagStages(projects); stages.no_billform=df.no_billform; stages.no_workorder=df.no_workorder; }
 
   projects.forEach(p=>{
     const hasJV=!!p.jvDate;
