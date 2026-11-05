@@ -139,7 +139,7 @@ async function tvProjectFill(id){
   box.innerHTML=`<details data-toggle="tv-${id}" ${attn.length?'open':''}><summary style="cursor:pointer;list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div class="st" style="margin:0;border:none;padding:0">📒 Tally transactions <span style="font-size:11px;font-weight:500;color:var(--text3)">(${t.tx.length} entries · live from Tally${snap.last_sync?' · synced '+new Date(snap.last_sync.finished_at||snap.last_sync.started_at).toLocaleString('en-IN'):''})</span></div>
       ${attn.length?`<span class="badge bg-red">${attn.length} to confirm</span>`:''}<span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span></summary>
-    <div style="margin-top:10px">${attn.length?tvAttentionHtml(p,attn):''}
+    <div style="margin-top:10px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
         ${[['Paid out (Dr)',t.paid],['Received (Cr)',t.received],['Net with RSR',net]].concat(it?[['Interest running (24%)',it.totalInterest],['Principal + interest',it.due]]:[]).map(x=>`<div style="background:var(--surface2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">${x[0]}</div><div style="font-weight:700">₹ ${_tvN(x[1])}</div></div>`).join('')}</div>
       ${shared?`<div class="alert al-amber" style="font-size:12px">Some entries are shared with other projects (same cost centre / ledger). Each project shows an equal share; the full amount is in the second line.</div>`:''}
@@ -148,59 +148,42 @@ async function tvProjectFill(id){
         <td style="text-align:right">${x.amt<0?_tvN(-x.amt):''}${x.sh>1&&x.amt<0?`<div style="font-size:9px;color:var(--text3)">of ${_tvN(-x.full)} ÷ ${x.sh}</div>`:''}</td><td style="text-align:right">${x.amt>0?_tvN(x.amt):''}${x.sh>1&&x.amt>0?`<div style="font-size:9px;color:var(--text3)">of ${_tvN(x.full)} ÷ ${x.sh}</div>`:''}</td></tr>`).join('')}
       <tr style="font-weight:700;background:var(--surface2)"><td colspan="4">Totals</td><td style="text-align:right">${_tvN(t.paid)}</td><td style="text-align:right">${_tvN(t.received)}</td></tr></tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">These numbers come straight from Tally and sit beside the old Fund Releases above; nothing above was changed. Interest here uses Tally entries only.</div></div></details>`;
+  if(typeof rcRender==='function') rcRender(id);
   if(typeof applyToggleStates==='function') applyToggleStates();
 }
 
 // receipts that arrived in Tally after go-live and need Likith's decision
+// receipts linked to a settlement: one settlement can hold several receipts (part-bill instalments), one receipt belongs to one settlement
+function rcGuids(s){ const a=(s.tvGuids||[]).slice(); if(s.tvGuid && !a.includes(s.tvGuid)) a.unshift(s.tvGuid); return a; }
+function rcLinkedMap(p){ const m=new Map(); (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>rcGuids(s).forEach(g=>m.set(g,s))); return m; }
+const RC_BAND = 0.10;   // a receipt within ±10% of the agreement amount is asked about (Final Bill / Part Bill / not a settlement)
 function tvAttention(p,t){
   if(!TV.base) return [];                                            // baseline not frozen yet → flag nothing
-  const known=new Set(TV.base.guids||[]); const sets=(p.settlements||[]).filter(s=>!isArchived(s));
+  const ag=agAmt(p); if(!(ag>0)) return [];
+  if(typeof _tlProjClosed==='function' && _tlProjClosed(p.tender).closed) return [];   // final bill already in: nothing left to ask
+  const known=new Set(TV.base.guids||[]); const lm=rcLinkedMap(p);
   const out=[]; const seen=new Set();
   for(const x of t.tx){ if(x.amt<=0 || known.has(x.g) || seen.has(x.g)) continue; seen.add(x.g);
+    if(Math.abs(x.amt-ag)>ag*RC_BAND) continue;                      // only a receipt near the agreement amount is likely a settlement
     if(_tvDec('r|'+p.tender+'|'+x.g)) continue;
-    if(sets.some(s=>s.tvGuid===x.g)) continue;
+    if(lm.has(x.g)) continue;
     out.push(x); }
   return out;
 }
 function tvAttentionHtml(p,list){
-  const sets=(p.settlements||[]).filter(s=>!isArchived(s)); const manual=sets.filter(s=>!s.tvGuid);
-  const pending=!!p.jvDate && !sets.length;
+  const sets=(p.settlements||[]).filter(s=>!isArchived(s)); const ag=agAmt(p);
   return list.map(x=>{ const k=_tvE(x.g), pid=_tvE(p.id), amt=_tvN(x.amt);
-    let msg, btns='';
-    if(pending){ msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}). This project is <b>check pending</b>. Is this the check received?`;
-      btns=`<button class="btn btn-sm btn-primary" onclick="tvReceiptAdd('${pid}','${k}')">Yes — mark check received</button>`; }
-    else if(manual.length){
-      const sc=manual.map(s=>{ const diff=Math.abs((s.amount||0)-x.amt), days=Math.abs((new Date(x.d)-new Date(s.date))/86400000), tol=Math.max(100,(s.amount||0)*0.02);
-        return {s,diff,days,likely:diff<=tol&&days<=10,close:diff<=Math.max(1000,(s.amount||0)*0.1)&&days<=30}; }).sort((a,b)=>a.diff-b.diff);
-      const best=sc[0]; const tag=best.likely?'✅ <b>Looks like the same money</b> — amount and date are close to your manual settlement.':best.close?'🟡 Close to your manual settlement, but not exact.':'⚠️ Does not closely match any manual settlement you recorded.';
-      msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}). You already recorded a settlement by hand.<br>${tag}${best.diff>0?` Difference from your ₹ ${_tvN(best.s.amount)}: ₹ ${_tvN(best.diff)}, ${Math.round(best.days)} day(s) apart.`:' Exactly the same amount.'}<br>Replace your manual amount with the Tally receipt?`;
-      btns=sc.map(z=>`<button class="btn btn-sm${z.likely?' btn-primary':''}" onclick="tvReceiptReplace('${pid}','${k}','${_tvE(z.s.id)}')">${z.likely?'✓ ':''}Yes — replace my ₹ ${_tvN(z.s.amount)} (${_tvD(z.s.date)})</button>`).join('')+`<button class="btn btn-sm" onclick="tvReceiptAdd('${pid}','${k}')">No — it is a separate, additional receipt</button>`; }
-    else { msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}).`; btns=`<button class="btn btn-sm" onclick="tvReceiptAdd('${pid}','${k}')">Record as a settlement</button>`; }
-    return `<div class="alert al-amber" style="font-size:12px;margin-bottom:8px">${msg}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btns}<button class="btn btn-sm" onclick="tvReceiptIgnore('${pid}','${k}')">Leave it as it is (don't ask again)</button></div></div>`; }).join('');
+    const pct=Math.round(Math.abs(x.amt-ag)/ag*1000)/10;
+    const sc=sets.map(s=>({s,diff:Math.abs((s.amount||0)-x.amt),days:Math.abs((new Date(x.d)-new Date(s.date))/86400000)})).sort((a,b)=>a.diff-b.diff);
+    const msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}) — within ${pct}% of this project's agreement amount (₹ ${_tvN(ag)}). Is it a settlement?`;
+    const link=sc.map((z,i)=>`<button class="btn btn-sm${i===0&&z.diff<=Math.max(1000,(z.s.amount||0)*0.1)&&z.days<=30?' btn-primary':''}" onclick="rcLinkTo('${pid}','${k}','${_tvE(z.s.id)}')">Link to my ${_tvE(z.s.billType||'Final Bill')} ₹ ${_tvN(z.s.amount)} (${_tvD(z.s.date)})</button>`).join('');
+    return `<div class="alert al-amber" style="font-size:12px;margin-bottom:8px">${msg}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn btn-sm btn-primary" onclick="rcRecord('${pid}','${k}','Final Bill')">Yes — Final Bill</button><button class="btn btn-sm" onclick="rcRecord('${pid}','${k}','Part Bill')">Yes — Part Bill</button>${link}<button class="btn btn-sm" onclick="tvReceiptIgnore('${pid}','${k}')">Not a settlement (don't ask again)</button></div></div>`;
+  }).join('');
 }
 function _tvTx(pid,g){ const p=GP(pid); const t=p&&TV.snap&&TV.snap.projects[String(p.tender)]; return {p, x:t&&t.tx.find(y=>y.g===g)}; }
 async function tvReceiptIgnore(pid,g){ const {p}=_tvTx(pid,g); if(!p) return; await tvDecide('r|'+p.tender+'|'+g,'ignored'); tvProjectFill(pid); toast('Left as it is','ok'); }
-async function tvReceiptAdd(pid,g){
-  const {p,x}=_tvTx(pid,g); if(!p||!x) return;
-  if(!confirm(`Record a settlement of ₹ ${_tvN(x.amt)} dated ${_tvD(x.d)} (Tally ${x.t} ${x.n}) on "${p.name}"?`)) return;
-  if(!p.settlements) p.settlements=[];
-  const s={id:uid(),amount:x.amt,date:x.d,mode:'Tally receipt',ref:x.n||'',tallyRef:x.n||'',tvGuid:g,billType:'Final Bill',notes:'Confirmed from Tally receipt'+(x.sh>1?' (equal share of ₹ '+_tvN(x.full)+')':''),recordedAt:new Date().toISOString()};
-  p.settlements.push(s);
-  try{ await saveProjectDB(p,{type:'settlement',amount:x.amt,ref:x.n||'',meta:{mode:'Tally receipt',notes:s.notes,tvGuid:g}});
-    try{ logSettlement(p,x.amt,x.n||'',x.d); }catch(e){}
-    if(typeof registerGrowthPoolCollection==='function'){ try{ await registerGrowthPoolCollection(p,s); }catch(e){} }
-    await tvDecide('r|'+p.tender+'|'+g,'recorded'); renderDetail(pid); toast('Settlement recorded','ok');
-  }catch(e){ p.settlements=p.settlements.filter(z=>z.id!==s.id); toast('Save failed — nothing was changed','error'); }
-}
-async function tvReceiptReplace(pid,g,sid){
-  const {p,x}=_tvTx(pid,g); if(!p||!x) return; const s=(p.settlements||[]).find(z=>z.id===sid); if(!s) return;
-  if(!confirm(`Replace your manual settlement of ₹ ${_tvN(s.amount)} (${_tvD(s.date)}) with the Tally receipt of ₹ ${_tvN(x.amt)} (${_tvD(x.d)}, ${x.t} ${x.n})?\n\nYour old amount is kept in the record as "amountManual".`)) return;
-  const old={amount:s.amount,date:s.date,tallyRef:s.tallyRef,amountManual:s.amountManual,tvGuid:s.tvGuid,tvDate:s.tvDate};
-  if(s.amountManual==null) s.amountManual=s.amount; s.amount=x.amt; s.tvGuid=g; s.tvDate=x.d; s.tallyRef=x.n||s.tallyRef||'';
-  try{ await saveProjectDB(p,{type:'settlement_tally_replace',amount:x.amt,ref:x.n||'',meta:{was:old.amount,tvGuid:g}});
-    await tvDecide('r|'+p.tender+'|'+g,'replaced'); renderDetail(pid); toast('Settlement now matches Tally','ok');
-  }catch(e){ Object.assign(s,old); toast('Save failed — nothing was changed','error'); }
-}
+async function tvReceiptAdd(pid,g){ return rcRecord(pid,g,'Final Bill'); }
+async function tvReceiptReplace(pid,g,sid){ return rcLinkTo(pid,g,sid); }
 
 // ───────── CONTRACTOR PAGE ─────────
 function tvContractorShell(cid){

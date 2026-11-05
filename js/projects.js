@@ -320,7 +320,7 @@ function renderDetail(id){
 
       <!-- Fund Releases -->
       <div class="card">
-        <details data-toggle="funds-${id}">
+        <details data-toggle="funds-${id}" open>
           <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
             <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${relList(p).length} entries${(typeof tvRel==='function'&&tvRel(p))?' · from Tally':''})</span>${(typeof tvSwitchOn==='function'&&tvSwitchOn()&&!(TV.snap&&TV.snap.projects&&TV.snap.projects[String(p.tender)]))?' <span style="font-size:11px;color:var(--amber);font-weight:600">· not linked to Tally — link it in Tally Live to see payments</span>':''}</div>
             <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
@@ -380,7 +380,7 @@ function renderDetail(id){
     <!-- Site Documents uploaded by contractor -->
     ${(p.siteDocuments&&p.siteDocuments.filter(d=>!isArchived(d)).length>0)?`
     <div class="card" style="margin-bottom:14px">
-      <details data-toggle="admin-sitedocs-${id}">
+      <details data-toggle="admin-sitedocs-${id}" open>
         <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px">
           <div class="st" style="margin:0;border:none;padding:0">📁 Contractor Site Documents (${p.siteDocuments.filter(d=>!isArchived(d)).length})</div>
           <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>

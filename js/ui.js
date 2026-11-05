@@ -114,7 +114,9 @@ function renderDash(){
   const active = allProjects.filter(p=>(p.status||'active')==='active');
   const cap = allProjects.reduce((s,p)=>s+totRel(p),0);
   const settled = allProjects.reduce((s,p)=>s+(p.settlements||[]).filter(x=>!isArchived(x)).reduce((a,x)=>a+x.amount,0),0);
-  const at = allProjects.filter(p=>getProjectAlerts(p).some(a=>a.type='red'||a.type==='amber')).length;
+  const _attnIds = new Set(getAllAlerts().filter(a=>a.type==='red'||a.type==='amber').map(a=>a.projectId));
+  const at = allProjects.filter(p=>_attnIds.has(p.id)).length;
+  const onHoldN = allProjects.filter(p=>(p.status||'active')==='onhold').length;
   const pendingUpd = allProjects.reduce((s,p)=>s+(p.contractorUpdates||[]).filter(u=>!u.reviewed&&!isArchived(u)).length,0);
   const totalAgreement = active.reduce((s,p)=>s+agAmt(p),0);
   const allAlerts = getAllAlerts();
@@ -133,7 +135,7 @@ function renderDash(){
   const importColor = !lastImport?'var(--red)':Math.round((new Date()-new Date(lastImport))/86400000)>3?'var(--amber)':'var(--green)';
 
   document.getElementById('dash-stats').innerHTML=`
-    <div class="stat"><div class="stat-lbl">Active Projects</div><div class="stat-val">${active.length}</div><div class="stat-sub">${fmt(totalAgreement)} value</div></div>
+    <div class="stat" style="cursor:pointer" onclick="dashGoStatus('active')"><div class="stat-lbl">Active Projects</div><div class="stat-val">${active.length}</div><div class="stat-sub">${fmt(totalAgreement)} value</div><div class="stat-sub" style="margin-top:3px"><span style="text-decoration:underline" onclick="event.stopPropagation();dashGoStatus('onhold')">${onHoldN} on hold</span> · <span style="text-decoration:underline;color:${at>0?'var(--red)':'inherit'}" onclick="event.stopPropagation();showAllAlerts()">${at} need attention</span></div></div>
     <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
     <div class="stat" style="cursor:pointer" onclick="dashGoTo('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to view':'all clear'}</div></div>
     <div class="stat" style="cursor:pointer" onclick="showAllAlerts()"><div class="stat-lbl">Alerts</div><div class="stat-val" style="color:${allAlerts.length>0?'var(--red)':'var(--green)'}">${allAlerts.length}</div><div class="stat-sub">${allAlerts.length>0?'tap to view':'all clear'}</div></div>`;
@@ -143,26 +145,6 @@ function renderDash(){
 
   // Main dashboard body — left column
   document.getElementById('dash-cards').innerHTML=`
-    <!-- Quick Access -->
-    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Quick Access</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px">
-      <button onclick="dashGoTo('attn')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
-        <div style="font-size:18px;margin-bottom:4px">⚠️</div>
-        <div style="font-size:11px;font-weight:700;color:var(--red)">Needs Attention</div>
-        <div style="font-size:13px;font-weight:800;color:var(--red)">${at}</div>
-      </button>
-      <button onclick="dashGoTo('active')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
-        <div style="font-size:18px;margin-bottom:4px">🏗️</div>
-        <div style="font-size:11px;font-weight:700;color:var(--navy)">Active</div>
-        <div style="font-size:13px;font-weight:800;color:var(--navy)">${active.length}</div>
-      </button>
-      <button onclick="dashGoTo('onhold')" style="padding:12px 8px;background:#fff;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;font-family:'Inter',sans-serif;text-align:center">
-        <div style="font-size:18px;margin-bottom:4px">⏸</div>
-        <div style="font-size:11px;font-weight:700;color:var(--text2)">On Hold</div>
-        <div style="font-size:13px;font-weight:800;color:var(--text2)">${allProjects.filter(p=>(p.status||'active')==='onhold').length}</div>
-      </button>
-    </div>
-
     <div id="dash-tasks-section"></div>
     <div id="dash-jv-section"></div>
     <div id="dash-jv-tracker"></div>
@@ -544,6 +526,11 @@ function showJVMonthDetail(monthKey, monthLabel){
 }
 
 
+function dashGoStatus(st){
+  ownerTab(1);
+  const f=document.getElementById('proj-status-filter');
+  if(f){ f.value=st; if(typeof renderProjects==='function') renderProjects(); }
+}
 function dashGoTo(filter){
   dashFilter = filter;
   ownerTab(1);

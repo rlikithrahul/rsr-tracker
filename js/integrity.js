@@ -22,15 +22,17 @@ async function runSystemChecks(){
     { id:'r2doc', label:'R2 document storage reachable',fn: checkR2Docs },
     { id:'cap',   label:'70% cap calculation correct',  fn: checkCapCalc },
     { id:'intr',  label:'Interest calculation correct', fn: checkInterestCalc },
-    { id:'cc',    label:'Active projects have Cost Centre set', fn: checkCostCentres },
-    { id:'dup',   label:'No duplicate voucher numbers in Tally imports', fn: checkDuplicates },
+    { id:'tlink', label:'Active projects are linked to Tally', fn: checkTallyLinks },
+    { id:'tsync', label:'Tally sync', fn: checkTallySync },
+    { id:'setrec',label:'Settlements without a linked Tally receipt', fn: checkSettlementsNoReceipt },
+    { id:'cled',  label:'Contractors with a Tally ledger', fn: checkContractorsNoLedger },
     { id:'queue', label:'Offline queue empty or syncable', fn: checkOfflineQueue2 },
     { id:'data',  label:'Active projects have contractor + BOQ set', fn: checkProjectIntegrity },
   ];
 
   const results = [];
   for(const check of checks){
-    const result = { label: check.label, status: 'running' };
+    const result = { label: check.label, status: 'running', fn: check.fn };
     results.push(result);
     renderHealthResults(results, body);
     try {
@@ -41,6 +43,7 @@ async function runSystemChecks(){
       result.clickAction = r.clickAction || null;
       result.clickIds = r.clickIds || [];
       result.dupeDetail = r.dupeDetail || null;
+      result.items = r.items || []; result.ignored = r.ignored || [];
     } catch(e){
       result.status = 'fail';
       result.detail = e.message;
@@ -76,6 +79,8 @@ function renderHealthResults(results, container){
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:${colors[r.status]}">${r.label}</div>
           ${r.detail?`<div style="font-size:12px;color:var(--text3);margin-top:2px;${r.clickable?'cursor:pointer;text-decoration:underline;color:var(--navy)':''}" ${r.clickable?`onclick="handleHealthCheckClick(${i})"`:''}>${r.detail}${r.clickable?' <span style="font-size:10px">→ click to view</span>':''}</div>`:''}
+          ${(r.items&&r.items.length)?`<div style="margin-top:6px">${r.items.map(it=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;font-size:12px"><span style="${it.pid?'cursor:pointer;text-decoration:underline;color:var(--navy)':''}" ${it.pid?`onclick="CM('modal-health');openDetail('${it.pid}')"`:''}>${it.label}</span><button class="btn btn-sm" onclick="hcIgnore(${i},'${it.key}')">Ignore</button></div>`).join('')}<div style="margin-top:6px"><button class="btn btn-sm" onclick="hcIgnoreAll(${i})">Mark all of these as OK</button></div></div>`:''}
+          ${(r.ignored&&r.ignored.length)?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--text3)">${r.ignored.length} marked as OK (hidden)</summary>${r.ignored.map(it=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:3px 0;font-size:12px;color:var(--text3)"><span>${it.label}</span><button class="btn btn-sm" onclick="hcUndo(${i},'${it.key}')">Undo</button></div>`).join('')}</details>`:''}
         </div>
       </div>`).join('')}`;
   // Re-attach summary after re-render
@@ -147,11 +152,62 @@ async function checkInterestCalc(){
   return { pass:ok, detail: ok ? `✓ Interest ${Math.round(r.totalInterest)} (expected ${Math.round(expected)})` : `Got ${Math.round(r.totalInterest)}, expected ~${Math.round(expected)}` };
 }
 
-async function checkCostCentres(){
-  const active = D.projects.filter(p=>projStatus(p)==='active');
-  const missing = active.filter(p=>!p.costCentre || !p.costCentre.trim());
-  if(missing.length===0) return { pass:true, detail:`All ${active.length} active projects have Cost Centre set` };
-  return { pass:false, detail:`${missing.length} active project(s) missing Cost Centre: ${missing.map(p=>p.name).join(', ')}`, clickable:true, clickAction:'missingCostCentre', clickIds: missing.map(p=>p.id) };
+// ─── Tally-era checks ────────────────────────────────
+// Items a check lists can be marked "OK" by Likith (Ignore) so they never nag again; they stay listed under "marked as OK" with an Undo.
+function _hcIgn(key){ const d=(typeof _tvDec==='function')?_tvDec('h|'+key):null; return !!d && d.action==='ignored'; }
+function _hcSplit(all){ return { items: all.filter(x=>!_hcIgn(x.key)), ignored: all.filter(x=>_hcIgn(x.key)) }; }
+async function _hcDecideMany(keys,action){
+  const at=new Date().toISOString(), by=(CU&&CU.name)||'';
+  const ids=new Set(keys.map(k=>'h|'+k));
+  TV.dec=(TV.dec||[]).filter(x=>!ids.has(x.id)).concat(keys.map(k=>({id:'h|'+k,action,by,at})));
+  TV.dec=await mergeAndSaveSetting(TV_DEC_KEY,TV.dec,true);
+}
+async function hcIgnore(i,key){ await hcApply(i,[key],'ignored'); }
+async function hcUndo(i,key){ await hcApply(i,[key],'unignored'); }
+async function hcIgnoreAll(i){ const r=(window._lastHealthResults||[])[i]; if(!r||!r.items) return;
+  if(!confirm('Mark all '+r.items.length+' listed items as OK? They will stop showing here (you can undo any of them).')) return;
+  await hcApply(i,r.items.map(x=>x.key),'ignored'); }
+async function hcApply(i,keys,action){
+  const list=window._lastHealthResults||[]; const r=list[i]; if(!r) return;
+  try{ await _hcDecideMany(keys,action); }catch(e){ toast('Could not save: '+e.message,'error'); return; }
+  r.status='running'; renderHealthResults(list,document.getElementById('health-body'));
+  try{ const n=await r.fn(); r.status=n.pass?'pass':'warn'; r.detail=n.detail||''; r.items=n.items||[]; r.ignored=n.ignored||[]; r.clickable=n.clickable||false; r.clickIds=n.clickIds||[]; }catch(e){ r.status='fail'; r.detail=e.message; }
+  renderHealthResults(list,document.getElementById('health-body'));
+}
+async function checkTallyLinks(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'Tally numbers could not be loaded, so links cannot be checked ('+(TV.err||'no data')+')' };
+  const all=D.projects.filter(p=>!isArchived(p)&&projStatus(p)==='active'&&!snap.projects[String(p.tender)]).map(p=>({key:'p|'+p.id,label:p.name+' (#'+p.tender+')',pid:p.id}));
+  const {items,ignored}=_hcSplit(all);
+  if(!items.length) return { pass:true, detail:'Every active project is linked to Tally'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
+  return { pass:false, detail:items.length+' active project'+(items.length>1?'s are':' is')+' not linked to a Tally cost centre — it shows no payments until linked (Tally Live → Needs linking):', items, ignored };
+}
+async function checkTallySync(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'No Tally data is available ('+(TV.err||'not loaded')+')' };
+  const ls=snap.last_sync&&(snap.last_sync.finished_at||snap.last_sync.started_at);
+  if(!ls) return { pass:false, detail:'Tally sync has never completed' };
+  const days=Math.floor((Date.now()-new Date(ls).getTime())/86400000);
+  const when=new Date(ls).toLocaleString('en-IN');
+  return days>7 ? { pass:false, detail:'Last Tally sync was '+days+' days ago ('+when+'). Open Tally on the office PC.' } : { pass:true, detail:'Last Tally sync: '+when+(days>0?' ('+days+' day'+(days>1?'s':'')+' ago — fine if Tally was not opened)':'') };
+}
+async function checkSettlementsNoReceipt(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'Tally numbers could not be loaded' };
+  const all=[]; D.projects.filter(p=>!isArchived(p)&&snap.projects[String(p.tender)]).forEach(p=>{
+    (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{ if(!rcGuids(s).length) all.push({key:'s|'+s.id,label:p.name+' — '+(s.billType||'Final Bill')+' '+fmt(s.amount)+' ('+s.date+')',pid:p.id}); }); });
+  const {items,ignored}=_hcSplit(all);
+  if(!items.length) return { pass:true, detail:'Every settlement has its Tally receipt linked'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
+  return { pass:false, detail:items.length+' settlement'+(items.length>1?'s have':' has')+' no Tally receipt linked (normal for settlements recorded before Tally). Open the project → Receipts from Tally → Link, or mark as OK:', items, ignored };
+}
+async function checkContractorsNoLedger(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'Tally numbers could not be loaded' };
+  const used=new Set(D.projects.filter(p=>!isArchived(p)&&p.contractorId).map(p=>p.contractorId));
+  const all=D.contractors.filter(c=>used.has(c.id)&&!(snap.contractors&&snap.contractors[c.name])).map(c=>({key:'c|'+c.id,label:c.name}));
+  const {items,ignored}=_hcSplit(all);
+  if(!items.length) return { pass:true, detail:'Every contractor with a project has a Tally ledger'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
+  return { pass:false, detail:items.length+' contractor'+(items.length>1?'s have':' has')+' no Tally ledger linked (Tally Live → Linking):', items, ignored };
 }
 
 async function checkDuplicates(){

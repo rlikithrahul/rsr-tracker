@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════════════════════
 const APP_BUILD_DATE = '5 Nov 2026';
 const APP_CHANGELOG = [
+  ['v27q','Receipts from Tally on every project: Link / Unlink to settlements (one settlement can take several receipts, one receipt only one settlement); a receipt within 10% of the agreement amount asks Final Bill / Part Bill at the top of the project page; paise differences take the Tally amount, bigger ones ask. Health check rebuilt for Tally (links, last sync, settlements without receipts, contractor ledgers) with Ignore / Undo. Quick Access row replaced by on-hold / need-attention counts under Active Projects. Fund Releases and Site Documents open by default. Needs-attention count fixed.'],
+  ['v27p','Alerts clean-up: duplicate-voucher alert and health check removed (Excel imports are gone), no 70% cap alerts for settled / final-bill projects, alerts use Tally numbers. Fix Tally Dates button removed. Mobile menu points to Tally Live.'],
   ['v27o','Tally is now the only source of payments and receipts for owner and staff: Excel-imported entries stay stored but are never shown, and projects not linked to Tally show nothing (with a link prompt). The last synced Tally numbers are kept if a refresh fails. The Use Tally numbers switch is retired. Settlements, statuses and part bills untouched.'],
   ['v27n','Full code check done. Old interest calculator file removed (nothing used it any more). Contractor profile page fix from v27m included.'],
   ['v27m','Fix: contractor profile page not opening after v27l (a leftover reference to the old interest calculation). The per-year interest table now uses the Tally ledger.'],

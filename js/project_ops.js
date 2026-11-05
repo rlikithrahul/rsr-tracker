@@ -700,7 +700,7 @@ let _settleAvailableReceipts = [];
 // (the Excel-imported receipts are hidden); otherwise from the Excel/Tally-import entries as before. Already-used ones are left out.
 function settleReceiptsFor(p){
   const used=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>String(s.tallyRef)));
-  const usedG=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tvGuid).map(s=>s.tvGuid));
+  const usedG=new Set(); (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{ (typeof rcGuids==='function'?rcGuids(s):(s.tvGuid?[s.tvGuid]:[])).forEach(g=>usedG.add(g)); });
   try{
     if(typeof tvSwitchOn==='function' && tvSwitchOn()){
       const t=TV.snap&&TV.snap.projects&&TV.snap.projects[String(p.tender)];
