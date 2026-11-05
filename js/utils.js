@@ -144,6 +144,7 @@ function showErr(msg){ const e=document.getElementById('lerr'); e.textContent=ms
 function projStatus(p){ return p.status || 'active'; }
 function statusBadge(p){
   const s = projStatus(p);
+  if(s==='settled')   return '<span class="badge status-completed">💰 Settled</span>';
   if(s==='completed') return '<span class="badge status-completed">✓ Completed</span>';
   if(s==='onhold')    return '<span class="badge status-onhold">⏸ On Hold</span>';
   return ''; // active = no badge, just use cap badge

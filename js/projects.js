@@ -153,7 +153,7 @@ function renderDetail(id){
     const billBadge = s.billType && s.billType!=='Final Bill'
       ? `<span style="font-size:10px;background:#7c3aed;color:#fff;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:4px">${s.billType}</span>`
       : '';
-    return `<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} ${s.notes?'· '+s.notes:''} ${billBadge}</span><div style="display:flex;align-items:center;gap:10px"><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`;
+    return `<div class="settle-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🏦 ${s.date} · ${s.mode||''} ${s.ref?'· '+s.ref:''} ${s.notes?'· '+s.notes:''} ${billBadge}</span><div style="display:flex;align-items:center;gap:10px"><select title="Change bill type (Part Bill / Final Bill)" onchange="setSettlementBillType('${id}','${s.id}',this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:6px">${['Final Bill','Part Bill 1','Part Bill 2','Part Bill 3','RA Bill','Other'].map(o=>`<option ${(s.billType||'Final Bill')===o?'selected':''}>${o}</option>`).join('')}</select><strong style="color:var(--green)">${fmt(s.amount)}</strong><button onclick="deleteSettlement('${id}','${s.id}')" title="Remove this settlement" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 4px">🗑️</button></div></div>`;
   }).join('');
 
   const verLog=(p.verifications||[]).slice().reverse().map(v=>`
@@ -262,7 +262,10 @@ function renderDetail(id){
           <div class="amenu" id="pdm-${p.id}">
             <button class="amenu-item" onclick="openSettle('${p.id}')">🏦 Record Settlement</button>
             <button class="amenu-item" onclick="openExpectedJVMenu('${p.id}')">📅 Expected JV</button>
-            <button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>
+            ${(p.status||'active')!=='active'?`<button class="amenu-item" style="color:var(--green)" onclick="changeProjectStatus('${p.id}','active')">▶ Mark Active (re-open)</button>`:''}
+            ${(p.status||'active')!=='onhold'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','onhold')">⏸ Mark On Hold</button>`:''}
+            ${(p.status||'active')!=='completed'?`<button class="amenu-item" onclick="changeProjectStatus('${p.id}','completed')">✓ Mark Completed</button>`:''}
+            ${(p.status||'active')!=='settled'?`<button class="amenu-item" style="color:var(--green);font-weight:700" onclick="changeProjectStatus('${p.id}','settled')">💰 Mark Settled (final payment received)</button>`:''}
             <button class="amenu-item danger" onclick="deleteProject('${p.id}')">📦 Archive</button>
           </div></div>
         </div>

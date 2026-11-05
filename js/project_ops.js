@@ -655,8 +655,7 @@ function openSettle(pid){
   const outstanding=Math.max(0,net-settled);
 
   // Build receipt transaction list from Tally imports for this project (not yet used as settlement)
-  const usedRefs=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>s.tallyRef));
-  const availableReceipts=(p.releases||[]).filter(r=>r.txType==='receipt'&&!usedRefs.has(r.ref)&&!isArchived(r));
+  const availableReceipts=settleReceiptsFor(p);
 
   const txOptions=availableReceipts.length
     ? availableReceipts.map((r,i)=>`<option value="${i}">${r.date} · Vch #${r.ref||'—'} · ${fmt(r.amount)}${r.notes?' · '+r.notes:''}</option>`).join('')
@@ -668,7 +667,7 @@ function openSettle(pid){
   // with the attribute's double quotes, which is every single time (JSON
   // always uses double quotes), silently truncating the handler and
   // making the dropdown appear to do nothing when a transaction is picked.
-  _settleAvailableReceipts = availableReceipts.map(r=>({ref:r.ref,amount:r.amount,date:r.date,notes:r.notes||''}));
+  _settleAvailableReceipts = availableReceipts.map(r=>({ref:r.ref,amount:r.amount,date:r.date,notes:r.notes||'',tvGuid:r.tvGuid||null}));
 
   document.getElementById('settle-summary').innerHTML=`
     <div class="calc" style="margin-bottom:14px">
@@ -680,14 +679,14 @@ function openSettle(pid){
     </div>
     ${availableReceipts.length?`
     <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:10px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:6px">📥 Select from Tally Receipt Transactions</div>
+      <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:6px">📥 Select from Tally receipt transactions${(typeof tvRel==='function'&&tvRel(p))?' <span style="font-weight:500;color:var(--text3)">(Tally Live)</span>':''}</div>
       <select id="settle-tx-select" onchange="prefillSettleFromTx()" style="width:100%;padding:7px;border:1px solid #a5d6a7;border-radius:var(--rs);font-family:'Inter',sans-serif;font-size:12px">
         <option value="">— Select a Tally receipt transaction —</option>
         ${txOptions}
       </select>
       <div style="font-size:11px;color:#2e7d32;margin-top:4px">Selecting a transaction auto-fills amount, date and reference below.</div>
     </div>`
-    :'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">ℹ️ No unmatched Tally receipts found — enter settlement details manually or import from Tally first.</div>'}`;
+    :'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">ℹ️ No unmatched Tally receipts found for this project — enter the details manually (or link the cost centre / ledger in Tally Live → Linking).</div>'}`;
 
   document.getElementById('settle-amt').value='';
   document.getElementById('settle-date').value=new Date().toISOString().split('T')[0];
@@ -697,6 +696,21 @@ function openSettle(pid){
 }
 
 let _settleAvailableReceipts = [];
+// Receipts the user can pick when settling. With "Use Tally numbers" ON and the project linked, these come from TALLY LIVE
+// (the Excel-imported receipts are hidden); otherwise from the Excel/Tally-import entries as before. Already-used ones are left out.
+function settleReceiptsFor(p){
+  const used=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>String(s.tallyRef)));
+  const usedG=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tvGuid).map(s=>s.tvGuid));
+  try{
+    if(typeof tvRel==='function' && tvRel(p)){
+      const t=TV.snap.projects[String(p.tender)];
+      return (t.tx||[]).filter(x=>x.amt>0 && !usedG.has(x.g) && !used.has(String(x.n||'')))
+        .map(x=>({id:'tv-'+x.g,date:x.d,amount:x.amt,ref:x.n||'',notes:(x.nar||'')+(x.sh>1?' (equal share of ₹ '+Number(x.full).toLocaleString('en-IN')+')':''),tvGuid:x.g,source:'tally-live'}))
+        .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    }
+  }catch(e){ console.warn('settleReceiptsFor',e); }
+  return (p.releases||[]).filter(r=>r.txType==='receipt'&&!used.has(String(r.ref))&&!isArchived(r)&&!(r.source==='settlement'));
+}
 function prefillSettleFromTx(){
   const sel=document.getElementById('settle-tx-select');
   if(!sel||sel.value==='') return;
@@ -735,6 +749,7 @@ async function confirmSettle(){
     mode:document.getElementById('settle-mode').value,
     ref,
     tallyRef,
+    tvGuid: (sel&&sel.value!==''&&_settleAvailableReceipts[parseInt(sel.value)]) ? (_settleAvailableReceipts[parseInt(sel.value)].tvGuid||undefined) : undefined,
     billType,
     notes:document.getElementById('settle-notes').value,
     recordedAt:new Date().toISOString()
@@ -758,13 +773,14 @@ async function confirmSettle(){
 // ─── PROJECT STATUS CHANGE ────────────────────────────
 async function changeProjectStatus(pid, newStatus){
   const p = GP(pid); if(!p) return;
-  const labels = {active:'Active',onhold:'On Hold',completed:'Completed'};
+  const labels = {active:'Active',onhold:'On Hold',completed:'Completed',settled:'Settled (final payment received)'};
   if(!confirm(`Change project status to "${labels[newStatus]}"?`)) return;
+  const oldStatus = p.status||'active';
   p.status = newStatus;
   p.statusChangedAt = new Date().toISOString();
   p.statusChangedBy = CU.name;
   try {
-    await saveProjectDB(p, {type:'status_change', amount:0, ref:null, meta:{newStatus, oldStatus: p.status}});
+    await saveProjectDB(p, {type:'status_change', amount:0, ref:null, meta:{newStatus, oldStatus}});
     toast(`✓ Project marked as ${labels[newStatus]}`, 'ok');
     writeActivityLog('status_change', `${p.name} → ${labels[newStatus]}`, p.id).catch(()=>{});
     if(dpid===pid) renderDetail(pid);
@@ -1135,12 +1151,7 @@ function detectSettlementCandidates(p){
   const ignoredRefs = new Set((p.ignoredSettlementRefs||[]));
 
   // Get unmatched receipt transactions
-  const receipts = (p.releases||[]).filter(r=>
-    r.txType==='receipt' &&
-    !isArchived(r) &&
-    !usedRefs.has(r.ref) &&
-    !ignoredRefs.has(r.id||r.ref)
-  );
+  const receipts = settleReceiptsFor(p).filter(r=>!ignoredRefs.has(r.id||r.ref));
 
   if(!receipts.length) return [];
 
@@ -1214,8 +1225,9 @@ function renderSettlementDetectionBanner(p){
 async function quickSettleFromDetection(pid, rid, amount, date, ref){
   const p = GP(pid); if(!p) return;
   if(!p.settlements) p.settlements = [];
+  const _c=(settleReceiptsFor(p).find(r=>(r.id||r.ref)===rid)||{});
   p.settlements.push({
-    id: uid(), date, amount,
+    id: uid(), date, amount, tvGuid: _c.tvGuid||undefined,
     mode: 'Bank Transfer', ref: ref||'',
     notes: 'Auto-detected from Tally receipt',
     tallyRef: ref||'',
@@ -1549,3 +1561,24 @@ function exportBOQPDF(pid, action){
   }
 }
 
+
+
+// Change the bill type of a recorded settlement (e.g. Part Bill 1 -> Final Bill). Nothing is deleted; amounts stay as recorded.
+async function setSettlementBillType(pid, sid, type){
+  const p=GP(pid); if(!p) return; const s=(p.settlements||[]).find(x=>x.id===sid); if(!s) return;
+  const old=s.billType||'Final Bill'; if(old===type) return;
+  s.billType=type;
+  try{
+    await saveProjectDB(p,{type:'settlement_billtype',amount:s.amount,ref:s.ref,meta:{settlementId:sid,from:old,to:type}});
+    toast('Bill type changed to '+type,'ok');
+    if(type==='Final Bill' && (p.status||'active')!=='settled' && confirm('This is the full and final payment.\n\nAlso mark the project as SETTLED? (Still fundable becomes 0 for it.)')){
+      await changeProjectStatusQuiet(p,'settled');
+    }
+    renderDetail(pid);
+  }catch(e){ s.billType=old; toast('Save failed','error'); renderDetail(pid); }
+}
+async function changeProjectStatusQuiet(p,newStatus){
+  const oldStatus=p.status||'active'; p.status=newStatus; p.statusChangedAt=new Date().toISOString(); p.statusChangedBy=CU.name;
+  await saveProjectDB(p,{type:'status_change',amount:0,ref:null,meta:{newStatus,oldStatus}});
+  writeActivityLog('status_change',`${p.name} → ${newStatus}`,p.id).catch(()=>{});
+}

@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════
 const APP_BUILD_DATE = '5 Nov 2026';
 const APP_CHANGELOG = [
-  ['v27f','Cost Centres: Still fundable is now 0 only for settled / final-bill works (completed-but-unsettled keeps its headroom) (part-bill works keep the 70% calculation); new State column in screen, Excel and PDF'],
+  ['v27f','Cost Centres: Still fundable now follows the project page maths (settled = 0, part bill = 70% of unbilled amount, else 70% minus net deployed) with a State column · Settle picks receipts from Tally Live (not Excel) when the switch is on · mark a project Settled / Active / Completed from the ⋮ menu · change a settlement between Part Bill and Final Bill'],
   ['v27e','Staff access control (per-person dashboards, Tally Live own password, access requests) · multi-select quick filters on Projects · About panel · Excel/PDF downloads (statements, interest sheet, cost-centre summary) · Project Report PDF · receipt-vs-settlement hints'],
   ['v27d','"Use Tally numbers" switch: linked projects use Tally payments, Excel entries hidden (not deleted)'],
   ['v27c','Tally numbers inside Projects and Contractors · Interest section · Needs linking tab · receipt-confirmation prompts'],

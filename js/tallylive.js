@@ -322,6 +322,17 @@ function _tlProjClosed(tender){
   const label=closed?'Settled':sets.length?'Part bill received':p.jvDate?'Check pending':st==='completed'?'Completed (not settled)':st==='onhold'?'On hold':'Active';
   return {known:true,closed,label};
 }
+// "Still fundable" for ONE project, same rules as the project page:
+//  settled / Final Bill received -> 0
+//  part bill received            -> 70% of (agreement - bills received) + any under-funding vs the billed amount (= the Additional Funding Opportunity panel)
+//  otherwise                     -> 70% of agreement - net deployed (payments - receipts)
+function _tlProjFundable(tender){
+  const p=(D.projects||[]).find(x=>String(x.tender)===String(tender)); if(!p) return null;
+  const ci=_tlProjClosed(tender); if(ci.closed) return 0;
+  let ag=0,rec=0,paid=0; try{ ag=Number(agAmt(p))||0; rec=totReceipts(p); paid=totPayments(p); }catch(e){ return null; }
+  if(rec>0) return Math.max(0,ag-rec)*0.7+Math.max(0,rec*0.7-paid);
+  return ag*0.7-Math.max(0,paid-rec);
+}
 function _tlCCList(){
   const q=TL.ccq.toLowerCase().trim(), cq=TL.ccc.toLowerCase().trim(), T=TL.totals||{}; const groups={};
   TL.cc.forEach((c,i)=>{
@@ -333,7 +344,7 @@ function _tlCCList(){
     const info=tl.map(_tlProjClosed).filter(x=>x.known); const allClosed=info.length>0&&info.every(x=>x.closed);
     const maxOpen=tl.filter(t=>!_tlProjClosed(t).closed).reduce((s,t)=>s+_tlAgree(t),0)*0.7;
     // closed work: nothing more can be funded (even if the 70% maths says otherwise). Mixed: only the still-open projects' 70% counts.
-    const headroom=allClosed?0:(info.some(x=>x.closed)?maxOpen-net:maxFund-net);
+    const pf=tl.map(_tlProjFundable); const headroom=allClosed?0:(pf.length&&pf.every(v=>v!==null)?pf.reduce((s,v)=>s+v,0):(info.some(x=>x.closed)?maxOpen-net:maxFund-net));
     const state=allClosed?'Settled':[...new Set(info.map(x=>x.label))].join(' / ');
     const k=con.name||'— No contractor set —'; (groups[k]=groups[k]||[]).push({c,i,tot:t0,con,ps,agreement,maxFund,net,headroom,allClosed,state});
   });
