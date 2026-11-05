@@ -304,9 +304,7 @@ function renderDetail(id){
             <span style="font-size:12px;color:var(--text2)">${row[0]}</span>
             <span style="font-size:13px;font-weight:700;${row[2]||'color:var(--navy)'}">${row[1]}</span>
           </div>`).join('')}
-          <div style="font-size:11px;color:var(--text3);margin-top:6px">
-            <a href="#" onclick="ownerTab(4);return false" style="color:var(--navy)">📈 View interest in Interest tab →</a>
-          </div>
+          <div id="tv-pint-${p.id}" style="margin-top:6px">${typeof tvIntBoxHtml==='function'?tvIntBoxHtml(p):''}</div>
           <div style="font-size:11px;color:var(--text3)">Tally Cost Centre: <strong>${p.costCentre||'—'}</strong></div>
         </div>
       </div>

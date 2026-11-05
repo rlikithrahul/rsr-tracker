@@ -143,14 +143,6 @@ function renderDash(){
 
   // Main dashboard body — left column
   document.getElementById('dash-cards').innerHTML=`
-    <!-- Last Tally Import -->
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:14px;font-size:12px">
-      <span style="color:var(--text3)">📤 Last Tally import:</span>
-      <span style="font-weight:700;color:${importColor}">${importAgo}</span>
-      ${lastImport?`<span style="color:var(--text3)">(${lastImport})</span>`:''}
-      <button onclick="ownerTab(3)" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:var(--rs);padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--navy)">Upload →</button>
-    </div>
-
     <!-- Quick Access -->
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Quick Access</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px">
@@ -994,8 +986,6 @@ const SIDEBAR_TABS = [
   {i:0, icon:'📊', label:'Dashboard'},
   {i:1, icon:'🏗️', label:'Projects'},
   {i:2, icon:'👷', label:'Contractors'},
-  {i:3, icon:'📂', label:'Tally'},
-  {i:4, icon:'📈', label:'Interest'},
   {i:5, icon:'💳', label:'EMI Calendar'},
   {i:7, icon:'🧾', label:'GST'},
   {i:8, icon:'🧱', label:'Material Credit'},
@@ -1057,6 +1047,7 @@ function showSidebar(){
 }
 
 function ownerTab(i){
+  if(i===3||i===4) i=18; // Excel Tally import + old Interest tracker are retired (hidden, data kept) — Tally Live replaces them
   atab=i; dpid=null;
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));

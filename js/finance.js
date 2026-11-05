@@ -1071,6 +1071,7 @@ async function exportAllData(){
       /* XLSX pre-loaded */
     }
 
+    try{ if(typeof tvLoad==='function') await tvLoad(); }catch(e){}   // so the interest column can come from Tally
     const wb = window.XLSX.utils.book_new();
     const now = new Date().toLocaleString('en-IN');
 
@@ -1080,7 +1081,7 @@ async function exportAllData(){
       [],
       ['Project Name','Tender ID','Type','Contractor','Location','Tally Cost Centre',
        'Agreement Amount','Max Fundable (70%)','Total Deployed','Cap Used %',
-       'Verified Work %','Total Settled','Outstanding','Interest Accrued','Status']
+       'Verified Work %','Total Settled','Outstanding','Interest (Tally; blank = not linked / Tally not loaded)','Status']
     ];
     D.projects.forEach(p=>{
       const c=GC(p.contractorId);
@@ -1091,7 +1092,7 @@ async function exportAllData(){
         Math.round(rel), Math.round(rel/max*100)+'%',
         Math.round(verPct(p))+'%',
         Math.round(settled), Math.round(Math.max(0,rel-settled)),
-        Math.round(calcProjectInterest(p).interest),
+        (()=>{ const i=typeof tvProjInterest==='function'?tvProjInterest(p):{state:'noload'}; return (i.state==='open'||i.state==='closed')?Math.round(i.amt||0):''; })(),
         pStat(p)==='green'?'On Track':pStat(p)==='red'?'High Risk':'Caution'
       ]);
     });

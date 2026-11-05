@@ -12,7 +12,7 @@ const TV_CACHE   = 'rsr_tv_cache_v1';            // last snapshot kept in this b
 let TV = { snap:null, at:0, p:null, base:null, dec:[], err:'', sw:null, relCache:{}, sig:'' };
 try{ const c=JSON.parse(localStorage.getItem(TV_CACHE)||'null'); if(c&&c.snap){ TV.snap=c.snap; TV.sw=c.sw||null; TV.sig=_tvSig(c.snap); } }catch(e){}
 function _tvSig(s){ return s?((s.last_sync&&(s.last_sync.finished_at||s.last_sync.started_at))||'')+'|'+Object.keys(s.projects||{}).length+'|'+((s.receipt_guids||[]).length):''; }
-const tvSwitchOn = () => !!(TV.sw && TV.sw.on) && !!TV.snap && !!(CU && CU.role==='owner');
+const tvSwitchOn = () => !(TV.sw && TV.sw.on===false) && !!TV.snap && !!(CU && CU.role==='owner');
 // Tally payments for a linked project (null = use the normal releases). Receipts are NOT included: money received counts only through
 // confirmed settlements, exactly as the app already works.
 function tvRel(p){
@@ -84,6 +84,36 @@ function tvInterest(txs, asOn){ // txs: [{d, amt}] amt in Tally sign (Dr negativ
   const S=tlIntSet(); return tlInterest(list,0,start,asOn||_tvToday(),null,{set:S,posted:S.autoInt?tlAutoPosted(list):{}});   // a 31-March interest voucher already in Tally is not charged twice
 }
 
+// Interest for ONE project from its Tally cost centre (or ledger), as shown on the project page, backup and reports.
+//  state: 'noload' (Tally numbers not loaded) | 'notlinked' | 'closed' (settled: shown as 0, atSettle = what it was) | 'open'
+function tvProjInterest(p){
+  const snap=TV.snap; if(!snap||!snap.projects) return {state:'noload'};
+  const t=snap.projects[String(p.tender)]; if(!t||!t.tx||!t.tx.length) return {state:t?'open':'notlinked',amt:0,fy:null};
+  const txs=t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar}));
+  const cl=(typeof _tlProjClosed==='function')?_tlProjClosed(p.tender):{closed:false};
+  if(cl.closed){
+    const fin=(p.settlements||[]).filter(s=>!isArchived(s)&&s.billType==='Final Bill'&&s.date).map(s=>s.date).sort().pop()||null;
+    let at=null, asOn=null; if(fin){ const r=tvInterest(txs,fin); if(r){ at=r.totalInterest; asOn=fin; } }
+    return {state:'closed',amt:0,atSettle:at,asOn};
+  }
+  const r=tvInterest(txs); return {state:'open',amt:r?r.totalInterest:0};
+}
+function tvIntBoxHtml(p){
+  const i=tvProjInterest(p), f=x=>fmt(Math.round(x));
+  const row=(v,sub)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--surface2)"><span style="font-size:12px;color:var(--text2)">Interest (Tally cost centre)</span><span style="font-size:13px;font-weight:700;color:var(--navy)">${v}</span></div>${sub?`<div style="font-size:11px;color:var(--text3);margin-top:4px">${sub}</div>`:''}`;
+  const go=`<a href="#" onclick="ownerTab(18);return false" style="color:var(--navy)">📒 Tally Live</a>`;
+  if(i.state==='noload') return row('—','Tally numbers not loaded yet.');
+  if(i.state==='notlinked') return row('—',`Not linked to a Tally cost centre — link it in ${go}.`);
+  if(i.state==='closed') return row('₹0 <span style="font-size:11px;font-weight:600;color:var(--green)">· interest closed</span>',i.atSettle!=null?`Interest at settlement (${i.asOn}): ${f(i.atSettle)}. Details in ${go}.`:`Project is settled. Details in ${go}.`);
+  return row(f(i.amt),`24% compounded every 31 March, as of today. Exact transactions: ${go}.`);
+}
+// Contractor headline "Interest (this FY)" from the contractor's Tally ledger (null = not available)
+function tvContInterestFY(c){
+  const snap=TV.snap; const t=snap&&snap.contractors&&snap.contractors[c.name]; if(!t||!t.tx||!t.tx.length) return null;
+  const r=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar}))); if(!r) return null;
+  const lab=_tlFY(_tvToday()); const f=(r.fy||[]).find(x=>x.fy===lab); return f?f.interest:0;
+}
+
 // ───────── PROJECT PAGE ─────────
 function tvProjectShell(id){
   const wrap=document.getElementById('detail-wrap'); if(!wrap || document.getElementById('tv-proj-'+id)) return;
@@ -93,7 +123,7 @@ function tvProjectShell(id){
 }
 async function tvProjectFill(id){
   const box=document.getElementById('tv-proj-'+id); const p=GP(id); if(!box||!p) return;
-  const snap=await tvLoad(); if(!document.getElementById('tv-proj-'+id)) return;
+  const snap=await tvLoad(); { const ib=document.getElementById('tv-pint-'+id); if(ib) ib.innerHTML=tvIntBoxHtml(p); } if(!document.getElementById('tv-proj-'+id)) return;
   if(!snap){ box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">Tally numbers could not be loaded (${_tvE(TV.err)}). The rest of the page is unaffected.</div>`; return; }
   const t=snap.projects[String(p.tender)];
   if(!t){ box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">This project is not linked to a Tally cost centre or ledger yet${CU&&CU.isSuperAdmin?' — link it in <a href="#" onclick="ownerTab(18);return false" style="color:var(--navy)">Tally Live → Needs linking</a>':''}.</div>`; return; }

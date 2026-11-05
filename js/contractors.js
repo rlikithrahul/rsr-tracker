@@ -97,8 +97,7 @@ function renderContractorProfile(cid){
     const settled = (p.settlements||[]).filter(s2=>!isArchived(s2)).reduce((s3,s2)=>s3+s2.amount,0);
     return s + Math.max(0, (p.jvAmount||0) - settled);
   },0);
-  const ledger = typeof calcContractorLedger==='function' ? calcContractorLedger(c) : {currentOutstanding:0, currentFYInterest:0};
-
+  
   // Super Admin can edit any headline figure (and reset it to the app's own
   // calculation). Everyone else always sees the calculation. Figures derived
   // from others (Outstanding) follow an edit made upstream.
@@ -109,7 +108,8 @@ function renderContractorProfile(cid){
   const eChecks   = ef('checks', totalChecksRcv);
   const ePending  = ef('pending', checkPending);
   const eOutst    = ef('outstanding', Math.max(0, eDeployed.value - eChecks.value));
-  const eInterest = ef('interest', ledger.currentFYInterest||0);
+  const _ci = typeof tvContInterestFY==='function'?tvContInterestFY(c):null;
+  const eInterest = ef('interest', _ci==null?0:_ci);
 
   el.innerHTML = `
     <div style="margin-bottom:16px">
@@ -174,7 +174,7 @@ function renderContractorProfile(cid){
         {k:'outstanding', e:eOutst,    l:'⏳ Outstanding', c:(eOutst.value>0?'var(--red)':'var(--green)'),
           sub:'Released minus checks received'},
         {k:'interest',    e:eInterest, l:'📈 Interest (this FY)', c:'var(--amber)',
-          sub:'Accrued this financial year (app calculation)'},
+          sub:'This financial year, from the Tally ledger'},
       ].map(x=>`<div class="card" style="text-align:center;padding:12px;border-top:3px solid ${x.c}">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:700;margin-bottom:4px">${x.l}${x.e.edited?' <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 5px;font-size:9px">EDITED</span>':''}</div>
         <div style="font-size:16px;font-weight:800;color:${x.c}">${(x.e.value||x.e.edited)?fmt(x.e.value):'—'}</div>

@@ -137,16 +137,14 @@ async function checkCapCalc(){
 }
 
 async function checkInterestCalc(){
-  // Test: 100000 payment released 30 days ago, 0 settled → interest = 100000*0.24*30/365 ≈ 1973
-  const testDate = new Date(Date.now()-30*86400000).toISOString().split('T')[0];
-  const testP = {
-    releases:[{ id:'t1', date: testDate, amount:100000, txType:'payment' }],
-    settlements:[], boq:[], contractorUpdates:[], verifications:[]
-  };
-  const interest = calcProjectInterest(testP).interest;
-  const expected = 100000*0.24*30/365;
-  const ok = Math.abs(interest - expected) < 50; // within ₹50 tolerance
-  return { pass:ok, detail: ok ? `✓ Interest ${Math.round(interest)} (expected ~${Math.round(expected)})` : `Got ${Math.round(interest)}, expected ~${Math.round(expected)}` };
+  // Tally-style engine test: 100000 paid 30 days ago, simple interest, both end days counted = 31 days -> 100000*24%*31/365
+  if(typeof tlInterest!=='function') return { pass:false, detail:'Tally interest engine not loaded' };
+  const d=n=>{ const x=new Date(Date.now()-n*86400000); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+  const S=tlIntSet({compound:false,rate:24,payDay:true,lastDay:true,style:'365',balances:'debit'});
+  const r=tlInterest([{date:d(30),delta:100000,isInt:false}],0,d(30),d(0),null,{set:S});
+  const expected=100000*0.24*31/365;
+  const ok=Math.abs(r.totalInterest-expected)<1;
+  return { pass:ok, detail: ok ? `✓ Interest ${Math.round(r.totalInterest)} (expected ${Math.round(expected)})` : `Got ${Math.round(r.totalInterest)}, expected ~${Math.round(expected)}` };
 }
 
 async function checkCostCentres(){
