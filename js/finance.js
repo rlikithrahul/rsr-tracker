@@ -200,7 +200,7 @@ function prefillDaybookDate(dateStr){
 
 function renderFunds(){
   const all=[];
-  D.projects.forEach(p=>{(p.releases||[]).filter(r=>!isArchived(r)).forEach(r=>{const c=GC(p.contractorId);all.push({...r,project:p.name,contractor:c?c.name:'—',pid:p.id});});});
+  D.projects.forEach(p=>{relList(p).forEach(r=>{const c=GC(p.contractorId);all.push({...r,project:p.name,contractor:c?c.name:'—',pid:p.id});});});
   all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   const totPay=all.filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0);
   const totRec=all.filter(r=>r.txType==='receipt').reduce((s,r)=>s+r.amount,0);
@@ -1106,7 +1106,7 @@ async function exportAllData(){
     ];
     D.projects.forEach(p=>{
       const c=GC(p.contractorId);
-      (p.releases||[]).filter(r=>!isArchived(r)).forEach(r=>{
+      relList(p).forEach(r=>{
         fundRows.push([
           r.date, p.name, c?c.name:'—', r.ref||'—', r.costCentre||'—',
           r.method||'—', r.notes||'—', r.amount, r.source||'manual'

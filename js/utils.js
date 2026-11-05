@@ -58,7 +58,16 @@ function maxF(p){ return agAmt(p)*0.7; }
 // This single function drives Net Deployed, Cap Used %, Available, and
 // the Funding Opportunity panel, so a missing filter here silently wrongs
 // every one of those at once.
-function totPayments(p){ return (p.releases||[]).filter(r=>!isArchived(r) && r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
+// The releases a project is judged on. Normally its own p.releases (Excel/Tally-import + manual). When the "Use Tally numbers" switch is ON
+// and the project is linked in Tally Live, the Excel-imported entries are HIDDEN (still stored, never deleted) and the Tally payments
+// are used instead; manual / settlement-origin entries are kept. Unlinked projects are unaffected.
+function relList(p){
+  const all=(p.releases||[]).filter(r=>!isArchived(r));
+  const t=(typeof tvRel==='function')?tvRel(p):null;
+  if(!t) return all;
+  return t.concat(all.filter(r=>!(r.source==='tally'||r.source==='tally-manual'||r.source==='tally-fuzzy')));
+}
+function totPayments(p){ return relList(p).filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
 // Only receipts that have been explicitly confirmed as a real government
 // settlement count toward reducing at-risk capital. A raw Tally "Receipt"
 // entry can be all sorts of things — an internal transfer between
@@ -150,7 +159,7 @@ function statusBadge(p){
 // ─── LAST ACTIVITY ────────────────────────────────────
 function lastActivityDays(p){
   const dates = [
-    ...(p.releases||[]).map(r=>r.date),
+    ...relList(p).map(r=>r.date),
     ...(p.contractorUpdates||[]).map(u=>u.date),
     ...(p.verifications||[]).map(v=>v.date),
     ...(p.settlements||[]).map(s=>s.date)

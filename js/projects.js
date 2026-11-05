@@ -129,15 +129,15 @@ function renderDetail(id){
       </td>
       <td style="text-align:right;font-weight:700">${fmt(item.qty*item.rate)}</td>
     </tr>`;}).join('');
-  const relLog=(p.releases||[]).filter(r=>!isArchived(r)).slice().reverse().map(r=>`
+  const relLog=relList(p).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).reverse().map(r=>`
     <div class="fr">
       <span class="fl">${r.date}<br>
         <span style="font-size:11px">${r.notes||''} · Vch #${r.ref||'—'} · ${r.method||''}</span><br>
-        ${r.source==='tally'||r.source==='tally-manual'?'<span style="font-size:10px;background:rgba(26,39,68,.1);color:var(--navy);padding:1px 6px;border-radius:4px;font-weight:600">📂 Tally</span>':'<span style="font-size:10px;background:var(--amber-bg);color:var(--amber);padding:1px 6px;border-radius:4px;font-weight:600">✏️ Manual</span>'}
+        ${r.fromTally?'<span style="font-size:10px;background:rgba(26,39,68,.1);color:var(--navy);padding:1px 6px;border-radius:4px;font-weight:600">📒 Tally live</span>':r.source==='tally'||r.source==='tally-manual'?'<span style="font-size:10px;background:rgba(26,39,68,.1);color:var(--navy);padding:1px 6px;border-radius:4px;font-weight:600">📂 Tally</span>':'<span style="font-size:10px;background:var(--amber-bg);color:var(--amber);padding:1px 6px;border-radius:4px;font-weight:600">✏️ Manual</span>'}
       </span>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="fv">${fmt(r.amount)}</span>
-        ${(CU && CU.isSuperAdmin)?`<div class="amenu-wrap">
+        ${(CU && CU.isSuperAdmin && !r.fromTally)?`<div class="amenu-wrap">
           <button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('rm-${r.id}')">⋮</button>
           <div class="amenu" id="rm-${r.id}">
             <button class="amenu-item" onclick="openEditRelease('${id}','${r.id}')">✏️ Edit</button>
@@ -320,7 +320,7 @@ function renderDetail(id){
       <div class="card">
         <details data-toggle="funds-${id}">
           <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
-            <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${(p.releases||[]).filter(r=>!isArchived(r)).length} entries)</span></div>
+            <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${relList(p).length} entries${(typeof tvRel==='function'&&tvRel(p))?' · from Tally':''})</span></div>
             <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
           </summary>
           <div style="margin-top:12px">${relLog}</div>

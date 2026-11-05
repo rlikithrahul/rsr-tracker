@@ -488,7 +488,7 @@ function renderSmartAlertStrip(){
 // ─── 12. LAST ACTIVITY ON PROJECT CARDS ──────────────
 function getProjectLastActivity(p){
   const events = [];
-  (p.releases||[]).forEach(r=>{ if(r.date) events.push(new Date(r.date)); });
+  relList(p).forEach(r=>{ if(r.date) events.push(new Date(r.date)); });
   (p.verifications||[]).forEach(v=>{ if(v.date) events.push(new Date(v.date)); });
   (p.settlements||[]).forEach(s=>{ if(s.date) events.push(new Date(s.date)); });
   if(p.jvDate) events.push(new Date(p.jvDate));

@@ -7,7 +7,39 @@
 
 const TV_BASE_KEY = 'rsr_tally_baseline_v1';     // receipts that already existed when this feature started — never flagged
 const TV_DEC_KEY  = 'rsr_tally_decisions_v1';    // Likith's answers (confirmed / ignored / "ok as it is" / "not in Tally")
-let TV = { snap:null, at:0, p:null, base:null, dec:[], err:'' };
+const TV_SW_KEY  = 'rsr_tally_switch_v1';        // {on:true/false} — "use Tally numbers" switch (Super Admin)
+const TV_CACHE   = 'rsr_tv_cache_v1';            // last snapshot kept in this browser for a fast, offline-safe first paint (owner/staff only)
+let TV = { snap:null, at:0, p:null, base:null, dec:[], err:'', sw:null, relCache:{}, sig:'' };
+try{ const c=JSON.parse(localStorage.getItem(TV_CACHE)||'null'); if(c&&c.snap){ TV.snap=c.snap; TV.sw=c.sw||null; TV.sig=_tvSig(c.snap); } }catch(e){}
+function _tvSig(s){ return s?((s.last_sync&&(s.last_sync.finished_at||s.last_sync.started_at))||'')+'|'+Object.keys(s.projects||{}).length+'|'+((s.receipt_guids||[]).length):''; }
+const tvSwitchOn = () => !!(TV.sw && TV.sw.on) && !!TV.snap && !!(CU && CU.role==='owner');
+// Tally payments for a linked project (null = use the normal releases). Receipts are NOT included: money received counts only through
+// confirmed settlements, exactly as the app already works.
+function tvRel(p){
+  if(!tvSwitchOn() || !p || !p.tender) return null; const k=String(p.tender);
+  if(k in TV.relCache) return TV.relCache[k];
+  const t=TV.snap.projects[k]; return TV.relCache[k]=t?_tvRelRaw(t):null;
+}
+function _tvRelRaw(t){ return t.tx.filter(x=>x.amt<0).map(x=>({id:'tv-'+x.g,date:x.d,amount:-x.amt,method:x.t,txType:'payment',ref:x.n,notes:x.nar||'',costCentre:x.cc||'',source:'tally-live',fromTally:true})); }
+function tvRerender(){
+  try{ if(typeof atab!=='undefined' && atab===18) return; if(typeof dpid!=='undefined' && dpid && typeof renderDetail==='function') renderDetail(dpid); else if(typeof ownerTab==='function' && typeof atab!=='undefined') ownerTab(atab); }catch(e){ console.warn('tally rerender',e); }
+}
+async function tvSwitchSet(on){
+  const v={on:!!on,at:new Date().toISOString(),by:(CU&&CU.name)||''};
+  await saveSetting(TV_SW_KEY,v); TV.sw=v; TV.relCache={}; _tvSave(); tvRerender();
+}
+function _tvSave(){ try{ localStorage.setItem(TV_CACHE,JSON.stringify({snap:TV.snap,sw:TV.sw})); }catch(e){} }
+// numbers that would change if the switch were turned on (computed without turning it on)
+function tvImpact(){
+  const rows=[]; let linked=0, unlinked=0, oldT=0, newT=0;
+  for(const p of (D.projects||[])){ if(isArchived(p)||!p.tender) continue;
+    const all=(p.releases||[]).filter(r=>!isArchived(r)); const oldV=all.filter(r=>r.txType!=='receipt').reduce((s,r)=>s+(r.amount||0),0);
+    const t=TV.snap&&TV.snap.projects[String(p.tender)]; if(!t){ unlinked++; oldT+=oldV; newT+=oldV; continue; } linked++;
+    const manual=all.filter(r=>!(r.source==='tally'||r.source==='tally-manual'||r.source==='tally-fuzzy')&&r.txType!=='receipt').reduce((s,r)=>s+(r.amount||0),0);
+    const newV=_tvRelRaw(t).reduce((s,r)=>s+r.amount,0)+manual; oldT+=oldV; newT+=newV;
+    if(Math.abs(newV-oldV)>1) rows.push({p,oldV,newV,diff:newV-oldV}); }
+  rows.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)); return {rows,linked,unlinked,oldT,newT};
+}
 
 function _tvE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function _tvN(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -21,7 +53,10 @@ async function tvLoad(force){
     try{
       const r=await fetch(SB_URL+'/functions/v1/tally-api',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({action:'app_snapshot',fresh:!!force})});
       const j=await r.json(); if(!r.ok) throw new Error(j.error||('Error '+r.status));
-      TV.snap=j; TV.at=Date.now(); TV.err='';
+      const before=TV.sig; TV.snap=j; TV.at=Date.now(); TV.err=''; TV.relCache={}; TV.sig=_tvSig(j);
+      try{ TV.sw=await getSetting(TV_SW_KEY,null); }catch(e){}
+      _tvSave();
+      if(tvSwitchOn() && before!==TV.sig) setTimeout(tvRerender,0);
       try{ TV.dec=await getSetting(TV_DEC_KEY,[])||[]; }catch(e){ TV.dec=TV.dec||[]; }
       try{ TV.base=await getSetting(TV_BASE_KEY,null); }catch(e){ TV.base=null; }
       // first time ever: the owner freezes today's receipts as "already handled" so old check-received projects are never flagged
@@ -152,3 +187,6 @@ async function tvContractorFill(cid){
   if(typeof renderDetail==='function'){ const o=renderDetail; renderDetail=function(id){ const r=o.apply(this,arguments); try{ tvProjectShell(id); }catch(e){ console.warn('tally view',e); } return r; }; }
   if(typeof renderContractorProfile==='function'){ const o=renderContractorProfile; renderContractorProfile=function(cid){ const r=o.apply(this,arguments); try{ tvContractorShell(cid); }catch(e){ console.warn('tally view',e); } return r; }; }
 })();
+
+// keep the numbers fresh for owner / staff only (never for contractor logins: the snapshot covers every contractor)
+(function(){ const wait=setInterval(()=>{ if(typeof CU!=='undefined' && CU){ clearInterval(wait); if(CU.role!=='owner'){ TV.snap=null; TV.sw=null; try{ localStorage.removeItem(TV_CACHE); }catch(e){} } if(CU.role==='owner'){ tvLoad(true).catch(()=>{}); setInterval(()=>{ if(document.visibilityState==='visible') tvLoad(true).catch(()=>{}); },5*60000); } } },1000); })();

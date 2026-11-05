@@ -130,7 +130,7 @@ async function tlLogin(){
 function _tlShell(el){
   _tlStyle();
   const tabs=[['daybook','Day Book'],['contractor','Contractor'],['ledgers','Ledgers'],['cc','Cost Centres'],['projects','Projects'],['interest','💰 Interest']];
-  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['linking','🔗 Linking']); }
+  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['switch','🔀 Use Tally numbers']); tabs.push(['linking','🔗 Linking']); }
   el.innerHTML = `<div class="wrap">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:18px;font-weight:700">📒 Tally Live</div>
@@ -155,7 +155,7 @@ function _tlErr(e){
 }
 function _tlTab(t){
   TL.tab=t; _tlShell(document.getElementById('sec-tally'));
-  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, linking:_tlLinking})[t]();
+  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, switch:_tlSwitch, linking:_tlLinking})[t]();
 }
 function _tlBusy(){ const b=document.getElementById('tl-body'); if(b) b.innerHTML='<div style="padding:30px;text-align:center;color:var(--text3)">⏳ Loading…</div>'; return b; }
 async function _tlLoadLedgers(){
@@ -560,4 +560,22 @@ async function _tlDoLink(kind,i,tender){
   if(kind==='cc'){ const c=TL.cc[i], s=_tlCCState(c); if(!s.tenders.includes(tender)) s.tenders.push(tender); if(s.type==='unmapped') s.type='project'; await _tlSaveCC(i); }
   else { const l=TL.ledgers[i], s=_tlLedState(l); if(!s.tenders.includes(tender)) s.tenders.push(tender); if(s.role==='none') s.role='project_only'; await _tlSaveLedger(i); }
   TV.at=0; _tlNeeds();
+}
+
+// ───────── "Use Tally numbers" switch ─────────
+async function _tlSwitch(){
+  const b=_tlBusy(); try{ await tvLoad(true); }catch(e){ return _tlErr(e); }
+  if(!TV.snap) return _tlErr(new Error('Could not load the Tally snapshot: '+TV.err));
+  const on=!!(TV.sw&&TV.sw.on), im=tvImpact(), n=x=>_tlN(x);
+  b.innerHTML=`<div class="card" style="padding:16px;margin-bottom:12px;border-left:4px solid ${on?'#2e7d32':'var(--gold,#d4a017)'}">
+     <div style="font-size:16px;font-weight:700">🔀 Use Tally numbers in the app — currently <span style="color:${on?'#2e7d32':'#b26a00'}">${on?'ON':'OFF'}</span></div>
+     <div style="font-size:13px;margin:8px 0;line-height:1.5">When <b>ON</b>, for every project that is linked in Tally, the deployed amount, cap used, available, interest and the Fund Releases list come from <b>Tally payments</b>. The old Excel-imported entries are <b>hidden, not deleted</b>, and are never used. Projects not linked yet, manual entries and your settlements (check received / pending) are <b>left exactly as they are</b>. Money received still counts only through your settlements. Turning it OFF brings the old numbers back instantly.</div>
+     <button class="btn btn-primary" onclick="_tlSwitchGo(${!on})">${on?'Turn OFF (back to Excel numbers)':'Turn ON'}</button></div>
+   <div class="tl-kpi"><div><div class="l">Projects linked (will use Tally)</div><div class="v">${im.linked}</div></div><div><div class="l">Not linked (stay as they are)</div><div class="v">${im.unlinked}</div></div><div><div class="l">Projects whose deployed amount changes</div><div class="v">${im.rows.length}</div></div><div><div class="l">Total deployed: now → with Tally</div><div class="v" style="font-size:13px">${n(im.oldT)}<br>→ ${n(im.newT)}</div></div></div>
+   <div class="card" style="padding:0;overflow:hidden"><div style="padding:10px 12px;background:var(--surface2);font-weight:700">What would change (largest first) — differences are expected where the Excel data had duplicates or missed edits</div><div style="overflow:auto;max-height:520px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Project</th><th>Contractor</th><th>Status</th><th style="text-align:right">Deployed now (Excel)</th><th style="text-align:right">With Tally</th><th style="text-align:right">Difference</th></tr></thead><tbody>
+   ${im.rows.slice(0,200).map(r=>{ const sets=(r.p.settlements||[]).filter(s=>!isArchived(s)).length; return `<tr style="cursor:pointer" onclick="ownerTab(1);openDetail('${_tlA(r.p.id)}')"><td>#${_tlE(r.p.tender)} ${_tlE(r.p.name)}</td><td>${_tlE(_tlContractorName(r.p))}</td><td>${sets?'Check received':r.p.jvDate?'Check pending':''}</td><td style="text-align:right">${n(r.oldV)}</td><td style="text-align:right">${n(r.newV)}</td><td style="text-align:right;font-weight:600;color:${r.diff<0?'#c0392b':'#2e7d32'}">${r.diff>0?'+':''}${n(r.diff)}</td></tr>`; }).join('')||'<tr><td colspan="6" style="padding:14px;color:var(--text3)">No project changes.</td></tr>'}</tbody></table></div></div>`;
+}
+async function _tlSwitchGo(on){
+  if(!confirm(on?'Turn ON: linked projects will use Tally numbers (Excel entries hidden, not deleted). You can turn it OFF any time. Continue?':'Turn OFF: back to the Excel-imported numbers. Continue?')) return;
+  try{ await tvSwitchSet(on); toast(on?'Tally numbers are ON':'Back to Excel numbers','ok'); _tlTab('switch'); }catch(e){ toast('Could not save: '+e.message,'error'); }
 }

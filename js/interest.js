@@ -56,11 +56,11 @@ function calcProjectInterest(p){
   const events = [];
 
   // Payments (add to balance)
-  (p.releases||[]).filter(r=>!isArchived(r)&&r.txType!=='receipt').forEach(r=>{
+  relList(p).filter(r=>r.txType!=='receipt').forEach(r=>{
     events.push({date:r.date, type:'payment', amount:r.amount, ref:r.ref||''});
   });
   // Receipts (reduce balance)
-  (p.releases||[]).filter(r=>!isArchived(r)&&r.txType==='receipt').forEach(r=>{
+  relList(p).filter(r=>r.txType==='receipt').forEach(r=>{
     events.push({date:r.date, type:'receipt', amount:r.amount, ref:r.ref||''});
   });
   // Settlements (reduce balance + may stop interest)
@@ -138,11 +138,11 @@ function calcContractorLedger(c){
 
   projects.forEach(p=>{
     // Payments out (add to outstanding)
-    (p.releases||[]).filter(r=>!isArchived(r)&&r.txType!=='receipt').forEach(r=>{
+    relList(p).filter(r=>r.txType!=='receipt').forEach(r=>{
       txStream.push({date:r.date, amount:r.amount, type:'payment', project:p.name, ref:r.ref||''});
     });
     // Receipts in (reduce outstanding) — includes government payments, partial recoveries
-    (p.releases||[]).filter(r=>!isArchived(r)&&r.txType==='receipt').forEach(r=>{
+    relList(p).filter(r=>r.txType==='receipt').forEach(r=>{
       txStream.push({date:r.date, amount:r.amount, type:'receipt', project:p.name, ref:r.ref||''});
     });
     // Settlements also reduce outstanding (government paid, we received it)
