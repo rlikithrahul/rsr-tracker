@@ -69,25 +69,43 @@ function tlDownloadStatement(kind){
 }
 
 // ───────── Interest sheet ─────────
-function tlDownloadInterest(kind){
+// The interest sheet, laid out like Tally's: one line per period of unchanged balance with days and interest, a subtotal per financial year, totals at the bottom.
+function _xIntLines(li){
+  const {res}=li, out=[]; const byFY={}; res.sched.forEach(g=>(byFY[g.fy]=byFY[g.fy]||[]).push(g));
+  Object.keys(byFY).sort().forEach(fyl=>{ let sub=0;
+    byFY[fyl].forEach(g=>{ sub+=g.interest; const more=g.evs.length>3?g.evs.slice(0,3).join('; ')+' (+'+(g.evs.length-3)+' more)':g.evs.join('; ');
+      out.push({k:g.kind==='cap'||g.kind==='posted'?'cap':'row',c:[g.from,g.days>0?g.to:'',g.days>0?g.days:'',more,g.dr||'',g.cr||'',g.bal,g.interest||'']}); });
+    out.push({k:'fy',c:['','','','Interest for '+fyl,'','','',sub]}); });
+  return out;
+}
+function tlDownloadInterest(kind, withStmt){
   const li=TL&&TL.lastInt; if(!li){ toast('Calculate interest first','error'); return; } if(!_xCheckLibs(kind)) return;
-  const {st,sel,res,asOn,rate,useOpen}=li; const base=_xName(st.title)+'_interest_'+asOn;
+  const {st,sel,res,asOn,rate,useOpen}=li; const base=_xName(st.title)+'_interest_'+asOn+(withStmt?'_with_statement':'');
+  const lines=_xIntLines(li); const sorted=sel.slice().sort((a,b)=>a.vch_date<b.vch_date?-1:1);
+  const head=['From','To (last day charged)','Days','Particulars','Paid out / added','Received','Principal balance','Interest for the period'];
+  const note='Interest at '+rate+'% a year, simple daily on the principal balance (365-day year). Each balance is charged from its date up to the day before the next entry. Interest of each financial year is added to the principal on 31 March (unless already posted in Tally). Receipts reduce the principal; no interest while the balance is nil. Calculated up to '+_xD(asOn)+'.';
+  const tail=[['Total interest charged',res.totalInterest],['Principal (incl. interest added on 31 March)',res.principal],['Interest not yet added to principal',res.accrued],['TOTAL DUE as on '+_xD(asOn),res.due]];
+  const fyTbl=res.fy.map(f=>[f.fy,f.interest,f.posted?'posted in Tally':(f.capitalised||''),f.endPrincipal]);
   if(kind==='xlsx'){
-    const sum=[['RSR CONSTRUCTIONS — INTEREST CALCULATION'],[st.title||''],[],['As on',_xD(asOn)],['Rate',rate+'% per annum, simple daily on the running balance'],['Compounding','Accrued interest added to the principal every 31 March until received'],['Rows used',sel.length+(useOpen?' + opening balance':'')],[],
-      ['Principal (incl. compounded interest)',_xNum(res.principal)],['Interest not yet compounded',_xNum(res.accrued)],['Total due',_xNum(res.due)],['Total interest charged',_xNum(res.totalInterest)],[],
-      ['Financial year','Interest accrued','Added to principal on 31 Mar','Principal after']];
-    res.fy.forEach(f=>sum.push([f.fy,_xNum(f.interest),f.capitalised?_xNum(f.capitalised):'',_xNum(f.endPrincipal)]));
-    const tx=[['Date','Voucher','Ledger / cost centre','Narration','Paid out (adds to principal)','Received (reduces principal)']];
-    sel.slice().sort((a,b)=>a.vch_date<b.vch_date?-1:1).forEach(r=>{ const a=Number(r.amount)||0; tx.push([_xD(r.vch_date),((r.vch_type||'')+' '+(r.vch_number||'')).trim(),(r.ledger||r.ledger_name||'')+(r.cc_name?' / '+r.cc_name:''),r.narration||'',a<0?_xNum(-a):'',a>0?_xNum(a):'']); });
-    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,_xSheet(sum,[38,22,28,18]),'Interest'); XLSX.utils.book_append_sheet(wb,_xSheet(tx,[12,18,34,40,22,22]),'Transactions used'); XLSX.writeFile(wb,base+'.xlsx');
+    const aoa=[['RSR CONSTRUCTIONS — INTEREST CALCULATION'],[st.title||''],[note],[],head];
+    lines.forEach(l=>{ const c=l.c.slice(); aoa.push(c.map((v,i)=>i===0&&v?_xD(v):i===1&&v?_xD(v):(i>=4&&v!==''?_xNum(v):v))); });
+    aoa.push([]); tail.forEach(t=>aoa.push(['','','',t[0],'','','',_xNum(t[1])]));
+    aoa.push([],['Year by year'],['Financial year','Interest','Added to principal 31 Mar','Principal after']); fyTbl.forEach(r=>aoa.push([r[0],_xNum(r[1]),typeof r[2]==='number'?_xNum(r[2]):r[2],_xNum(r[3])]));
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,_xSheet(aoa,[13,15,7,52,16,16,18,18]),'Interest sheet');
+    if(withStmt){ const tx=[['Date','Voucher','Ledger / cost centre','Narration','Paid out','Received']]; sorted.forEach(r=>{ const a=Number(r.amount)||0; tx.push([_xD(r.vch_date),((r.vch_type||'')+' '+(r.vch_number||'')).trim(),(r.ledger||r.ledger_name||'')+(r.cc_name?' / '+r.cc_name:''),r.narration||'',a<0?_xNum(-a):'',a>0?_xNum(a):'']); }); XLSX.utils.book_append_sheet(wb,_xSheet(tx,[12,18,34,40,18,18]),'Statement'); }
+    XLSX.writeFile(wb,base+'.xlsx');
   } else {
-    const c=_xPdfStart('Interest calculation',null,false); const {doc}=c; doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(doc.splitTextToSize(String(st.title||''),c.W-80),40,c.y); c.y+=18;
-    _xKV(c,[['As on',_xD(asOn)],['Rate',rate+'% a year, simple daily on the running balance'],['Compounding','Interest accrued is added to the principal every 31 March until payment is received'],['Rows used',sel.length+(useOpen?' + opening balance':'')]]);
-    _xHead(c,'Result'); doc.autoTable({startY:c.y,body:[['Principal (incl. compounded interest)',_xP(res.principal)],['Interest not yet compounded',_xP(res.accrued)],['Total due',_xP(res.due)],['Total interest charged',_xP(res.totalInterest)]],styles:{fontSize:9,cellPadding:4},columnStyles:{1:{halign:'right',fontStyle:'bold'}},theme:'grid',margin:{left:40,right:40}});
-    c.y=doc.lastAutoTable.finalY+16; _xHead(c,'Year by year');
-    doc.autoTable({startY:c.y,head:[['Financial year','Interest accrued','Added to principal (31 Mar)','Principal after']],body:res.fy.map(f=>[f.fy,_xP(f.interest),f.capitalised?_xP(f.capitalised):'—',_xP(f.endPrincipal)]),styles:{fontSize:8.5,cellPadding:4},headStyles:{fillColor:c.navy,textColor:[255,255,255]},columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},margin:{left:40,right:40}});
-    c.y=doc.lastAutoTable.finalY+16; _xHead(c,'Transactions used');
-    doc.autoTable({startY:c.y,head:[['Date','Voucher','Ledger / cost centre','Paid out','Received']],body:sel.slice().sort((a,b)=>a.vch_date<b.vch_date?-1:1).map(r=>{ const a=Number(r.amount)||0; return [_xD(r.vch_date),((r.vch_type||'')+' '+(r.vch_number||'')).trim(),(r.ledger||r.ledger_name||'')+(r.cc_name?'\n'+r.cc_name:''),a<0?_xPlain(-a):'',a>0?_xPlain(a):'']; }),styles:{fontSize:7.5,cellPadding:3},headStyles:{fillColor:c.navy,textColor:[255,255,255]},columnStyles:{3:{halign:'right'},4:{halign:'right'}},margin:{left:40,right:40}});
+    const c=_xPdfStart('Interest calculation',null,true); const {doc}=c; doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(doc.splitTextToSize(String(st.title||''),c.W-80),40,c.y); c.y+=16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110,110,110); const nl=doc.splitTextToSize(note,c.W-80); doc.text(nl,40,c.y); c.y+=nl.length*9+4; doc.setTextColor(20,20,20);
+    const body=lines.map(l=>{ const v=l.c; return [v[0]?_xD(v[0]):'',v[1]?_xD(v[1]):'',v[2],v[3],v[4]!==''?_xPlain(v[4]):'',v[5]!==''?_xPlain(v[5]):'',v[6]!==''?_xPlain(v[6]):'',v[7]!==''?_xPlain(v[7]):'']; });
+    doc.autoTable({startY:c.y,head:[head],body,styles:{fontSize:7.5,cellPadding:3},headStyles:{fillColor:c.navy,textColor:[255,255,255]},columnStyles:{2:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'}},margin:{left:40,right:40},
+      didParseCell:d=>{ if(d.section==='body'){ const k=lines[d.row.index].k; if(k==='fy'){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[232,236,244]; } else if(k==='cap'){ d.cell.styles.fillColor=[255,248,225]; } } }});
+    c.y=doc.lastAutoTable.finalY+14;
+    doc.autoTable({startY:c.y,body:tail.map(t=>[t[0],_xPlain(t[1])]),theme:'grid',styles:{fontSize:9,cellPadding:4},columnStyles:{0:{fontStyle:'bold'},1:{halign:'right',fontStyle:'bold',cellWidth:140}},margin:{left:40,right:40}});
+    c.y=doc.lastAutoTable.finalY+14; _xHead(c,'Year by year');
+    doc.autoTable({startY:c.y,head:[['Financial year','Interest','Added to principal (31 Mar)','Principal after']],body:fyTbl.map(r=>[r[0],_xPlain(r[1]),typeof r[2]==='number'?_xPlain(r[2]):(r[2]||'—'),_xPlain(r[3])]),styles:{fontSize:8.5,cellPadding:4},headStyles:{fillColor:c.navy,textColor:[255,255,255]},columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},margin:{left:40,right:40}});
+    if(withStmt){ doc.addPage(); c.y=50; _xHead(c,'Statement — transactions used');
+      doc.autoTable({startY:c.y,head:[['Date','Voucher','Ledger / cost centre','Narration','Paid out','Received']],body:sorted.map(r=>{ const a=Number(r.amount)||0; return [_xD(r.vch_date),((r.vch_type||'')+' '+(r.vch_number||'')).trim(),(r.ledger||r.ledger_name||'')+(r.cc_name?'\n'+r.cc_name:''),r.narration||'',a<0?_xPlain(-a):'',a>0?_xPlain(a):'']; }),styles:{fontSize:7.5,cellPadding:3},headStyles:{fillColor:c.navy,textColor:[255,255,255]},columnStyles:{4:{halign:'right'},5:{halign:'right'}},margin:{left:40,right:40}}); }
     _xPdfFooter(doc); doc.save(base+'.pdf');
   }
 }

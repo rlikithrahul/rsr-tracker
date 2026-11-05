@@ -45,7 +45,7 @@ function tlModal(title, html, buttons){
     const old=document.getElementById('tl-modal'); if(old) old.remove();
     const d=document.createElement('div'); d.id='tl-modal';
     d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-    d.innerHTML=`<div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.35)">
+    d.innerHTML=`<div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.35)">
       <div style="font-size:16px;font-weight:700;margin-bottom:10px">${title}</div><div style="font-size:13px;line-height:1.5">${html}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px">${buttons.map((b,i)=>`<button class="btn btn-sm${b.primary?' btn-primary':''}" data-i="${i}">${_tlE(b.label)}</button>`).join('')}</div></div>`;
     document.body.appendChild(d);
@@ -85,24 +85,42 @@ function _tlDays(a,b){ return Math.max(0,Math.round((_tlMs(b)-_tlMs(a))/86400000
 function _tlNextDay(d){ const t=new Date(_tlMs(d)+86400000); return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0'); }
 function _tlFY(d){ const p=d.split('-'); const y=+p[1]>=4?+p[0]:+p[0]-1; return 'FY '+y+'-'+String(y+1).slice(-2); }
 // txs: [{date, delta}] delta>0 = money paid out (adds to principal), delta<0 = money received (reduces it)
-function tlInterest(txs, opening, startDate, asOn, ratePct){
-  const rate=ratePct/100, ev=txs.map(t=>({date:t.date,delta:t.delta,k:0})).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+// opts.posted = {'FY 2025-26':true,...}: interest for that year was ALREADY posted in Tally as a 31-March voucher, so no interest of ours is added for it.
+// Besides the totals this returns .sched = the day-by-day schedule (one line per period of unchanged balance) for the interest sheet:
+//   {from,to,days,evs:[text],dr,cr,bal,interest,fy,kind}  bal = principal during the period; to = last day charged (the day before the next entry).
+function tlInterest(txs, opening, startDate, asOn, ratePct, opts){
+  opts=opts||{}; const posted=opts.posted||{};
+  const rate=ratePct/100, ev=txs.map(t=>({date:t.date,delta:t.delta,k:0,desc:t.desc||'',isInt:!!t.isInt})).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
   const startY=+startDate.slice(0,4), endY=+asOn.slice(0,4);
   for(let y=startY;y<=endY;y++){ const d=y+'-03-31'; if(d>=startDate && d<asOn) ev.push({date:d,delta:0,k:1}); }
   ev.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.k-b.k);
-  let bal=Number(opening)||0, acc=0, prev=startDate, total=0; const fy={};
-  const F=l=>fy[l]||(fy[l]={fy:l,interest:0,capitalised:0,endPrincipal:0});
-  const accrue=(to)=>{ if(bal>0 && to>prev){ let cur=prev; // split so each day is attributed to its own FY
-      const d=_tlDays(cur,to); const i=bal*rate*d/365; acc+=i; total+=i; F(_tlFY(_tlNextDay(cur))).interest+=i; } };
+  let bal=Number(opening)||0, acc=0, prev=startDate, total=0; const fy={}; const sched=[]; let seg=null;
+  const F=l=>fy[l]||(fy[l]={fy:l,interest:0,capitalised:0,endPrincipal:0,calc:0,postedAmt:0,posted:false});
+  const open=(date,text,dr,cr,kind)=>{ if(!seg||seg.from!==date){ seg={from:date,to:date,days:0,evs:[],dr:0,cr:0,bal:0,interest:0,fy:_tlFY(_tlNextDay(date)),kind:kind||'tx'}; sched.push(seg); } if(text) seg.evs.push(text); seg.dr+=dr; seg.cr+=cr; if(kind&&kind!=='tx') seg.kind=kind; };
+  const accrue=(to)=>{ if(to>prev){ const d=_tlDays(prev,to); const i=bal>0?bal*rate*d/365:0;
+      if(seg&&seg.from===prev){ seg.days=d; seg.interest=i; seg.to=_tlPrevDay(to); }
+      if(i>0){ acc+=i; total+=i; F(_tlFY(_tlNextDay(prev))).interest+=i; } } };
+  if(Number(opening)) open(startDate,'Opening balance',Number(opening)>0?Number(opening):0,Number(opening)<0?-Number(opening):0,'open');
+  if(seg) seg.bal=bal;
   for(const e of ev){
     if(e.date>asOn) break;
     accrue(e.date); prev=e.date>prev?e.date:prev;
-    if(e.k===1){ const f=F(_tlFY(e.date)); f.capitalised+=acc; bal+=acc; acc=0; f.endPrincipal=bal; }
-    else if(e.delta>0) bal+=e.delta; else bal=Math.max(0,bal+e.delta);
+    if(e.k===1){ const f=F(_tlFY(e.date));
+      if(posted[f.fy]){ f.posted=true; f.calc=acc; acc=0; f.endPrincipal=bal;
+        open(e.date,'Interest for '+f.fy+' already posted in Tally (our calculation '+_tlN(f.calc)+')',0,0,'posted'); }
+      else { f.capitalised+=acc; bal+=acc; open(e.date,'Interest added to principal ('+f.fy+')',acc,0,'cap'); acc=0; f.endPrincipal=bal; }
+    } else {
+      open(e.date,e.desc||(e.delta>0?'Paid out':'Received'),Math.max(0,e.delta),Math.max(0,-e.delta));
+      if(e.delta>0) bal+=e.delta; else bal=Math.max(0,bal+e.delta);
+    }
+    seg.bal=bal;
   }
   accrue(asOn); const last=F(_tlFY(asOn)); if(!last.endPrincipal) last.endPrincipal=bal;
-  return { fy:Object.values(fy).sort((a,b)=>a.fy<b.fy?-1:1), principal:bal, accrued:acc, totalInterest:total, due:bal+acc };
+  // what was found in Tally on 31 March for years the user marked as posted
+  for(const e of ev){ if(e.k===0&&e.isInt&&e.delta>0&&e.date.slice(5)==='03-31'){ const f=fy[_tlFY(e.date)]; if(f) f.postedAmt+=e.delta; } }
+  return { fy:Object.values(fy).sort((a,b)=>a.fy<b.fy?-1:1), principal:bal, accrued:acc, totalInterest:total, due:bal+acc, sched, asOn, startDate };
 }
+function _tlPrevDay(d){ const t=new Date(_tlMs(d)-86400000); return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0'); }
 
 // ───────── page shell / login ─────────
 async function renderTallyLive(){
@@ -231,21 +249,34 @@ function _tlStatement(st, target){
 function _tlTickAll(v){ document.querySelectorAll('.tl-ck').forEach(c=>c.checked=v); }
 function _tlTickRange(){ const f=tlv('ti-f'), t=tlv('ti-t'); const rows=TL.stmt.rows;
   document.querySelectorAll('.tl-ck').forEach(c=>{ const d=rows[+c.dataset.i].vch_date; c.checked=(!f||d>=f)&&(!t||d<=t); }); }
-function _tlCalcInterest(){
-  const st=TL.stmt, rows=st.rows; const sel=[...document.querySelectorAll('.tl-ck')].filter(c=>c.checked).map(c=>rows[+c.dataset.i]);
-  const asOn=tlv('ti-asof')||_tlToday(), rate=parseFloat(tlv('ti-rate'))||TL_RATE;
-  const useOpen=!!document.getElementById('ti-open') && document.getElementById('ti-open').checked && st.opening!=null;
+function _tlIntPostedFor(st, rows){   // per financial year: was the interest already posted in Tally? (saved choice, else auto-suggested from a 31-March "interest" voucher)
+  TL.intPosted=TL.intPosted||{}; const k=st.title||''; const m=TL.intPosted[k]=TL.intPosted[k]||{};
+  rows.forEach(r=>{ if(r.vch_date&&r.vch_date.slice(5)==='03-31'&&(Number(r.amount)||0)<0&&/interest/i.test((r.narration||'')+' '+(r.ledger||''))){ const f=_tlFY(r.vch_date); if(!(f in m)) m[f]=true; } });
+  return m;
+}
+function _tlIntPost(fy,v){ const li=TL.lastInt; if(!li) return; TL.intPosted[li.st.title||'']=TL.intPosted[li.st.title||'']||{}; TL.intPosted[li.st.title||''][fy]=!!v; }
+function _tlCalcInterest(again){
+  const st=TL.stmt, rows=st.rows; let sel, asOn, rate, useOpen;
+  if(again===true && TL.lastInt){ ({sel,asOn,rate,useOpen}=TL.lastInt); }
+  else {
+    sel=[...document.querySelectorAll('.tl-ck')].filter(c=>c.checked).map(c=>rows[+c.dataset.i]);
+    asOn=tlv('ti-asof')||_tlToday(); rate=parseFloat(tlv('ti-rate'))||TL_RATE;
+    useOpen=!!document.getElementById('ti-open') && document.getElementById('ti-open').checked && st.opening!=null;
+  }
   if(!sel.length && !useOpen){ toast('Tick at least one row','error'); return; }
-  const txs=sel.map(r=>({date:r.vch_date, delta:-(Number(r.amount)||0)}));
+  const txs=sel.map(r=>({date:r.vch_date, delta:-(Number(r.amount)||0), desc:((r.vch_type||'')+' '+(r.vch_number||'')).trim()+(r.narration?' — '+String(r.narration).slice(0,60):''), isInt:/interest/i.test((r.narration||'')+' '+(r.ledger||''))}));
   const opening=useOpen?-(Number(st.opening)||0):0;                // Dr balance (negative in Tally) = money out = positive principal
   const start=useOpen?st.openingDate:(sel.map(r=>r.vch_date).sort()[0]);
-  const res=tlInterest(txs, opening, start, asOn, rate);
+  const posted=_tlIntPostedFor(st, sel);
+  const res=tlInterest(txs, opening, start, asOn, rate, {posted});
   const sums=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
      ${[['Principal (incl. compounded interest)',res.principal],['Interest not yet compounded',res.accrued],['Total due',res.due],['Total interest charged',res.totalInterest]].map(x=>`<div class="card" style="padding:8px"><div style="font-size:10px;color:var(--text3)">${x[0]}</div><div style="font-size:15px;font-weight:700">₹ ${_tlN(x[1])}</div></div>`).join('')}</div>`;
-  const tbl=`<table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Financial year</th><th style="text-align:right">Interest accrued</th><th style="text-align:right">Added to principal on 31 Mar</th><th style="text-align:right">Principal after</th></tr></thead><tbody>${res.fy.map(f=>`<tr><td>${_tlE(f.fy)}</td><td style="text-align:right">${_tlN(f.interest)}</td><td style="text-align:right">${f.capitalised?_tlN(f.capitalised):'—'}</td><td style="text-align:right">${_tlN(f.endPrincipal)}</td></tr>`).join('')}</tbody></table>`;
   TL.lastInt={st,sel,res,asOn,rate,useOpen};
-  tlModal('Interest — '+_tlE(st.title||''), `<div style="color:var(--text3);margin-bottom:8px">${rate}% p.a. simple daily on the running balance, added to the principal every 31 March. As on ${_tlDate(asOn)} · ${sel.length} rows${useOpen?' + opening balance':''}.</div>`+sums+tbl+
-    `<div style="font-size:11px;color:var(--text3);margin-top:8px">Receipts reduce the principal; no interest runs while the balance is nil. Same rules as the Interest tab. This is a calculation only — nothing is saved.</div>`, [{label:'⬇ Excel sheet',value:'x'},{label:'⬇ PDF',value:'p'},{label:'Close',value:1,primary:true}]).then(v=>{ if(v==='x') tlDownloadInterest('xlsx'); else if(v==='p') tlDownloadInterest('pdf'); });
+  const tbl=`<table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Financial year</th><th style="text-align:right">Interest accrued</th><th style="text-align:right">Added to principal on 31 Mar</th><th style="text-align:right">Principal after</th><th style="text-align:center" title="Tick if you already posted this year's interest as a payment voucher in Tally on 31 March">Already posted in Tally?</th></tr></thead><tbody>${res.fy.map(f=>{ const can=f.capitalised>0||f.posted||f.postedAmt>0; return `<tr><td>${_tlE(f.fy)}</td><td style="text-align:right">${_tlN(f.interest)}</td><td style="text-align:right">${f.posted?'<span style="color:var(--text3)">posted in Tally</span>':(f.capitalised?_tlN(f.capitalised):'—')}</td><td style="text-align:right">${_tlN(f.endPrincipal)}</td><td style="text-align:center">${can?`<input type="checkbox" ${f.posted?'checked':''} onchange="_tlIntPost('${_tlA(f.fy)}',this.checked)">${f.posted&&f.postedAmt>0?`<div style="font-size:10px;color:var(--text3)">voucher ${_tlN(f.postedAmt)} · ours ${_tlN(f.calc)}${Math.abs(f.postedAmt-f.calc)>1?`<br><b style="color:#c0392b">difference ${_tlN(f.postedAmt-f.calc)}</b>`:' ✓'}</div>`:(f.posted?`<div style="font-size:10px;color:var(--text3)">ours ${_tlN(f.calc)}</div>`:(f.postedAmt>0?'<div style="font-size:10px;color:#b26a00">interest voucher found on 31 Mar</div>':''))}`:'—'}</td></tr>`; }).join('')}</tbody></table>`;
+  tlModal('Interest — '+_tlE(st.title||''), `<div style="color:var(--text3);margin-bottom:8px">${rate}% p.a. simple daily on the running balance (365-day year, each balance counted from its date up to the day before the next entry), added to the principal every 31 March. Calculated up to ${_tlDate(asOn)} · ${sel.length} rows${useOpen?' + opening balance':''}.</div>`+sums+tbl+
+    `<div style="font-size:11px;color:var(--text3);margin-top:8px">Tick a year if its interest is already in Tally as a 31-March payment (then we do not add it again), then press ↻ Recalculate. Receipts reduce the principal; no interest runs while the balance is nil. Nothing is saved or posted to Tally.</div>`,
+    [{label:'↻ Recalculate',value:'r'},{label:'⬇ Interest sheet · Excel',value:'x'},{label:'⬇ Interest sheet · PDF',value:'p'},{label:'⬇ Interest + statement · Excel',value:'xs'},{label:'⬇ Interest + statement · PDF',value:'ps'},{label:'Close',value:1,primary:true}]).then(v=>{
+      if(v==='r') _tlCalcInterest(true); else if(v==='x') tlDownloadInterest('xlsx'); else if(v==='p') tlDownloadInterest('pdf'); else if(v==='xs') tlDownloadInterest('xlsx',true); else if(v==='ps') tlDownloadInterest('pdf',true); });
 }
 
 // build a statement (rows + opening) from the API response, bridging FY2024-25 → FY2025-26 openings when history is on
