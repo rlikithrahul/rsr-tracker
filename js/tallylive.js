@@ -128,8 +128,9 @@ async function tlLogin(){
   }catch(e){ if(er) er.textContent = e.message; }
 }
 function _tlShell(el){
-  const tabs=[['daybook','Day Book'],['contractor','Contractor'],['ledgers','Ledgers'],['cc','Cost Centres'],['projects','Projects']];
-  if(TL.admin) tabs.push(['linking','🔗 Linking']);
+  _tlStyle();
+  const tabs=[['daybook','Day Book'],['contractor','Contractor'],['ledgers','Ledgers'],['cc','Cost Centres'],['projects','Projects'],['interest','💰 Interest']];
+  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['linking','🔗 Linking']); }
   el.innerHTML = `<div class="wrap">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:18px;font-weight:700">📒 Tally Live</div>
@@ -154,7 +155,7 @@ function _tlErr(e){
 }
 function _tlTab(t){
   TL.tab=t; _tlShell(document.getElementById('sec-tally'));
-  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, cc:_tlCC, projects:_tlProjectsTab, linking:_tlLinking})[t]();
+  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, linking:_tlLinking})[t]();
 }
 function _tlBusy(){ const b=document.getElementById('tl-body'); if(b) b.innerHTML='<div style="padding:30px;text-align:center;color:var(--text3)">⏳ Loading…</div>'; return b; }
 async function _tlLoadLedgers(){
@@ -213,18 +214,18 @@ function _tlStatement(st, target){
     return `<tr${r.synthetic?' style="background:var(--surface2)"':''}><td><input type="checkbox" class="tl-ck" data-i="${i}" checked></td><td>${_tlDate(r.vch_date)}${r.source==='fy2425'?' <span title="FY2024-25 company" style="font-size:9px;color:var(--text3)">·24-25</span>':''}</td><td>${_tlE(r.vch_type)} ${_tlE(r.vch_number||'')}</td>${showL?`<td>${_tlE(r.ledger||r.ledger_name||'')}${r.cc_name?`<div style="font-size:10px;color:var(--text3)">${_tlE(r.cc_name)}</div>`:''}</td>`:''}<td style="max-width:300px">${_tlE(r.narration||r.party_ledger||'')}</td><td style="text-align:right">${a<0?_tlN(-a):''}</td><td style="text-align:right">${a>0?_tlN(a):''}</td><td style="text-align:right;white-space:nowrap">${_tlAmt(bal)}</td></tr>`; }).join('');
   const hasOpen=st.opening!=null;
   target.innerHTML=`<div style="font-weight:700;margin:12px 0 6px">${_tlE(st.title||'')}</div>
-   <div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+   ${st.interest?`<div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
      <b>Interest</b>
      <label>As on<br><input type="date" id="ti-asof" value="${_tlToday()}"></label>
      <label>Rate % p.a.<br><input type="number" step="0.5" id="ti-rate" value="${TL_RATE}" style="width:64px"></label>
      ${hasOpen?`<label style="display:flex;gap:4px;align-items:end"><input type="checkbox" id="ti-open" checked> include opening balance</label>`:''}
      <label>Tick rows from<br><input type="date" id="ti-f"></label><label>to<br><input type="date" id="ti-t"></label>
      <button class="btn btn-sm" onclick="_tlTickRange()">Tick range</button><button class="btn btn-sm" onclick="_tlTickAll(true)">All</button><button class="btn btn-sm" onclick="_tlTickAll(false)">None</button>
-     <button class="btn btn-sm btn-primary" onclick="_tlCalcInterest()">Calculate interest on ticked rows</button></div>
-   <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th></th><th>Date</th><th>Voucher</th>${showL?'<th>Ledger / cost centre</th>':''}<th>Narration</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead><tbody>
+     <button class="btn btn-sm btn-primary" onclick="_tlCalcInterest()">Calculate interest on ticked rows</button></div>`:''}
+   <div style="overflow:auto"><table class="tbl${st.interest?'':' tl-noint'}" style="width:100%;font-size:12px"><thead><tr><th></th><th>Date</th><th>Voucher</th>${showL?'<th>Ledger / cost centre</th>':''}<th>Narration</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead><tbody>
     ${hasOpen?`<tr style="background:var(--surface2)"><td></td><td colspan="${showL?6:5}"><b>Opening balance (${_tlDate(st.openingDate)})</b></td><td style="text-align:right">${_tlAmt(st.opening)}</td></tr>`:''}
     ${body}<tr style="font-weight:700;background:var(--surface2)"><td></td><td colspan="${showL?4:3}">Totals</td><td style="text-align:right">${_tlN(dr)}</td><td style="text-align:right">${_tlN(cr)}</td><td style="text-align:right">${_tlAmt(bal)}</td></tr></tbody></table></div>
-   <div style="font-size:11px;color:var(--text3);margin-top:6px">Dr = paid out (adds to what the party owes RSR) · Cr = received (reduces it). Tick only the rows that should carry interest.</div>`;
+   <div style="font-size:11px;color:var(--text3);margin-top:6px">Dr = paid out (adds to what the party owes RSR) · Cr = received (reduces it).${st.interest?' Tick only the rows that should carry interest.':''}</div>`;
   target.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function _tlTickAll(v){ document.querySelectorAll('.tl-ck').forEach(c=>c.checked=v); }
@@ -421,7 +422,7 @@ async function _tlSaveLedger(i){
   try{
     await tlApi('set_ledger_link',{guid:l.guid,name:l.name,contractor_name:s.contractor,link_role:s.role,link_tender_id:l.link_tender_id,link_note:l.link_note});
     await tlApi('set_ledger_projects',{guid:l.guid,name:l.name,tender_ids:s.tenders});
-    l.contractor_name=s.role==='none'?null:s.contractor; l.link_role=s.role; TL.ledgerProj[l.guid]=s.tenders.slice(); toast('Saved','ok'); _tlLinkList();
+    l.contractor_name=s.role==='none'?null:s.contractor; l.link_role=s.role; TL.ledgerProj[l.guid]=s.tenders.slice(); toast('Saved','ok'); TV.at=0; _tlLinkList();
   }catch(e){ _tlErr(e); }
 }
 async function _tlSaveCC(i){
@@ -439,10 +440,124 @@ async function _tlSaveCC(i){
   for(const x of proj){ const others=TL.cc.filter(o=>o.guid!==c.guid && _tlCCProjects(o).includes(x.t)).map(o=>o.name);
     if(others.length){ const a=await tlModal('Project already linked', `Project <b>#${_tlE(x.t)} ${_tlE(x.p?x.p.name:'')}</b> is already linked to cost centre <b>${others.map(_tlE).join(', ')}</b>. A project with two cost centres is fine if that is how it was booked in Tally.`, [{label:'Cancel',value:'no'},{label:'Link anyway',value:'ok',primary:true}]); if(a!=='ok') return; } }
   try{ await tlApi('set_cc_link',{guid:c.guid,name:c.name,cc_type:s.type,tender_ids:s.tenders,contractor_name:s.contractor});
-    c.cc_type=s.type; c.contractor_name=s.contractor||null; TL.ccLinks=TL.ccLinks.filter(l=>l.cc_guid!==c.guid).concat(s.tenders.map(x=>({cc_guid:c.guid,tender_id:x}))); toast('Saved','ok'); _tlLinkList();
+    c.cc_type=s.type; c.contractor_name=s.contractor||null; TL.ccLinks=TL.ccLinks.filter(l=>l.cc_guid!==c.guid).concat(s.tenders.map(x=>({cc_guid:c.guid,tender_id:x}))); toast('Saved','ok'); TV.at=0; _tlLinkList();
   }catch(e){ _tlErr(e); }
 }
 async function _tlLinkLog(){
   const b=_tlBusy(); try{ const r=await tlApi('link_log');
     b.innerHTML=`<div style="overflow:auto"><table class="tbl" style="width:100%;font-size:11px"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Item</th><th>Was</th><th>Now</th></tr></thead><tbody>${r.log.map(x=>`<tr><td>${new Date(x.changed_at).toLocaleString('en-IN')}</td><td>${_tlE(x.changed_by)}</td><td>${_tlE(x.kind)}</td><td>${_tlE(x.item_name)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.old_value)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.new_value)}</td></tr>`).join('')}</tbody></table></div>`; }catch(e){ _tlErr(e); }
+}
+
+
+// ───────── look & feel (scoped to this page only) ─────────
+function _tlStyle(){
+  if(document.getElementById('tl-style')) return; const st=document.createElement('style'); st.id='tl-style';
+  st.textContent=`
+  #sec-tally .card{border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  #sec-tally .tbl{border-collapse:separate;border-spacing:0}
+  #sec-tally .tbl thead th{position:sticky;top:0;background:var(--surface2);z-index:1;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);padding:8px 8px;border-bottom:1px solid var(--border)}
+  #sec-tally .tbl td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+  #sec-tally .tbl tbody tr:nth-child(even){background:rgba(127,127,127,.04)}
+  #sec-tally .tbl tbody tr[onclick]:hover{background:rgba(212,160,23,.12)}
+  #sec-tally .tl-noint th:first-child,#sec-tally .tl-noint td:first-child{display:none}
+  #sec-tally .btn-sm{border-radius:20px}
+  #sec-tally input,#sec-tally select{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;background:var(--surface);color:var(--text)}
+  #sec-tally .tl-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+  #sec-tally .tl-kpi>div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+  #sec-tally .tl-kpi .l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+  #sec-tally .tl-kpi .v{font-size:17px;font-weight:700;margin-top:2px}`;
+  document.head.appendChild(st);
+}
+
+// ───────── Interest (its own section) ─────────
+const TL_ILEVELS=[['c_total','Contractor — whole ledger (all his linked ledgers)'],['c_ledger','Contractor — one of his ledgers'],['c_cc','Contractor — all his cost centres'],['cc','One cost centre'],['proj','One project']];
+async function _tlInterestTab(){
+  const b=_tlBusy(); try{ await _tlLoadCC(); await _tlLoadLedgers(); await tvLoad(); }catch(e){ return _tlErr(e); }
+  if(!TV.snap) return _tlErr(new Error('Could not load the Tally snapshot: '+TV.err));
+  b.innerHTML=`<div class="card" style="padding:14px;margin-bottom:10px">
+     <div style="font-weight:700;margin-bottom:4px">💰 Interest</div>
+     <div style="font-size:12px;color:var(--text3);margin-bottom:10px">24% a year, simple daily on the running balance, and every 31 March the year's interest is added to the principal (compounding) until the money is received. Pick what you want to look at, tick the transactions, and calculate. Nothing is saved or posted to Tally.</div>
+     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+       <label style="font-size:11px">Look at<br><select id="ti-lv" onchange="_tlIntLevel()">${TL_ILEVELS.map(l=>`<option value="${l[0]}">${_tlE(l[1])}</option>`).join('')}</select></label>
+       <label style="font-size:11px" id="ti-l1">Contractor<br><input id="ti-a" list="ti-dl" placeholder="Type to search…" style="min-width:260px" oninput="_tlIntLedgers()"></label>
+       <label style="font-size:11px;display:none" id="ti-l2">Ledger<br><select id="ti-b" style="min-width:220px"></select></label>
+       <datalist id="ti-dl"></datalist>
+       <button class="btn btn-primary btn-sm" onclick="_tlIntShow()">Show transactions</button></div></div><div id="ti-out"></div>`;
+  _tlIntLevel();
+}
+function _tlIntLevel(){
+  const lv=tlv('ti-lv')||'c_total'; const dl=document.getElementById('ti-dl'); const a=document.getElementById('ti-a'); a.value='';
+  const lab=a.closest('label'); let opts=[];
+  if(lv==='c_total'||lv==='c_ledger'||lv==='c_cc'){ lab.firstChild.textContent='Contractor'; opts=Object.keys(TV.snap.contractors).concat(_tlContractors()); if(lv==='c_cc') opts=_tlContractors(); }
+  else if(lv==='cc'){ lab.firstChild.textContent='Cost centre'; opts=TL.cc.map(c=>c.name); }
+  else { lab.firstChild.textContent='Project'; opts=_tlProjects().map(p=>'#'+p.tender+' '+p.name); }
+  dl.innerHTML=[...new Set(opts)].sort().map(o=>`<option value="${_tlA(o)}">`).join('');
+  document.getElementById('ti-l2').style.display=lv==='c_ledger'?'':'none'; document.getElementById('ti-b').innerHTML='';
+}
+function _tlIntLedgers(){
+  if(tlv('ti-lv')!=='c_ledger') return; const t=TV.snap.contractors[tlv('ti-a')]; const sel=document.getElementById('ti-b');
+  sel.innerHTML=t?t.ledgers.map(l=>`<option>${_tlE(l.name)}</option>`).join(''):'';
+}
+function _tlSnapRows(tx, filt){ return tx.filter(filt||(()=>true)).map(x=>({vch_date:x.d,vch_type:x.t,vch_number:x.n,narration:x.nar||'',amount:x.amt,ledger:x.l||x.led||'',cc_name:x.cc||'',synthetic:/^open/.test(x.g||''),source:x.src||'main'})); }
+async function _tlIntShow(){
+  const lv=tlv('ti-lv'), a=tlv('ti-a').trim(), out=document.getElementById('ti-out'); if(!a){ toast('Choose something first','error'); return; }
+  out.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">⏳ Loading…</div>';
+  try{
+    if(lv==='c_total'){ const t=TV.snap.contractors[a]; if(!t){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">No Tally ledger is linked to this contractor yet.</div>'; return; }
+      _tlStatement({rows:_tlSnapRows(t.tx),opening:null,title:a+' — whole ledger',interest:true}, out); }
+    else if(lv==='c_ledger'){ const t=TV.snap.contractors[a], l=tlv('ti-b'); if(!t||!l){ toast('Choose the contractor and ledger','error'); out.innerHTML=''; return; }
+      _tlStatement({rows:_tlSnapRows(t.tx,x=>x.l===l),opening:null,title:a+' — ledger '+l,interest:true}, out); }
+    else if(lv==='c_cc'){ const names=TL.cc.filter(c=>(_tlCCContractor(c).name||'')===a).map(c=>c.name); if(!names.length){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">This contractor has no cost centres linked yet.</div>'; return; }
+      const r=await tlApi('cc_statement',{cost_centres:names}); _tlStatement({rows:r.rows.map(x=>({...x,ledger:x.ledger_name})),opening:null,title:a+' — '+names.length+' cost centres',interest:true}, out); }
+    else if(lv==='cc'){ const c=TL.cc.find(x=>x.name.toLowerCase()===a.toLowerCase()); if(!c){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">No such cost centre.</div>'; return; }
+      const r=await tlApi('cc_statement',{cost_centres:[c.name]}); _tlStatement({rows:r.rows.map(x=>({...x,ledger:x.ledger_name})),opening:null,title:'Cost centre '+c.name,interest:true}, out); }
+    else { const m=a.match(/^#?(\S+)/); const t=m&&TV.snap.projects[m[1]]; if(!t){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">This project has no Tally transactions (not linked yet).</div>'; return; }
+      _tlStatement({rows:_tlSnapRows(t.tx),opening:null,title:'Project '+a+(t.shared?' (shared entries split equally)':''),interest:true}, out); }
+  }catch(e){ _tlErr(e); }
+}
+
+// ───────── Needs linking ─────────
+function _tlUnhide(id){ TV.dec=(TV.dec||[]).filter(d=>d.id!==id); mergeAndSaveSetting(TV_DEC_KEY,TV.dec.concat([{id,action:'reset',by:(CU&&CU.name)||'',at:new Date().toISOString()}]),true).then(r=>{ TV.dec=r.filter(d=>d.action!=='reset'); _tlNeeds(); }).catch(e=>toast(e.message,'error')); }
+async function _tlNeedsDecide(id,action){ await tvDecide(id,action); _tlNeeds(); }
+async function _tlNeeds(){
+  const b=_tlBusy(); try{ await _tlLoadCC(); await _tlLoadLedgers(); await _tlLoadTotals(); await tvLoad(true); }catch(e){ return _tlErr(e); }
+  if(!TV.snap) return _tlErr(new Error('Could not load the Tally snapshot: '+TV.err));
+  const dec=id=>{ const d=_tvDec(id); return d&&d.action!=='reset'?d:null; };
+  const projs=_tlProjects().filter(p=>!TV.snap.projects[p.tender]);
+  const shown=projs.filter(p=>!dec('p|'+p.tender)), hidden=projs.filter(p=>dec('p|'+p.tender));
+  const conts=_tlContractors().filter(n=>!TV.snap.contractors[n]); const cshown=conts.filter(n=>!dec('c|'+n));
+  const T=TL.totals||{}; const ccs=TL.cc.filter(c=>T[c.name.toLowerCase()] && !_tlCCProjects(c).length && !c.contractor_name && !['ignore','general','closed_no_cc'].includes(c.cc_type) && !dec('k|'+c.guid));
+  const st=p=>{ const full=(D.projects.find(x=>String(x.tender)===p.tender)||{}); const sets=(full.settlements||[]).filter(s=>!isArchived(s)).length; return sets?'Check received':full.jvDate?'Check pending':(p.status||''); };
+  b.innerHTML=`<div class="card" style="padding:12px;margin-bottom:10px;font-size:12px;color:var(--text3)">Everything here has no Tally link yet, so the app can't show Tally numbers for it. For each one choose <b>Link</b>, <b>OK as it is</b> (settled or dealt with outside Tally — it stops showing here) or <b>Not in Tally</b>. Nothing you choose changes any status or amount.</div>
+   <div class="tl-kpi"><div><div class="l">Projects not linked</div><div class="v">${shown.length}</div></div><div><div class="l">Contractors without a ledger</div><div class="v">${cshown.length}</div></div><div><div class="l">Cost centres with entries, no project</div><div class="v">${ccs.length}</div></div><div><div class="l">Hidden by you</div><div class="v">${hidden.length}</div></div></div>
+   <div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 12px;background:var(--surface2);font-weight:700">Projects not linked</div><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Project</th><th>Contractor</th><th>Status</th><th></th></tr></thead><tbody>
+   ${shown.map(p=>`<tr><td>#${_tlE(p.tender)} ${_tlE(p.name)}</td><td>${_tlE(p.contractor)}</td><td>${_tlE(st(p))}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick='_tlLinkProject(${JSON.stringify(p.tender)})'>Link…</button> <button class="btn btn-sm" onclick='_tlNeedsDecide(${JSON.stringify("p|"+p.tender)},"ok")'>OK as it is</button> <button class="btn btn-sm" onclick='_tlNeedsDecide(${JSON.stringify("p|"+p.tender)},"none")'>Not in Tally</button></td></tr>`).join('')||'<tr><td colspan="4" style="padding:14px;color:var(--text3)">All projects are linked or dealt with. 🎉</td></tr>'}</tbody></table></div></div>
+   <div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 12px;background:var(--surface2);font-weight:700">Contractors with no Tally ledger</div><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><tbody>
+   ${cshown.map(n=>`<tr><td>${_tlE(n)}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick='TL.linkkind="ledgers";TL.linkq=${JSON.stringify(n.split(" ")[0])};_tlTab("linking")'>Link…</button> <button class="btn btn-sm" onclick='_tlNeedsDecide(${JSON.stringify("c|"+n)},"ok")'>OK as it is</button> <button class="btn btn-sm" onclick='_tlNeedsDecide(${JSON.stringify("c|"+n)},"none")'>Not in Tally</button></td></tr>`).join('')||'<tr><td style="padding:14px;color:var(--text3)">None.</td></tr>'}</tbody></table></div></div>
+   <div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 12px;background:var(--surface2);font-weight:700">Cost centres with entries but no project or contractor</div><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><tbody>
+   ${ccs.map(c=>`<tr><td>${_tlE(c.name)}</td><td style="text-align:right">${_tlN((T[c.name.toLowerCase()]||{}).paid)} paid · ${_tlN((T[c.name.toLowerCase()]||{}).received)} received</td><td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick='TL.linkkind="cc";TL.linkq=${JSON.stringify(c.name)};_tlTab("linking")'>Link…</button> <button class="btn btn-sm" onclick='_tlNeedsDecide(${JSON.stringify("k|"+c.guid)},"ok")'>OK as it is</button></td></tr>`).join('')||'<tr><td style="padding:14px;color:var(--text3)">None.</td></tr>'}</tbody></table></div></div>
+   ${hidden.length?`<details class="card" style="padding:10px 12px"><summary style="cursor:pointer">Hidden by you (${hidden.length})</summary>${hidden.map(p=>`<div style="font-size:12px;padding:4px 0">#${_tlE(p.tender)} ${_tlE(p.name)} — <i>${_tlE((dec('p|'+p.tender)||{}).action==='none'?'Not in Tally':'OK as it is')}</i> <button class="btn btn-sm" onclick='_tlUnhide(${JSON.stringify("p|"+p.tender)})'>Show again</button></div>`).join('')}</details>`:''}`;
+}
+// link one project straight to a cost centre or a ledger, using the normal Linking checks and warnings
+function _tlLinkProject(tender){
+  const p=_tlProj(tender); const old=document.getElementById('tl-modal'); if(old) old.remove();
+  const d=document.createElement('div'); d.id='tl-modal'; d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML=`<div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:12px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;padding:18px">
+    <div style="font-weight:700;margin-bottom:6px">Link #${_tlE(tender)} ${_tlE(p?p.name:'')}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Search a Tally cost centre or ledger. Try the project name, tender number or the contractor's name.</div>
+    <input id="tl-lp-q" placeholder="Search…" value="${_tlA(p?p.name.split(' ').slice(0,2).join(' '):'')}" style="margin-bottom:8px"><div id="tl-lp-l" style="overflow:auto;flex:1;border:1px solid var(--border);border-radius:8px;min-height:160px"></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn btn-sm" onclick="document.getElementById('tl-modal').remove()">Close</button></div></div>`;
+  document.body.appendChild(d);
+  const draw=()=>{ const q=tlv('tl-lp-q').toLowerCase(); const T=TL.totals||{};
+    const a=TL.cc.map((c,i)=>({c,i})).filter(x=>!q||(x.c.name+' '+(x.c.alias_text||'')).toLowerCase().includes(q)).slice(0,25);
+    const b2=TL.ledgers.map((l,i)=>({l,i})).filter(x=>!q||(x.l.name+' '+(x.l.contractor_name||'')).toLowerCase().includes(q)).slice(0,25);
+    document.getElementById('tl-lp-l').innerHTML=`<div style="padding:6px 10px;font-size:11px;font-weight:700;background:var(--surface2)">Cost centres</div>`+(a.map(x=>`<div style="padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px" onclick="_tlDoLink('cc',${x.i},'${_tlA(tender)}')">${_tlE(x.c.name)} <span style="color:var(--text3)">· ${_tlN((T[x.c.name.toLowerCase()]||{}).paid)} paid</span></div>`).join('')||'<div style="padding:8px 10px;color:var(--text3);font-size:12px">none</div>')+
+      `<div style="padding:6px 10px;font-size:11px;font-weight:700;background:var(--surface2)">Ledgers</div>`+(b2.map(x=>`<div style="padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px" onclick="_tlDoLink('led',${x.i},'${_tlA(tender)}')">${_tlE(x.l.name)} <span style="color:var(--text3)">· ${_tlE(x.l.parent_group)}</span></div>`).join('')||'<div style="padding:8px 10px;color:var(--text3);font-size:12px">none</div>'); };
+  document.getElementById('tl-lp-q').oninput=draw; draw();
+}
+async function _tlDoLink(kind,i,tender){
+  const m=document.getElementById('tl-modal'); if(m) m.remove();
+  if(kind==='cc'){ const c=TL.cc[i], s=_tlCCState(c); if(!s.tenders.includes(tender)) s.tenders.push(tender); if(s.type==='unmapped') s.type='project'; await _tlSaveCC(i); }
+  else { const l=TL.ledgers[i], s=_tlLedState(l); if(!s.tenders.includes(tender)) s.tenders.push(tender); if(s.role==='none') s.role='project_only'; await _tlSaveLedger(i); }
+  TV.at=0; _tlNeeds();
 }
