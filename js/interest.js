@@ -78,7 +78,7 @@ function calcProjectInterest(p){
   let prevDate = null;
   let isFullySettled = false;
   const breakdown = [];
-  const today = new Date().toISOString().split('T')[0];
+  const today = (typeof _tlToday==='function')?_tlToday():new Date().toISOString().split('T')[0];
 
   for(let i=0; i<=events.length; i++){
     const ev = events[i];
@@ -174,9 +174,9 @@ function calcContractorLedger(c){
   let accrued = 0;       // interest accrued in current FY (resets after compounding)
   let totalInterest = 0; // all-time interest
   let prevDate = null;
-  const today = new Date().toISOString().split('T')[0];
+  const today = (typeof _tlToday==='function')?_tlToday():new Date().toISOString().split('T')[0];
   const currentFY = getCurrentFY();
-  const currentFYStart = getFYStart(currentFY).toISOString().split('T')[0];
+  const currentFYStart = currentFY.split(' ')[1].split('-')[0]+'-04-01';   // was UTC-shifted one day early in IST
   let currentFYInterest = 0;
   const fyBreakdown = {};
 
@@ -290,7 +290,7 @@ function renderInterest(){
   const wrap = document.getElementById('interest-wrap');
   if(!wrap) return;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = (typeof _tlToday==='function')?_tlToday():new Date().toISOString().split('T')[0];
   let grandOutstanding = 0, grandInterestFY = 0, grandInterestAllTime = 0;
 
   const contractorCards = D.contractors.map(c=>{

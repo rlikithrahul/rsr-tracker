@@ -7,7 +7,7 @@
 const _xNum = n => Math.round((Number(n)||0)*100)/100;
 function _xName(s){ return String(s||'report').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_').slice(0,60)||'report'; }
 function _xD(d){ if(!d) return ''; const p=String(d).split('-'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d; }
-function _xToday(){ return new Date().toISOString().split('T')[0]; }
+function _xToday(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }   // local date (IST), not UTC
 function _xP(n){ return (typeof pdfFmt==='function')?pdfFmt(n):('Rs. '+(Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})); }
 function _xPlain(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _xCheckLibs(kind){
@@ -82,8 +82,8 @@ function tlDownloadInterest(kind, withStmt){
   const li=TL&&TL.lastInt; if(!li){ toast('Calculate interest first','error'); return; } if(!_xCheckLibs(kind)) return;
   const {st,sel,res,asOn,rate,useOpen}=li; const base=_xName(st.title)+'_interest_'+asOn+(withStmt?'_with_statement':'');
   const lines=_xIntLines(li); const sorted=sel.slice().sort((a,b)=>a.vch_date<b.vch_date?-1:1);
-  const head=['From','To (last day charged)','Days','Particulars','Paid out / added','Received','Principal balance','Interest for the period'];
-  const note='Interest at '+rate+'% a year, simple daily on the principal balance (365-day year). Each balance is charged from its date up to the day before the next entry. Interest of each financial year is added to the principal on 31 March (unless already posted in Tally). Receipts reduce the principal; no interest while the balance is nil. Calculated up to '+_xD(asOn)+'.';
+  const head=['From','To (last day, included)','Days','Particulars','Paid out / added','Received','Principal balance','Interest for the period'];
+  const SS=li.S||(res&&res.set)||{}; const note='Interest settings: '+tlSetSummary(SS)+'. Interest is balance x rate x days / '+(SS.style==='cal'?'365 or 366':'365')+'; a balance is charged from its first day to its last day. Interest posted in Tally as a voucher is not charged twice. Calculated up to '+(SS.lastDay===false?'(not including) ':'and including ')+_xD(asOn)+'.';
   const tail=[['Total interest charged',res.totalInterest],['Principal (incl. interest added on 31 March)',res.principal],['Interest not yet added to principal',res.accrued],['TOTAL DUE as on '+_xD(asOn),res.due]];
   const fyTbl=res.fy.map(f=>[f.fy,f.interest,f.posted?'posted in Tally':(f.capitalised||''),f.endPrincipal]);
   if(kind==='xlsx'){
@@ -143,7 +143,7 @@ async function downloadProjectReport(pid){
     const state=sets.length?'Check received / settled':(p.jvDate?'Check pending':'Work in progress');
     const dep=totPayments(p), rec=(typeof totReceipts==='function')?totReceipts(p):0, net=totRel(p), max=maxF(p);
     // interest the same way as the Tally Live Interest section: payments add, confirmed settlements reduce, 24% compounded every 31 March
-    let ires=null; if(typeof tlInterest==='function'){ const ev=[]; relList(p).filter(r=>r.txType!=='receipt').forEach(r=>ev.push({date:r.date,delta:r.amount})); sets.forEach(s2=>ev.push({date:s2.date,delta:-s2.amount})); if(ev.length) ires=tlInterest(ev,0,ev.map(e=>e.date).sort()[0],_xToday(),24); }
+    let ires=null; if(typeof tlInterest==='function'){ const ev=[]; relList(p).filter(r=>r.txType!=='receipt').forEach(r=>ev.push({date:r.date,delta:r.amount,isInt:tlIsIntText(r.notes)})); sets.forEach(s2=>ev.push({date:s2.date,delta:-s2.amount})); if(ev.length) { const S=tlIntSet(); ires=tlInterest(ev,0,ev.map(e=>e.date).sort()[0],_xToday(),null,{set:S,posted:S.autoInt?tlAutoPosted(ev):{}}); } }
     const ctx=_xPdfStart('Project report',p.tender?'Tender '+p.tender:'',false); const {doc}=ctx;
     doc.setFont('helvetica','bold'); doc.setFontSize(13); const nl=doc.splitTextToSize(p.name||'—',ctx.W-80); doc.text(nl,40,ctx.y); ctx.y+=nl.length*16+4;
     _xKV(ctx,[['Tender ID',p.tender],['EA number',typeof getEANumber==='function'?getEANumber(p):''],['Gen code',typeof getGenCode==='function'?getGenCode(p):''],['Firm',p.firm||'RSR Constructions'],['Contractor',c.name],['Type / location',[p.type,p.location].filter(Boolean).join(' · ')],['Status',(p.status||'active')+' — '+state],

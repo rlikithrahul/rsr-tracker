@@ -55,6 +55,7 @@ async function tvLoad(force){
       const j=await r.json(); if(!r.ok) throw new Error(j.error||('Error '+r.status));
       const before=TV.sig; TV.snap=j; TV.at=Date.now(); TV.err=''; TV.relCache={}; TV.sig=_tvSig(j);
       try{ TV.sw=await getSetting(TV_SW_KEY,null); }catch(e){}
+      try{ if(typeof tlLoadIntSet==='function') await tlLoadIntSet(); }catch(e){}
       _tvSave();
       if(tvSwitchOn() && before!==TV.sig) setTimeout(tvRerender,0);
       try{ TV.dec=await getSetting(TV_DEC_KEY,[])||[]; }catch(e){ TV.dec=TV.dec||[]; }
@@ -79,8 +80,8 @@ async function tvDecide(id, action, extra){
 // ───────── interest (24% simple daily on the running balance; accrued interest joins the principal every 31 March) ─────────
 function tvInterest(txs, asOn){ // txs: [{d, amt}] amt in Tally sign (Dr negative = paid out = principal up)
   if(typeof tlInterest!=='function' || !txs.length) return null;
-  const list=txs.map(t=>({date:t.d,delta:-(Number(t.amt)||0)})); const start=list.map(x=>x.date).sort()[0];
-  return tlInterest(list,0,start,asOn||_tvToday(),24);
+  const list=txs.map(t=>({date:t.d,delta:-(Number(t.amt)||0),isInt:tlIsIntText(t.nar)})); const start=list.map(x=>x.date).sort()[0];
+  const S=tlIntSet(); return tlInterest(list,0,start,asOn||_tvToday(),null,{set:S,posted:S.autoInt?tlAutoPosted(list):{}});   // a 31-March interest voucher already in Tally is not charged twice
 }
 
 // ───────── PROJECT PAGE ─────────
@@ -97,7 +98,7 @@ async function tvProjectFill(id){
   const t=snap.projects[String(p.tender)];
   if(!t){ box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">This project is not linked to a Tally cost centre or ledger yet${CU&&CU.isSuperAdmin?' — link it in <a href="#" onclick="ownerTab(18);return false" style="color:var(--navy)">Tally Live → Needs linking</a>':''}.</div>`; return; }
   const net=t.paid-t.received, shared=t.tx.some(x=>x.sh>1);
-  const it=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt})));
+  const it=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar})));
   const attn=tvAttention(p,t);
   box.innerHTML=`<details data-toggle="tv-${id}" ${attn.length?'open':''}><summary style="cursor:pointer;list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div class="st" style="margin:0;border:none;padding:0">📒 Tally transactions <span style="font-size:11px;font-weight:500;color:var(--text3)">(${t.tx.length} entries · live from Tally${snap.last_sync?' · synced '+new Date(snap.last_sync.finished_at||snap.last_sync.started_at).toLocaleString('en-IN'):''})</span></div>
