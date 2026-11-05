@@ -151,7 +151,7 @@ function statusBadge(p){
 }
 
 // intr(p) removed — approximate formula, no longer called.
-// Authoritative interest calculation is calcProjectInterest(p) in interest.js
+// Interest is calculated from Tally (tlInterest in tallylive.js; project/contractor views in tallyview.js)
 // (chronological event-based, correctly handles receipts/settlements/compounding).
 // Used by: Interest tab, Backup/Excel export.
 
@@ -456,3 +456,10 @@ function fmtDateTime(dateStr){
   }catch(e){ return dateStr; }
 }
 
+
+// Financial-year label (moved here from the retired interest.js; used by the Work Experience screens)
+function getFYLabel(date){
+  const d = new Date(date);
+  const year = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear()-1;
+  return `FY ${year}-${String(year+1).slice(-2)}`;
+}

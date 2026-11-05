@@ -96,7 +96,6 @@ function ownerTabSilent(i){
   else if(i===1) renderProjects();
   else if(i===2){ renderConts(); }
   else if(i===3) loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
-  else if(i===4) renderInterest();
   else if(i===5) renderEMI();
   else if(i===6) renderSettings();
   else if(i===7) renderGST();

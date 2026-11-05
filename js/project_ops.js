@@ -702,8 +702,9 @@ function settleReceiptsFor(p){
   const used=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tallyRef).map(s=>String(s.tallyRef)));
   const usedG=new Set((p.settlements||[]).filter(s=>!isArchived(s)&&s.tvGuid).map(s=>s.tvGuid));
   try{
-    if(typeof tvRel==='function' && tvRel(p)){
-      const t=TV.snap.projects[String(p.tender)];
+    if(typeof tvSwitchOn==='function' && tvSwitchOn()){
+      const t=TV.snap&&TV.snap.projects&&TV.snap.projects[String(p.tender)];
+      if(!t) return [];
       return (t.tx||[]).filter(x=>x.amt>0 && !usedG.has(x.g) && !used.has(String(x.n||'')))
         .map(x=>({id:'tv-'+x.g,date:x.d,amount:x.amt,ref:x.n||'',notes:(x.nar||'')+(x.sh>1?' (equal share of ₹ '+Number(x.full).toLocaleString('en-IN')+')':''),tvGuid:x.g,source:'tally-live'}))
         .sort((a,b)=>String(b.date).localeCompare(String(a.date)));

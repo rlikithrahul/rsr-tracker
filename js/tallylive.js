@@ -174,7 +174,7 @@ async function tlLogin(){
 function _tlShell(el){
   _tlStyle();
   const tabs=[['daybook','Day Book'],['contractor','Contractor'],['ledgers','Ledgers'],['cc','Cost Centres'],['projects','Projects'],['interest','💰 Interest']];
-  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['switch','🔀 Use Tally numbers']); tabs.push(['linking','🔗 Linking']); }
+  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['linking','🔗 Linking']); }
   el.innerHTML = `<div class="wrap">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:18px;font-weight:700">📒 Tally Live</div>

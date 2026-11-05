@@ -108,6 +108,7 @@ function renderContractorProfile(cid){
   const eChecks   = ef('checks', totalChecksRcv);
   const ePending  = ef('pending', checkPending);
   const eOutst    = ef('outstanding', Math.max(0, eDeployed.value - eChecks.value));
+  const ledger = { fyBreakdown: (typeof tvContFyBreakdown==='function')?tvContFyBreakdown(c):{} };   // per-FY interest from the Tally ledger
   const _ci = typeof tvContInterestFY==='function'?tvContInterestFY(c):null;
   const eInterest = ef('interest', _ci==null?0:_ci);
 

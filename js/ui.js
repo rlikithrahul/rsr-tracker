@@ -1066,7 +1066,6 @@ function ownerTab(i){
       renderFunds();
     }
   }
-  if(i===4) renderInterest();
   if(i===5) renderEMI();
   if(i===6) renderSettings();
   if(i===7) renderGST();
@@ -1163,7 +1162,6 @@ function goBack(){
     });
   } else if(targetTab === 0){ renderDash(); }
   else if(targetTab === 2){ renderConts(); }
-  else if(targetTab === 4){ renderInterest(); }
   else if(targetTab === 5){ renderEMI(); }
   else if(targetTab === 7){ renderGST(); }
 }

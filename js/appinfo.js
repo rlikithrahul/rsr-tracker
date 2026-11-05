@@ -4,6 +4,9 @@
 // ═══════════════════════════════════════════════════════
 const APP_BUILD_DATE = '5 Nov 2026';
 const APP_CHANGELOG = [
+  ['v27o','Tally is now the only source of payments and receipts for owner and staff: Excel-imported entries stay stored but are never shown, and projects not linked to Tally show nothing (with a link prompt). The last synced Tally numbers are kept if a refresh fails. The Use Tally numbers switch is retired. Settlements, statuses and part bills untouched.'],
+  ['v27n','Full code check done. Old interest calculator file removed (nothing used it any more). Contractor profile page fix from v27m included.'],
+  ['v27m','Fix: contractor profile page not opening after v27l (a leftover reference to the old interest calculation). The per-year interest table now uses the Tally ledger.'],
   ['v27l','All interest now comes from Tally, calculated the Tally way. Project page shows the interest of its Tally cost centre (0 and interest closed once settled; not linked shows a link prompt). Backup Excel, integrity check and contractor Interest box no longer use the old calculator. Nothing deleted.'],
   ['v27k','Tally Import page and old Interest tracker removed from the menu for everyone (nothing deleted - Excel entries stay stored but hidden). Tally Cost Centre Reference moved to the Action Centre. Numbers now always come from Tally Live. No status, settlement or part-bill was changed.'],
   ['v27j','Interest settings like Tally: payment day / receipt day counted, 365-day or calendar year, debit / credit / all balances, compounding on 31 March, last day, stop at nil, recognise posted interest vouchers · saved defaults on the Interest page (Super Admin) used by every interest figure · per-calculation settings box wherever interest is calculated · settings printed on the sheet'],

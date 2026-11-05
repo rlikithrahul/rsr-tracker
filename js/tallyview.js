@@ -12,13 +12,13 @@ const TV_CACHE   = 'rsr_tv_cache_v1';            // last snapshot kept in this b
 let TV = { snap:null, at:0, p:null, base:null, dec:[], err:'', sw:null, relCache:{}, sig:'' };
 try{ const c=JSON.parse(localStorage.getItem(TV_CACHE)||'null'); if(c&&c.snap){ TV.snap=c.snap; TV.sw=c.sw||null; TV.sig=_tvSig(c.snap); } }catch(e){}
 function _tvSig(s){ return s?((s.last_sync&&(s.last_sync.finished_at||s.last_sync.started_at))||'')+'|'+Object.keys(s.projects||{}).length+'|'+((s.receipt_guids||[]).length):''; }
-const tvSwitchOn = () => !(TV.sw && TV.sw.on===false) && !!TV.snap && !!(CU && CU.role==='owner');
+const tvSwitchOn = () => !!(CU && CU.role==='owner');   // owner / staff: Tally is the ONLY source of payments (Excel-imported entries stay stored but are never shown)
 // Tally payments for a linked project (null = use the normal releases). Receipts are NOT included: money received counts only through
 // confirmed settlements, exactly as the app already works.
 function tvRel(p){
   if(!tvSwitchOn() || !p || !p.tender) return null; const k=String(p.tender);
   if(k in TV.relCache) return TV.relCache[k];
-  const t=TV.snap.projects[k]; return TV.relCache[k]=t?_tvRelRaw(t):null;
+  const t=TV.snap&&TV.snap.projects&&TV.snap.projects[k]; return TV.relCache[k]=t?_tvRelRaw(t):[];   // not linked / not loaded yet: no Excel numbers, just nothing
 }
 function _tvRelRaw(t){ return t.tx.filter(x=>x.amt<0).map(x=>({id:'tv-'+x.g,date:x.d,amount:-x.amt,method:x.t,txType:'payment',ref:x.n,notes:x.nar||'',costCentre:x.cc||'',source:'tally-live',fromTally:true})); }
 function tvRerender(){
@@ -65,7 +65,7 @@ async function tvLoad(force){
         TV.base={at:new Date().toISOString(), guids:j.receipt_guids||[]};
         try{ await saveSetting(TV_BASE_KEY, TV.base); }catch(e){ TV.base=null; }
       }
-    }catch(e){ TV.err=e.message; TV.snap=null; }
+    }catch(e){ TV.err=e.message; }   // keep the last synced Tally numbers: nothing changes in Tally unless it is opened, so the last sync is the latest data
     TV.p=null; return TV.snap;
   })();
   return TV.p;
@@ -112,6 +112,12 @@ function tvContInterestFY(c){
   const snap=TV.snap; const t=snap&&snap.contractors&&snap.contractors[c.name]; if(!t||!t.tx||!t.tx.length) return null;
   const r=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar}))); if(!r) return null;
   const lab=_tlFY(_tvToday()); const f=(r.fy||[]).find(x=>x.fy===lab); return f?f.interest:0;
+}
+
+// Per-financial-year interest from the contractor's Tally ledger: {'FY 2025-26':{interest}} (empty if not linked / not loaded)
+function tvContFyBreakdown(c){
+  const snap=TV.snap; const t=snap&&snap.contractors&&snap.contractors[c.name]; const o={}; if(!t||!t.tx||!t.tx.length) return o;
+  const r=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar}))); (r&&r.fy||[]).forEach(f=>{ o[f.fy]={interest:f.interest}; }); return o;
 }
 
 // ───────── PROJECT PAGE ─────────
