@@ -288,7 +288,7 @@ function triggerInstall(){
 // invisible, because nothing about it looks like an error. Bumping this
 // version string forces a real reinstall, a real cache purge, and a
 // guaranteed fresh shell on the next load.
-const SW_VERSION = 'rsr-tracker-v27e-1';
+const SW_VERSION = 'rsr-tracker-v27f-1';
 
 function registerServiceWorker(){
   if(!('serviceWorker' in navigator)) return;

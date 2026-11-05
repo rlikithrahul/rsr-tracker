@@ -313,6 +313,15 @@ async function _tlCC(){
   _tlCCList();
 }
 function _tlAgree(tender){ const p=(D.projects||[]).find(x=>String(x.tender)===String(tender)); if(!p) return 0; try{ return Number(agAmt(p))||0; }catch(e){ return 0; } }
+// A project is CLOSED for funding only when SETTLED (status settled) or a Final Bill has been received. Completed work still has headroom. Closed = nothing more to fund.
+// (Part bills do not close it: those keep the normal "70% of agreement minus net deployed" headroom.)
+function _tlProjClosed(tender){
+  const p=(D.projects||[]).find(x=>String(x.tender)===String(tender)); if(!p) return {known:false,closed:false,label:''};
+  const sets=(p.settlements||[]).filter(s=>!isArchived(s)); const final=sets.some(s=>s.billType==='Final Bill');
+  const st=p.status||'active'; const closed=st==='settled'||final;   // completed-but-not-settled stays OPEN: a little spending may still be needed
+  const label=closed?'Settled':sets.length?'Part bill received':p.jvDate?'Check pending':st==='completed'?'Completed (not settled)':st==='onhold'?'On hold':'Active';
+  return {known:true,closed,label};
+}
 function _tlCCList(){
   const q=TL.ccq.toLowerCase().trim(), cq=TL.ccc.toLowerCase().trim(), T=TL.totals||{}; const groups={};
   TL.cc.forEach((c,i)=>{
@@ -320,24 +329,29 @@ function _tlCCList(){
     const ps=_tlCCProjects(c).map(t=>_tlProj(t)).filter(Boolean); const con=_tlCCContractor(c);
     const hay=(c.name+' '+(c.alias_text||'')+' '+ps.map(p=>p.name+' '+p.tender).join(' ')).toLowerCase();
     if(q && !hay.includes(q)) return; if(cq && !(con.name||'unassigned').toLowerCase().includes(cq)) return;
-    const t0=tot||{paid:0,received:0,n:0}; const agreement=_tlCCProjects(c).reduce((s,t)=>s+_tlAgree(t),0); const maxFund=agreement*0.7, net=t0.paid-t0.received;
-    const k=con.name||'— No contractor set —'; (groups[k]=groups[k]||[]).push({c,i,tot:t0,con,ps,agreement,maxFund,net,headroom:maxFund-net});
+    const t0=tot||{paid:0,received:0,n:0}; const tl=_tlCCProjects(c); const agreement=tl.reduce((s,t)=>s+_tlAgree(t),0); const maxFund=agreement*0.7, net=t0.paid-t0.received;
+    const info=tl.map(_tlProjClosed).filter(x=>x.known); const allClosed=info.length>0&&info.every(x=>x.closed);
+    const maxOpen=tl.filter(t=>!_tlProjClosed(t).closed).reduce((s,t)=>s+_tlAgree(t),0)*0.7;
+    // closed work: nothing more can be funded (even if the 70% maths says otherwise). Mixed: only the still-open projects' 70% counts.
+    const headroom=allClosed?0:(info.some(x=>x.closed)?maxOpen-net:maxFund-net);
+    const state=allClosed?'Settled':[...new Set(info.map(x=>x.label))].join(' / ');
+    const k=con.name||'— No contractor set —'; (groups[k]=groups[k]||[]).push({c,i,tot:t0,con,ps,agreement,maxFund,net,headroom,allClosed,state});
   });
   const names=Object.keys(groups).sort(); const el=document.getElementById('tl-ccl');
   TL._ccSum={}; const all=[];
-  names.forEach(n=>{ const rows=groups[n].map(x=>({name:x.c.name,projects:x.ps.map(p=>({tender:p.tender,name:p.name})),agreement:x.agreement,maxFund:x.maxFund,paid:x.tot.paid,received:x.tot.received,net:x.net,headroom:x.headroom,n:x.tot.n}));
+  names.forEach(n=>{ const rows=groups[n].map(x=>({name:x.c.name,projects:x.ps.map(p=>({tender:p.tender,name:p.name})),agreement:x.agreement,maxFund:x.maxFund,paid:x.tot.paid,received:x.tot.received,net:x.net,headroom:x.headroom,state:x.state,n:x.tot.n}));
     TL._ccSum[n]={title:n,rows}; rows.forEach(r=>all.push({...r,name:n+' / '+r.name})); });
   TL._ccSum['__all__']={title:'All contractors (as filtered)',rows:all};
   if(!names.length){ el.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">Nothing matches.</div>'; return; }
-  el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--text3)">${names.length} contractor group(s)</span><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','xlsx')">⬇ All as Excel</button><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','pdf')">⬇ All as PDF</button></div>`+names.map(n=>{ const g=groups[n]; const paid=g.reduce((s,x)=>s+x.tot.paid,0), rec=g.reduce((s,x)=>s+x.tot.received,0), mx=g.reduce((s,x)=>s+x.maxFund,0);
+  el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--text3)">${names.length} contractor group(s)</span><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','xlsx')">⬇ All as Excel</button><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','pdf')">⬇ All as PDF</button></div>`+names.map(n=>{ const g=groups[n]; const paid=g.reduce((s,x)=>s+x.tot.paid,0), rec=g.reduce((s,x)=>s+x.tot.received,0), mx=g.reduce((s,x)=>s+x.maxFund,0), sf=g.reduce((s,x)=>s+x.headroom,0);
     return `<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--surface2)">
       <b>${_tlE(n)}</b><span style="font-size:12px;color:var(--text3)">${g.length} cost centres</span>
-      <span style="margin-left:auto;font-size:12px">Max fundable <b>${_tlN(mx)}</b> · Paid <b>${_tlN(paid)}</b> · Received <b>${_tlN(rec)}</b> · Net with RSR <b>${_tlN(paid-rec)}</b> · Still fundable <b style="color:${mx-(paid-rec)<0?'#c0392b':'#2e7d32'}">${_tlN(mx-(paid-rec))}</b></span>
+      <span style="margin-left:auto;font-size:12px">Max fundable <b>${_tlN(mx)}</b> · Paid <b>${_tlN(paid)}</b> · Received <b>${_tlN(rec)}</b> · Net with RSR <b>${_tlN(paid-rec)}</b> · Still fundable <b style="color:${sf<0?'#c0392b':'#2e7d32'}">${_tlN(sf)}</b></span>
       <button class="btn btn-sm" onclick='tlDownloadCCSummary(${JSON.stringify(n)},"xlsx")'>⬇ Excel</button><button class="btn btn-sm" onclick='tlDownloadCCSummary(${JSON.stringify(n)},"pdf")'>⬇ PDF</button>
       <button class="btn btn-sm btn-primary" onclick='_tlCCOpen(${JSON.stringify(g.map(x=>x.i))},${JSON.stringify(n)})'>Statement — all his cost centres</button></div>
-      <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Cost centre</th><th style="text-align:left">Projects</th><th style="text-align:right">Max fundable (70%)</th><th style="text-align:right">Paid (Dr)</th><th style="text-align:right">Received (Cr)</th><th style="text-align:right">Net with RSR</th><th style="text-align:right">Still fundable</th><th>Entries</th></tr></thead><tbody>
-      ${g.map(x=>`<tr style="cursor:pointer" onclick='_tlCCOpen([${x.i}],${JSON.stringify(x.c.name)})'><td>${_tlE(x.c.name)}${x.con.how==='several'?' <span title="linked projects belong to different contractors" style="color:#c0392b">⚠</span>':''}</td><td style="font-size:11px;color:var(--text3)">${x.ps.map(p=>'#'+_tlE(p.tender)+' '+_tlE(p.name.slice(0,40))).join('<br>')||_tlE(x.c.alias_text||'')}</td><td style="text-align:right">${x.maxFund?_tlN(x.maxFund):'—'}</td><td style="text-align:right">${_tlN(x.tot.paid)}</td><td style="text-align:right">${_tlN(x.tot.received)}</td><td style="text-align:right;font-weight:600">${_tlN(x.net)}</td><td style="text-align:right;color:${x.maxFund&&x.headroom<0?'#c0392b':'inherit'}">${x.maxFund?_tlN(x.headroom):'—'}</td><td style="text-align:center">${x.tot.n}</td></tr>`).join('')}
-      <tr style="font-weight:700;background:var(--surface2)"><td colspan="2">Total</td><td style="text-align:right">${_tlN(mx)}</td><td style="text-align:right">${_tlN(paid)}</td><td style="text-align:right">${_tlN(rec)}</td><td style="text-align:right">${_tlN(paid-rec)}</td><td style="text-align:right">${_tlN(mx-(paid-rec))}</td><td></td></tr></tbody></table></div></div>`; }).join('');
+      <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Cost centre</th><th style="text-align:left">Projects</th><th style="text-align:right">Max fundable (70%)</th><th style="text-align:right">Paid (Dr)</th><th style="text-align:right">Received (Cr)</th><th style="text-align:right">Net with RSR</th><th style="text-align:right">Still fundable</th><th>State</th><th>Entries</th></tr></thead><tbody>
+      ${g.map(x=>`<tr style="cursor:pointer" onclick='_tlCCOpen([${x.i}],${JSON.stringify(x.c.name)})'><td>${_tlE(x.c.name)}${x.con.how==='several'?' <span title="linked projects belong to different contractors" style="color:#c0392b">⚠</span>':''}</td><td style="font-size:11px;color:var(--text3)">${x.ps.map(p=>'#'+_tlE(p.tender)+' '+_tlE(p.name.slice(0,40))).join('<br>')||_tlE(x.c.alias_text||'')}</td><td style="text-align:right">${x.maxFund?_tlN(x.maxFund):'—'}</td><td style="text-align:right">${_tlN(x.tot.paid)}</td><td style="text-align:right">${_tlN(x.tot.received)}</td><td style="text-align:right;font-weight:600">${_tlN(x.net)}</td><td style="text-align:right;color:${x.headroom<0?'#c0392b':'inherit'}">${x.maxFund?_tlN(x.headroom):'—'}</td><td style="font-size:11px">${x.allClosed?`<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-weight:600">${_tlE(x.state)}</span>${x.net<0?'<div style="color:var(--text3);margin-top:2px">RSR owes contractor</div>':''}`:_tlE(x.state)}</td><td style="text-align:center">${x.tot.n}</td></tr>`).join('')}
+      <tr style="font-weight:700;background:var(--surface2)"><td colspan="2">Total</td><td style="text-align:right">${_tlN(mx)}</td><td style="text-align:right">${_tlN(paid)}</td><td style="text-align:right">${_tlN(rec)}</td><td style="text-align:right">${_tlN(paid-rec)}</td><td style="text-align:right">${_tlN(sf)}</td><td></td><td></td></tr></tbody></table></div></div>`; }).join('');
 }
 async function _tlCCOpen(idxs, label){
   const d=document.getElementById('tl-ccs'); d.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">⏳ Loading…</div>';

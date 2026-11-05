@@ -99,17 +99,17 @@ function tlDownloadCCSummary(key, kind){
   const base=_xName('CostCentres_'+g.title)+'_'+_xToday(); const T=g.rows.reduce((a,r)=>({agreement:a.agreement+r.agreement,maxFund:a.maxFund+r.maxFund,paid:a.paid+r.paid,received:a.received+r.received,net:a.net+r.net,headroom:a.headroom+r.headroom}),{agreement:0,maxFund:0,paid:0,received:0,net:0,headroom:0});
   if(kind==='xlsx'){
     const aoa=[['RSR CONSTRUCTIONS — COST CENTRE SUMMARY'],[g.title],['Generated',_xD(_xToday())],['Max fundable = 70% of the linked projects\' agreement amount. Net with RSR = paid out − received. Where a cost centre is shared, its projects\' agreements are added together.'],[],
-      ['Cost centre','Projects','Agreement amount','Max fundable (70%)','Deployed (paid out)','Receipts','Net with RSR (closing)','Still fundable','Entries']];
-    g.rows.forEach(r=>aoa.push([r.name,r.projects.map(p=>'#'+p.tender+' '+p.name).join('; '),_xNum(r.agreement),_xNum(r.maxFund),_xNum(r.paid),_xNum(r.received),_xNum(r.net),_xNum(r.headroom),r.n]));
-    aoa.push([],['TOTAL','',_xNum(T.agreement),_xNum(T.maxFund),_xNum(T.paid),_xNum(T.received),_xNum(T.net),_xNum(T.headroom),'']);
-    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,_xSheet(aoa,[30,48,18,18,18,16,20,16,8]),'Cost centres'); XLSX.writeFile(wb,base+'.xlsx');
+      ['Cost centre','Projects','Agreement amount','Max fundable (70%)','Deployed (paid out)','Receipts','Net with RSR (closing)','Still fundable','Project state','Entries']];
+    g.rows.forEach(r=>aoa.push([r.name,r.projects.map(p=>'#'+p.tender+' '+p.name).join('; '),_xNum(r.agreement),_xNum(r.maxFund),_xNum(r.paid),_xNum(r.received),_xNum(r.net),_xNum(r.headroom),r.state||'',r.n]));
+    aoa.push([],['TOTAL','',_xNum(T.agreement),_xNum(T.maxFund),_xNum(T.paid),_xNum(T.received),_xNum(T.net),_xNum(T.headroom),'','']);
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,_xSheet(aoa,[30,48,18,18,18,16,20,16,22,8]),'Cost centres'); XLSX.writeFile(wb,base+'.xlsx');
   } else {
     const c=_xPdfStart('Cost centre summary',null,true); const {doc}=c; doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(String(g.title),40,c.y); c.y+=8;
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(110,110,110); doc.text('Max fundable = 70% of the linked projects\' agreement amount. Net with RSR = paid out - received.',40,c.y+8); doc.setTextColor(20,20,20);
-    doc.autoTable({startY:c.y+18,head:[['Cost centre / projects','Agreement','Max fundable (70%)','Deployed','Receipts','Net with RSR','Still fundable']],
-      body:g.rows.map(r=>[r.name+(r.projects.length?'\n'+r.projects.map(p=>'#'+p.tender+' '+p.name).join('\n'):''),_xPlain(r.agreement),_xPlain(r.maxFund),_xPlain(r.paid),_xPlain(r.received),_xPlain(r.net),_xPlain(r.headroom)]),
+    doc.autoTable({startY:c.y+18,head:[['Cost centre / projects','Agreement','Max fundable (70%)','Deployed','Receipts','Net with RSR','Still fundable','State']],
+      body:g.rows.map(r=>[r.name+(r.projects.length?'\n'+r.projects.map(p=>'#'+p.tender+' '+p.name).join('\n'):''),_xPlain(r.agreement),_xPlain(r.maxFund),_xPlain(r.paid),_xPlain(r.received),_xPlain(r.net),_xPlain(r.headroom),r.state||'']),
       styles:{fontSize:7.5,cellPadding:3.5},headStyles:{fillColor:c.navy,textColor:[255,255,255]},alternateRowStyles:{fillColor:[247,248,251]},columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}},margin:{left:40,right:40},
-      foot:[['TOTAL',_xPlain(T.agreement),_xPlain(T.maxFund),_xPlain(T.paid),_xPlain(T.received),_xPlain(T.net),_xPlain(T.headroom)]],footStyles:{fillColor:c.navy,textColor:[255,255,255],halign:'right'}});
+      foot:[['TOTAL',_xPlain(T.agreement),_xPlain(T.maxFund),_xPlain(T.paid),_xPlain(T.received),_xPlain(T.net),_xPlain(T.headroom),'']],footStyles:{fillColor:c.navy,textColor:[255,255,255],halign:'right'}});
     _xPdfFooter(doc); doc.save(base+'.pdf');
   }
 }
