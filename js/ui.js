@@ -710,8 +710,18 @@ function dashCardHTML(p){
 // PROJECTS VIEW STATE
 // ═══════════════════════════════════════════════════════
 let projViewMode = 'grid'; // 'grid' | 'table'
-let projQuickFilter = 'all'; // contractor id, firm name, or 'all'
-let projQuickFilterType = 'none'; // 'contractor' | 'firm' | 'none'
+let projQuickFilter = 'all'; // (old single-select state — kept only so older saved states do not break)
+let projQuickFilterType = 'none';
+// Quick pills are MULTI-select: pick as many as you like. Within one group (e.g. two contractors) it is "either";
+// across groups (status + firm + contractor) it is "and".
+let projQF = {status:[], firm:[], contractor:[]};
+function projQFAny(){ return projQF.status.length||projQF.firm.length||projQF.contractor.length; }
+function projQFMatch(p, skip){
+  if(skip!=='status' && projQF.status.length && !projQF.status.some(k=>k==='incomplete'?isIncomplete(p):(p.status||'active')===k)) return false;
+  if(skip!=='firm' && projQF.firm.length && !projQF.firm.includes(p.firm||'RSR Constructions')) return false;
+  if(skip!=='contractor' && projQF.contractor.length && !projQF.contractor.includes(p.contractorId)) return false;
+  return true;
+}
 
 function setProjectView(mode){
   projViewMode = mode;
@@ -734,51 +744,42 @@ function clearAllFilters(){
   document.getElementById('proj-firm-filter').value = 'all';
   document.getElementById('proj-type-filter').value = 'all';
   document.getElementById('proj-sort-filter').value = 'agree-asc';
-  projQuickFilter = 'all'; projQuickFilterType = 'none';
+  projQuickFilter = 'all'; projQuickFilterType = 'none'; projQF = {status:[], firm:[], contractor:[]};
   renderProjects();
 }
 
 function setQuickFilter(val, type){
-  if(projQuickFilter === val){ projQuickFilter='all'; projQuickFilterType='none'; }
-  else { projQuickFilter=val; projQuickFilterType=type; }
+  const a = projQF[type]; if(!a) return;
+  const i = a.indexOf(val); if(i>=0) a.splice(i,1); else a.push(val);
   renderProjects();
 }
+function clearQuickFilters(){ projQF = {status:[], firm:[], contractor:[]}; renderProjects(); }
 
 function buildQuickPills(list){
   const pillsEl = document.getElementById('proj-quick-pills');
   if(!pillsEl) return;
-
-  // Contractor pills
-  const contractorIds = [...new Set(list.map(p=>p.contractorId).filter(Boolean))];
-  const firmNames = [...new Set(list.map(p=>p.firm||'RSR Constructions'))];
-
+  const live = D.projects.filter(p=>!isArchived(p));
   let html = '';
-
-  // Status pills
-  const statuses = [
-    {k:'active',label:'🟢 Active'},
-    {k:'onhold',label:'⏸ On Hold'},
-    {k:'completed',label:'✅ Completed'},
-    {k:'incomplete',label:'🔴 Incomplete'},
-  ];
-  statuses.forEach(s=>{
-    const count = D.projects.filter(p=>!isArchived(p)&&(s.k==='incomplete'?isIncomplete(p):(p.status||'active')===s.k)).length;
-    if(count>0) html += `<button class="qfilter-pill${projQuickFilter===s.k?' active':''}" onclick="setQuickFilter('${s.k}','status')">${s.label} <span style="opacity:.7">${count}</span></button>`;
+  // Status pills (counts respect the other groups, so you can see what a combination would give)
+  [{k:'active',label:'🟢 Active'},{k:'onhold',label:'⏸ On Hold'},{k:'completed',label:'✅ Completed'},{k:'incomplete',label:'🔴 Incomplete'}].forEach(s=>{
+    const count = live.filter(p=>projQFMatch(p,'status') && (s.k==='incomplete'?isIncomplete(p):(p.status||'active')===s.k)).length;
+    const on = projQF.status.includes(s.k);
+    if(count>0||on) html += `<button class="qfilter-pill${on?' active':''}" onclick="setQuickFilter('${s.k}','status')">${on?'✓ ':''}${s.label} <span style="opacity:.7">${count}</span></button>`;
   });
-
   // Firm pills
-  firmNames.forEach(f=>{
-    const short = f==='RSR Constructions'?'RSR':f==='R Sadhu Rao'?'RS Rao':'RLR';
-    html += `<button class="qfilter-pill${projQuickFilter===f?' active':''}" onclick="setQuickFilter('${f}','firm')">🏢 ${short}</button>`;
+  [...new Set(live.map(p=>p.firm||'RSR Constructions'))].forEach(f=>{
+    const short = f==='RSR Constructions'?'RSR':f==='R Sadhu Rao'?'RS Rao':'RLR'; const on = projQF.firm.includes(f);
+    const count = live.filter(p=>projQFMatch(p,'firm') && (p.firm||'RSR Constructions')===f).length;
+    html += `<button class="qfilter-pill${on?' active':''}" onclick="setQuickFilter('${f}','firm')">${on?'✓ ':''}🏢 ${short} <span style="opacity:.7">${count}</span></button>`;
   });
-
-  // Contractor pills — ALL contractors with active projects
-  contractorIds.forEach(cid=>{
-    const c = GC(cid); if(!c) return;
-    const name = c.name.split(' ').slice(0,2).join(' ');
-    html += `<button class="qfilter-pill${projQuickFilter===cid?' active':''}" onclick="setQuickFilter('${cid}','contractor')">👷 ${name}</button>`;
+  // Contractor pills — every contractor that has a project under the other selected pills
+  const cids = [...new Set(live.filter(p=>projQFMatch(p,'contractor')).map(p=>p.contractorId).filter(Boolean))].concat(projQF.contractor);
+  [...new Set(cids)].forEach(cid=>{
+    const c = GC(cid); if(!c) return; const on = projQF.contractor.includes(cid);
+    const count = live.filter(p=>projQFMatch(p,'contractor') && p.contractorId===cid).length;
+    html += `<button class="qfilter-pill${on?' active':''}" onclick="setQuickFilter('${cid}','contractor')">${on?'✓ ':''}👷 ${c.name.split(' ').slice(0,2).join(' ')} <span style="opacity:.7">${count}</span></button>`;
   });
-
+  if(projQFAny()) html += `<button class="qfilter-pill" style="border-style:dashed" onclick="clearQuickFilters()">✕ Clear filters</button>`;
   pillsEl.innerHTML = html;
 }
 
@@ -811,12 +812,7 @@ function renderProjects(){
     const matchType = typeFilter==='all' || (p.type||'')=== typeFilter;
 
     // Quick pill filter
-    let matchPill = true;
-    if(projQuickFilter !== 'all'){
-      if(projQuickFilterType==='contractor') matchPill = p.contractorId===projQuickFilter;
-      else if(projQuickFilterType==='firm') matchPill = (p.firm||'RSR Constructions')===projQuickFilter;
-      else if(projQuickFilterType==='status') matchPill = projQuickFilter==='incomplete' ? isIncomplete(p) : (p.status||'active')===projQuickFilter;
-    }
+    const matchPill = projQFMatch(p);
 
     return matchQ && matchStatus && matchFirm && matchType && matchPill && !isArchived(p);
   });
@@ -1122,8 +1118,8 @@ function saveNavState(){
     firmFilter: document.getElementById('proj-firm-filter')?.value || 'all',
     typeFilter: document.getElementById('proj-type-filter')?.value || 'all',
     sortFilter: document.getElementById('proj-sort-filter')?.value || 'agree-asc',
-    quickFilter: projQuickFilter,
-    quickFilterType: projQuickFilterType,
+    quickFilter: JSON.stringify(projQF),
+    quickFilterType: 'multi',
     viewMode: projViewMode,
     scrollY: window.scrollY
   };
@@ -1132,8 +1128,7 @@ function saveNavState(){
 function goBack(){
   // Restore to previous tab and filter state
   projViewMode = navHistory.viewMode;
-  projQuickFilter = navHistory.quickFilter;
-  projQuickFilterType = navHistory.quickFilterType;
+  try{ projQF = JSON.parse(navHistory.quickFilter); if(!projQF||!projQF.status) projQF={status:[],firm:[],contractor:[]}; }catch(e){ projQF={status:[],firm:[],contractor:[]}; }
 
   // Switch to tab (ownerTab resets filters, so restore after)
   const targetTab = navHistory.tab;

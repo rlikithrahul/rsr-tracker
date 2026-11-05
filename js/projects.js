@@ -256,6 +256,7 @@ function renderDetail(id){
           <button class="btn btn-sm" onclick="openFullBOQModal('${p.id}')">👁 Full BOQ</button>
           <button class="btn btn-sm" onclick="openEditProject('${p.id}')">✏️ Edit</button>
           <button class="btn btn-sm" title="Word file to stick on the front of the tender file (top half of an A4 sheet)" onclick="downloadFileSticker('${p.id}')">🏷️ File Sticker</button>
+          <button class="btn btn-sm" title="PDF report: project details, status, money summary, settlements, all transactions and interest" onclick="downloadProjectReport('${p.id}')">📄 Project Report</button>
           <button class="btn btn-sm" onclick="openOwnerNotes('${p.id}')">📝 Notes${p.ownerNotes?' ●':''}</button>
           <div class="amenu-wrap"><button class="amenu-btn" onclick="event.stopPropagation();toggleMenu('pdm-${p.id}')">⋮</button>
           <div class="amenu" id="pdm-${p.id}">

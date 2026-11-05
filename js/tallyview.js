@@ -132,8 +132,12 @@ function tvAttentionHtml(p,list){
     let msg, btns='';
     if(pending){ msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}). This project is <b>check pending</b>. Is this the check received?`;
       btns=`<button class="btn btn-sm btn-primary" onclick="tvReceiptAdd('${pid}','${k}')">Yes — mark check received</button>`; }
-    else if(manual.length){ msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}). You already recorded a settlement by hand. Replace your manual amount with the Tally receipt?`;
-      btns=manual.map(s=>`<button class="btn btn-sm btn-primary" onclick="tvReceiptReplace('${pid}','${k}','${_tvE(s.id)}')">Yes — replace my ₹ ${_tvN(s.amount)} (${_tvD(s.date)})</button>`).join('')+`<button class="btn btn-sm" onclick="tvReceiptAdd('${pid}','${k}')">No — it is an additional receipt</button>`; }
+    else if(manual.length){
+      const sc=manual.map(s=>{ const diff=Math.abs((s.amount||0)-x.amt), days=Math.abs((new Date(x.d)-new Date(s.date))/86400000), tol=Math.max(100,(s.amount||0)*0.02);
+        return {s,diff,days,likely:diff<=tol&&days<=10,close:diff<=Math.max(1000,(s.amount||0)*0.1)&&days<=30}; }).sort((a,b)=>a.diff-b.diff);
+      const best=sc[0]; const tag=best.likely?'✅ <b>Looks like the same money</b> — amount and date are close to your manual settlement.':best.close?'🟡 Close to your manual settlement, but not exact.':'⚠️ Does not closely match any manual settlement you recorded.';
+      msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}). You already recorded a settlement by hand.<br>${tag}${best.diff>0?` Difference from your ₹ ${_tvN(best.s.amount)}: ₹ ${_tvN(best.diff)}, ${Math.round(best.days)} day(s) apart.`:' Exactly the same amount.'}<br>Replace your manual amount with the Tally receipt?`;
+      btns=sc.map(z=>`<button class="btn btn-sm${z.likely?' btn-primary':''}" onclick="tvReceiptReplace('${pid}','${k}','${_tvE(z.s.id)}')">${z.likely?'✓ ':''}Yes — replace my ₹ ${_tvN(z.s.amount)} (${_tvD(z.s.date)})</button>`).join('')+`<button class="btn btn-sm" onclick="tvReceiptAdd('${pid}','${k}')">No — it is a separate, additional receipt</button>`; }
     else { msg=`Tally shows a receipt of <b>₹ ${amt}</b> on ${_tvD(x.d)} (${_tvE(x.t)} ${_tvE(x.n)}).`; btns=`<button class="btn btn-sm" onclick="tvReceiptAdd('${pid}','${k}')">Record as a settlement</button>`; }
     return `<div class="alert al-amber" style="font-size:12px;margin-bottom:8px">${msg}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${btns}<button class="btn btn-sm" onclick="tvReceiptIgnore('${pid}','${k}')">Leave it as it is (don't ask again)</button></div></div>`; }).join('');
 }

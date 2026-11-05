@@ -213,7 +213,7 @@ function _tlStatement(st, target){
   const body=rows.map((r,i)=>{ const a=Number(r.amount)||0; bal+=a; if(a<0) dr+=-a; else cr+=a;
     return `<tr${r.synthetic?' style="background:var(--surface2)"':''}><td><input type="checkbox" class="tl-ck" data-i="${i}" checked></td><td>${_tlDate(r.vch_date)}${r.source==='fy2425'?' <span title="FY2024-25 company" style="font-size:9px;color:var(--text3)">·24-25</span>':''}</td><td>${_tlE(r.vch_type)} ${_tlE(r.vch_number||'')}</td>${showL?`<td>${_tlE(r.ledger||r.ledger_name||'')}${r.cc_name?`<div style="font-size:10px;color:var(--text3)">${_tlE(r.cc_name)}</div>`:''}</td>`:''}<td style="max-width:300px">${_tlE(r.narration||r.party_ledger||'')}</td><td style="text-align:right">${a<0?_tlN(-a):''}</td><td style="text-align:right">${a>0?_tlN(a):''}</td><td style="text-align:right;white-space:nowrap">${_tlAmt(bal)}</td></tr>`; }).join('');
   const hasOpen=st.opening!=null;
-  target.innerHTML=`<div style="font-weight:700;margin:12px 0 6px">${_tlE(st.title||'')}</div>
+  target.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><div style="font-weight:700">${_tlE(st.title||'')}</div><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadStatement('xlsx')">⬇ Excel</button><button class="btn btn-sm" onclick="tlDownloadStatement('pdf')">⬇ PDF</button></div>
    ${st.interest?`<div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
      <b>Interest</b>
      <label>As on<br><input type="date" id="ti-asof" value="${_tlToday()}"></label>
@@ -243,8 +243,9 @@ function _tlCalcInterest(){
   const sums=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
      ${[['Principal (incl. compounded interest)',res.principal],['Interest not yet compounded',res.accrued],['Total due',res.due],['Total interest charged',res.totalInterest]].map(x=>`<div class="card" style="padding:8px"><div style="font-size:10px;color:var(--text3)">${x[0]}</div><div style="font-size:15px;font-weight:700">₹ ${_tlN(x[1])}</div></div>`).join('')}</div>`;
   const tbl=`<table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Financial year</th><th style="text-align:right">Interest accrued</th><th style="text-align:right">Added to principal on 31 Mar</th><th style="text-align:right">Principal after</th></tr></thead><tbody>${res.fy.map(f=>`<tr><td>${_tlE(f.fy)}</td><td style="text-align:right">${_tlN(f.interest)}</td><td style="text-align:right">${f.capitalised?_tlN(f.capitalised):'—'}</td><td style="text-align:right">${_tlN(f.endPrincipal)}</td></tr>`).join('')}</tbody></table>`;
+  TL.lastInt={st,sel,res,asOn,rate,useOpen};
   tlModal('Interest — '+_tlE(st.title||''), `<div style="color:var(--text3);margin-bottom:8px">${rate}% p.a. simple daily on the running balance, added to the principal every 31 March. As on ${_tlDate(asOn)} · ${sel.length} rows${useOpen?' + opening balance':''}.</div>`+sums+tbl+
-    `<div style="font-size:11px;color:var(--text3);margin-top:8px">Receipts reduce the principal; no interest runs while the balance is nil. Same rules as the Interest tab. This is a calculation only — nothing is saved.</div>`, [{label:'Close',value:1,primary:true}]);
+    `<div style="font-size:11px;color:var(--text3);margin-top:8px">Receipts reduce the principal; no interest runs while the balance is nil. Same rules as the Interest tab. This is a calculation only — nothing is saved.</div>`, [{label:'⬇ Excel sheet',value:'x'},{label:'⬇ PDF',value:'p'},{label:'Close',value:1,primary:true}]).then(v=>{ if(v==='x') tlDownloadInterest('xlsx'); else if(v==='p') tlDownloadInterest('pdf'); });
 }
 
 // build a statement (rows + opening) from the API response, bridging FY2024-25 → FY2025-26 openings when history is on
@@ -311,6 +312,7 @@ async function _tlCC(){
     <button class="btn btn-sm" onclick="TL.ccq='';TL.ccc='';_tlCC()">Clear</button></div><div id="tl-ccl"></div><div id="tl-ccs"></div>`;
   _tlCCList();
 }
+function _tlAgree(tender){ const p=(D.projects||[]).find(x=>String(x.tender)===String(tender)); if(!p) return 0; try{ return Number(agAmt(p))||0; }catch(e){ return 0; } }
 function _tlCCList(){
   const q=TL.ccq.toLowerCase().trim(), cq=TL.ccc.toLowerCase().trim(), T=TL.totals||{}; const groups={};
   TL.cc.forEach((c,i)=>{
@@ -318,17 +320,24 @@ function _tlCCList(){
     const ps=_tlCCProjects(c).map(t=>_tlProj(t)).filter(Boolean); const con=_tlCCContractor(c);
     const hay=(c.name+' '+(c.alias_text||'')+' '+ps.map(p=>p.name+' '+p.tender).join(' ')).toLowerCase();
     if(q && !hay.includes(q)) return; if(cq && !(con.name||'unassigned').toLowerCase().includes(cq)) return;
-    const k=con.name||'— No contractor set —'; (groups[k]=groups[k]||[]).push({c,i,tot:tot||{paid:0,received:0,n:0},con,ps});
+    const t0=tot||{paid:0,received:0,n:0}; const agreement=_tlCCProjects(c).reduce((s,t)=>s+_tlAgree(t),0); const maxFund=agreement*0.7, net=t0.paid-t0.received;
+    const k=con.name||'— No contractor set —'; (groups[k]=groups[k]||[]).push({c,i,tot:t0,con,ps,agreement,maxFund,net,headroom:maxFund-net});
   });
   const names=Object.keys(groups).sort(); const el=document.getElementById('tl-ccl');
+  TL._ccSum={}; const all=[];
+  names.forEach(n=>{ const rows=groups[n].map(x=>({name:x.c.name,projects:x.ps.map(p=>({tender:p.tender,name:p.name})),agreement:x.agreement,maxFund:x.maxFund,paid:x.tot.paid,received:x.tot.received,net:x.net,headroom:x.headroom,n:x.tot.n}));
+    TL._ccSum[n]={title:n,rows}; rows.forEach(r=>all.push({...r,name:n+' / '+r.name})); });
+  TL._ccSum['__all__']={title:'All contractors (as filtered)',rows:all};
   if(!names.length){ el.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">Nothing matches.</div>'; return; }
-  el.innerHTML=names.map(n=>{ const g=groups[n]; const paid=g.reduce((s,x)=>s+x.tot.paid,0), rec=g.reduce((s,x)=>s+x.tot.received,0);
-    return `<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--surface2)">
+  el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--text3)">${names.length} contractor group(s)</span><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','xlsx')">⬇ All as Excel</button><button class="btn btn-sm" onclick="tlDownloadCCSummary('__all__','pdf')">⬇ All as PDF</button></div>`+names.map(n=>{ const g=groups[n]; const paid=g.reduce((s,x)=>s+x.tot.paid,0), rec=g.reduce((s,x)=>s+x.tot.received,0), mx=g.reduce((s,x)=>s+x.maxFund,0);
+    return `<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--surface2)">
       <b>${_tlE(n)}</b><span style="font-size:12px;color:var(--text3)">${g.length} cost centres</span>
-      <span style="margin-left:auto;font-size:12px">Paid <b>${_tlN(paid)}</b> · Received <b>${_tlN(rec)}</b> · Net with RSR <b>${_tlN(paid-rec)}</b></span>
-      <button class="btn btn-sm" onclick='_tlCCOpen(${JSON.stringify(g.map(x=>x.i))},${JSON.stringify(n)})'>Statement &amp; interest — all of his cost centres</button></div>
-      <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Cost centre</th><th style="text-align:left">Projects</th><th style="text-align:right">Paid (Dr)</th><th style="text-align:right">Received (Cr)</th><th style="text-align:right">Net with RSR</th><th>Entries</th></tr></thead><tbody>
-      ${g.map(x=>`<tr style="cursor:pointer" onclick='_tlCCOpen([${x.i}],${JSON.stringify(x.c.name)})'><td>${_tlE(x.c.name)}${x.con.how==='several'?' <span title="linked projects belong to different contractors" style="color:#c0392b">⚠</span>':''}</td><td style="font-size:11px;color:var(--text3)">${x.ps.map(p=>'#'+_tlE(p.tender)+' '+_tlE(p.name.slice(0,40))).join('<br>')||_tlE(x.c.alias_text||'')}</td><td style="text-align:right">${_tlN(x.tot.paid)}</td><td style="text-align:right">${_tlN(x.tot.received)}</td><td style="text-align:right;font-weight:600">${_tlN(x.tot.paid-x.tot.received)}</td><td style="text-align:center">${x.tot.n}</td></tr>`).join('')}</tbody></table></div></div>`; }).join('');
+      <span style="margin-left:auto;font-size:12px">Max fundable <b>${_tlN(mx)}</b> · Paid <b>${_tlN(paid)}</b> · Received <b>${_tlN(rec)}</b> · Net with RSR <b>${_tlN(paid-rec)}</b> · Still fundable <b style="color:${mx-(paid-rec)<0?'#c0392b':'#2e7d32'}">${_tlN(mx-(paid-rec))}</b></span>
+      <button class="btn btn-sm" onclick='tlDownloadCCSummary(${JSON.stringify(n)},"xlsx")'>⬇ Excel</button><button class="btn btn-sm" onclick='tlDownloadCCSummary(${JSON.stringify(n)},"pdf")'>⬇ PDF</button>
+      <button class="btn btn-sm btn-primary" onclick='_tlCCOpen(${JSON.stringify(g.map(x=>x.i))},${JSON.stringify(n)})'>Statement — all his cost centres</button></div>
+      <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Cost centre</th><th style="text-align:left">Projects</th><th style="text-align:right">Max fundable (70%)</th><th style="text-align:right">Paid (Dr)</th><th style="text-align:right">Received (Cr)</th><th style="text-align:right">Net with RSR</th><th style="text-align:right">Still fundable</th><th>Entries</th></tr></thead><tbody>
+      ${g.map(x=>`<tr style="cursor:pointer" onclick='_tlCCOpen([${x.i}],${JSON.stringify(x.c.name)})'><td>${_tlE(x.c.name)}${x.con.how==='several'?' <span title="linked projects belong to different contractors" style="color:#c0392b">⚠</span>':''}</td><td style="font-size:11px;color:var(--text3)">${x.ps.map(p=>'#'+_tlE(p.tender)+' '+_tlE(p.name.slice(0,40))).join('<br>')||_tlE(x.c.alias_text||'')}</td><td style="text-align:right">${x.maxFund?_tlN(x.maxFund):'—'}</td><td style="text-align:right">${_tlN(x.tot.paid)}</td><td style="text-align:right">${_tlN(x.tot.received)}</td><td style="text-align:right;font-weight:600">${_tlN(x.net)}</td><td style="text-align:right;color:${x.maxFund&&x.headroom<0?'#c0392b':'inherit'}">${x.maxFund?_tlN(x.headroom):'—'}</td><td style="text-align:center">${x.tot.n}</td></tr>`).join('')}
+      <tr style="font-weight:700;background:var(--surface2)"><td colspan="2">Total</td><td style="text-align:right">${_tlN(mx)}</td><td style="text-align:right">${_tlN(paid)}</td><td style="text-align:right">${_tlN(rec)}</td><td style="text-align:right">${_tlN(paid-rec)}</td><td style="text-align:right">${_tlN(mx-(paid-rec))}</td><td></td></tr></tbody></table></div></div>`; }).join('');
 }
 async function _tlCCOpen(idxs, label){
   const d=document.getElementById('tl-ccs'); d.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">⏳ Loading…</div>';
@@ -462,6 +471,9 @@ function _tlStyle(){
   #sec-tally .tl-noint th:first-child,#sec-tally .tl-noint td:first-child{display:none}
   #sec-tally .btn-sm{border-radius:20px}
   #sec-tally input,#sec-tally select{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;background:var(--surface);color:var(--text)}
+  @keyframes tlfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  #sec-tally #tl-body>*{animation:tlfade .18s ease}
+  #sec-tally .btn{transition:background .15s,box-shadow .15s}
   #sec-tally .tl-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
   #sec-tally .tl-kpi>div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
   #sec-tally .tl-kpi .l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
