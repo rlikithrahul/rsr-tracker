@@ -11,6 +11,11 @@ async function loadEMIData(){
   if(!D.emiData.emis) D.emiData.emis = [];
   if(!D.emiData.cards) D.emiData.cards = [];
   if(!D.emiData.billAmounts) D.emiData.billAmounts = {};
+  if(!D.emiData.paid) D.emiData.paid = {};                 // "kind|id|due-date" -> {at, by}: payments ticked as paid
+  if(!D.emiData.trackFrom){                                // overdue is only judged from the day this feature started, so old months never flood the dashboard
+    D.emiData.trackFrom = emiYmd(new Date());
+    try{ saveEMIData(); }catch(e){}
+  }
 }
 
 async function saveEMIData(){
@@ -50,6 +55,12 @@ async function renderEMI(){
         <button class="btn btn-sm btn-navy" onclick="openAddCard()">+ Add Card</button>
       </div>
       <div id="emi-cards-wrap">${renderCardListNew()}</div>
+    </div>
+
+    <!-- PAID LOG -->
+    <div class="card" style="margin-top:14px">
+      <div class="st" style="margin:0 0 10px;border:none;padding:0">✅ Recently marked paid</div>
+      <div id="emi-paid-log">${_emiPaidLogHtml()}</div>
     </div>
   </div>`;
 
@@ -104,53 +115,10 @@ function renderEMIList(){
 function renderUpcomingPayments(){
   const el = document.getElementById('emi-upcoming');
   if(!el || !D.emiData) return;
-
-  const today = new Date();
-  const todayDay = today.getDate();
-  const upcoming = [];
-
-  // Check EMIs
-  (D.emiData.emis||[]).filter(e=>e.active!==false).forEach(e=>{
-    const daysUntil = e.dueDay >= todayDay ? e.dueDay - todayDay : (e.dueDay + 30 - todayDay);
-    if(daysUntil <= 5){
-      upcoming.push({
-        type: 'emi', name: e.name, amount: e.amount,
-        daysUntil, dueDay: e.dueDay,
-        urgent: daysUntil <= 2
-      });
-    }
-  });
-
-  // Check credit card due dates
-  (D.emiData.cards||[]).forEach(card=>{
-    const daysUntil = card.dueDay >= todayDay ? card.dueDay - todayDay : (card.dueDay + 30 - todayDay);
-    if(daysUntil <= 5){
-      const cycleKey = getCardCycleKey(card);
-      const billAmt = D.emiData.billAmounts[`${card.id}_${cycleKey}`] || 0;
-      upcoming.push({
-        type: 'card', name: card.name, amount: billAmt,
-        daysUntil, dueDay: card.dueDay,
-        urgent: daysUntil <= 2
-      });
-    }
-  });
-
+  const upcoming = emiDueItems();
   if(!upcoming.length){ el.innerHTML=''; return; }
-
-  upcoming.sort((a,b)=>a.daysUntil-b.daysUntil);
-
-  el.innerHTML = `<div class="card" style="border-top:3px solid ${upcoming.some(u=>u.urgent)?'var(--red)':'var(--amber)'};margin-bottom:14px">
-    <div class="st" style="margin-bottom:10px">⏰ Upcoming Payments</div>
-    ${upcoming.map(u=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
-        background:${u.urgent?'#fef2f2':'#fffbeb'};border-radius:var(--rs);margin-bottom:6px;flex-wrap:wrap;gap:6px">
-        <div>
-          <div style="font-weight:700;font-size:13px">${u.type==='card'?'💳':'📅'} ${u.name}</div>
-          <div style="font-size:11px;color:var(--text2)">Due on ${u.dueDay}th · ${u.daysUntil===0?'Today!':u.daysUntil===1?'Tomorrow':u.daysUntil+' days'}</div>
-        </div>
-        <div style="font-weight:800;font-size:14px;color:${u.urgent?'var(--red)':'#92400e'}">${u.amount?fmt(u.amount):'Amount pending'}</div>
-      </div>`).join('')}
-  </div>`;
+  el.innerHTML = `<div class="card" style="border-top:3px solid ${upcoming.some(u=>u.days<=1)?'var(--red)':'var(--amber)'};margin-bottom:14px">
+    <div class="st" style="margin-bottom:10px">⏰ Upcoming & unpaid</div>${upcoming.map(_emiRowHtml).join('')}</div>`;
 }
 
 // getEMIDashboardAlerts() dead first version removed — see phase-aware version below, which is the one actually active.
@@ -316,45 +284,81 @@ function getCardPhase(card){
 }
 
 // ─── DASHBOARD UPCOMING ───────────────────────────────
-function getEMIDashboardAlerts(){
-  if(!D.emiData) return '';
-  const today = new Date();
-  const todayDay = today.getDate();
-  const items = [];
+// ═══════════ PAID TICKS ═══════════
+// Every EMI / card due date is its own item. It stays on the dashboard until someone ticks "Paid".
+// If the due date passes without a tick it turns into a red "not marked paid" warning (it no longer just disappears).
+function emiYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _emiDate(y,m,day){ const dim=new Date(y,m+1,0).getDate(); return new Date(y,m,Math.min(day,dim)); }
+function _emiDays(dt){ const t=new Date(); t.setHours(0,0,0,0); return Math.round((dt-t)/86400000); }
+function _emiTrackFrom(x){ const a=(D.emiData&&D.emiData.trackFrom)||'0000-00-00'; const c=x.createdAt?emiYmd(new Date(x.createdAt)):'0000-00-00'; return a>c?a:c; }
+function _emiPaidKey(kind,id,ymd){ return kind+'|'+id+'|'+ymd; }
+// all unpaid dues that matter now: due within 3 days, or overdue (up to 60 days) and not ticked
+function emiDueItems(){
+  const out=[]; if(!D.emiData) return out; const paid=D.emiData.paid||{}; const t=new Date();
+  const push=(o)=>{ if(paid[_emiPaidKey(o.kind,o.id,o.ymd)]) return; if(o.ymd < o.from) return; if(o.days>3||o.days<-60) return; out.push(o); };
   (D.emiData.emis||[]).filter(e=>e.active!==false).forEach(e=>{
-    const daysUntil = e.dueDay >= todayDay ? e.dueDay - todayDay : e.dueDay + 30 - todayDay;
-    if(daysUntil <= 3) items.push({icon:'📅', name:e.name, amount:e.amount, daysUntil, urgent:daysUntil<=1, type:'emi'});
+    for(let k=-2;k<=1;k++){ const dd=_emiDate(t.getFullYear(),t.getMonth()+k,e.dueDay); push({kind:'emi',id:e.id,name:e.name,icon:'📅',amount:e.amount,dueDay:e.dueDay,date:dd,ymd:emiYmd(dd),days:_emiDays(dd),from:_emiTrackFrom(e)}); }
   });
-  (D.emiData.cards||[]).forEach(card=>{
-    const phase = getCardPhase(card);
-    const cycleKey = getCardCycleKey(card);
-    const amt = D.emiData.billAmounts[card.id+'_'+cycleKey];
-    if(phase==='enter-bill'){
-      items.push({icon:'📨', name:card.name+' (CC)', amount:null, daysUntil:999, urgent:false, type:'bill-prompt', cardId:card.id, cardName:card.name});
-    } else if(phase==='reminder'){
-      const daysUntil = card.dueDay >= todayDay ? card.dueDay - todayDay : card.dueDay + 30 - todayDay;
-      items.push({icon:'💳', name:card.name+' (CC)', amount:amt||0, daysUntil, urgent:daysUntil<=1, type:'card'});
+  (D.emiData.cards||[]).forEach(c=>{
+    for(let k=-2;k<=0;k++){
+      const bill=_emiDate(t.getFullYear(),t.getMonth()+k,c.billDay);
+      const dd = c.dueDay>c.billDay ? _emiDate(bill.getFullYear(),bill.getMonth(),c.dueDay) : _emiDate(bill.getFullYear(),bill.getMonth()+1,c.dueDay);
+      const ck = bill.getFullYear()+'-'+String(bill.getMonth()+1).padStart(2,'0')+'-'+String(c.billDay).padStart(2,'0');
+      const amt = D.emiData.billAmounts[c.id+'_'+ck];
+      if(amt===undefined && _emiDays(dd)<0) { /* bill amount never entered, but the due date passed: still ask */ }
+      push({kind:'card',id:c.id,name:c.name+' (CC)',icon:'💳',amount:amt,dueDay:c.dueDay,date:dd,ymd:emiYmd(dd),days:_emiDays(dd),from:_emiTrackFrom(c)});
     }
   });
-  if(!items.length) return '';
-  items.sort((a,b)=>{ if(a.type==='bill-prompt'&&b.type!=='bill-prompt') return 1; if(b.type==='bill-prompt'&&a.type!=='bill-prompt') return -1; return a.daysUntil-b.daysUntil; });
-  const borderColor = items.some(u=>u.urgent)?'var(--red)':'var(--amber)';
-  const rows = items.slice(0,5).map(u=>{
-    const isPrompt = u.type==='bill-prompt';
-    const color = u.urgent?'var(--red)':isPrompt?'var(--amber)':'#92400e';
-    const valHtml = isPrompt
-      ? '<button onclick="enterBillAmountNew(\''+u.cardId+'\',\''+u.cardName+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">Enter Amount</button>'
-      : (u.amount?fmt(u.amount):'—')+' · '+(u.daysUntil===0?'Today':u.daysUntil===1?'Tomorrow':u.daysUntil+'d');
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--surface2)">'
-      +'<div style="font-size:12px;font-weight:600">'+u.icon+' '+u.name+'</div>'
-      +'<div style="font-size:12px;color:'+color+'">'+valHtml+'</div>'
-      +'</div>';
-  }).join('');
+  return out.sort((a,b)=>a.days-b.days);
+}
+async function emiMarkPaid(kind,id,ymd){
+  if(!D.emiData.paid) D.emiData.paid={};
+  D.emiData.paid[_emiPaidKey(kind,id,ymd)] = {at:new Date().toISOString(), by:(CU&&CU.name)||''};
+  try{ await saveEMIData(); toast('✓ Marked as paid','ok'); }catch(e){ delete D.emiData.paid[_emiPaidKey(kind,id,ymd)]; toast('Save failed — not marked','error'); return; }
+  _emiRefreshViews();
+}
+async function emiUndoPaid(key){
+  if(!D.emiData.paid||!D.emiData.paid[key]) return;
+  if(!confirm('Mark this payment as NOT paid again?')) return;
+  const old=D.emiData.paid[key]; delete D.emiData.paid[key];
+  try{ await saveEMIData(); toast('↩ Back to unpaid','ok'); }catch(e){ D.emiData.paid[key]=old; toast('Save failed','error'); return; }
+  _emiRefreshViews();
+}
+function _emiRefreshViews(){
+  const emiEl=document.getElementById('dash-emi-section'); if(emiEl) emiEl.innerHTML=getEMIDashboardAlerts();
+  const banner=document.getElementById('dash-banner'); if(banner&&typeof renderDashAlertStrip==='function') banner.innerHTML=renderDashAlertStrip();
+  if(document.getElementById('emi-upcoming')){ renderUpcomingPayments(); const l=document.getElementById('emi-paid-log'); if(l) l.innerHTML=_emiPaidLogHtml(); }
+}
+function _emiDueWhen(u){ return u.days<0 ? 'was due '+(-u.days)+' day'+(u.days===-1?'':'s')+' ago' : u.days===0?'due Today':u.days===1?'due Tomorrow':'due in '+u.days+' days'; }
+function _emiRowHtml(u){
+  const od=u.days<0; const nice=u.date.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:6px;border-radius:var(--rs);background:'+(od?'#fef2f2':u.days<=1?'#fffbeb':'transparent')+';border:'+(od?'1px solid #fca5a5':'1px solid var(--surface2)')+'">'
+    +'<div style="min-width:0"><div style="font-size:12px;font-weight:700">'+u.icon+' '+xmlEsc(u.name)+'</div>'
+    +'<div style="font-size:11px;color:'+(od?'var(--red)':'var(--text2)')+';font-weight:'+(od?'700':'400')+'">'+(od?'⚠ NOT MARKED PAID — ':'')+nice+' · '+_emiDueWhen(u)+(od?'. Please check and tick if it is paid.':'')+'</div></div>'
+    +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:700;color:'+(od?'var(--red)':'var(--navy)')+'">'+(u.amount?fmt(u.amount):'Amount not entered')+'</span>'
+    +'<button onclick="emiMarkPaid(\''+u.kind+'\',\''+u.id+'\',\''+u.ymd+'\')" style="background:var(--green);color:#fff;border:none;border-radius:var(--rs);padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">✓ Paid</button></div></div>';
+}
+function getEMIDashboardAlerts(){
+  if(!D.emiData) return '';
+  const todayDay = new Date().getDate();
+  const items = emiDueItems();
+  const prompts = [];
+  (D.emiData.cards||[]).forEach(card=>{ if(getCardPhase(card)==='enter-bill') prompts.push(card); });
+  if(!items.length && !prompts.length) return '';
+  const overdue = items.filter(u=>u.days<0), soon = items.filter(u=>u.days>=0);
+  const borderColor = overdue.length||soon.some(u=>u.days<=1)?'var(--red)':'var(--amber)';
+  const promptRows = prompts.map(c=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--surface2)"><div style="font-size:12px;font-weight:600">📨 '+xmlEsc(c.name)+' (CC)</div><button onclick="enterBillAmountNew(\''+c.id+'\',\''+String(c.name).replace(/'/g,"\\'")+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:var(--rs);padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">Enter bill</button></div>').join('');
   return '<div class="card" style="border-top:3px solid '+borderColor+';padding:12px;margin-bottom:14px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Payments & Bills</div>'
-    +rows
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Payments & Bills'+(overdue.length?' <span style="color:var(--red)">· '+overdue.length+' not marked paid</span>':'')+'</div>'
+    +overdue.map(_emiRowHtml).join('')+soon.slice(0,5).map(_emiRowHtml).join('')+promptRows
     +'<button onclick="ownerTab(5)" style="margin-top:8px;background:none;border:none;font-size:11px;color:var(--navy);font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif">View EMI Calendar →</button>'
     +'</div>';
+}
+function _emiPaidLogHtml(){
+  const paid=(D.emiData&&D.emiData.paid)||{}; const names={}; (D.emiData.emis||[]).forEach(e=>names['emi|'+e.id]=e.name); (D.emiData.cards||[]).forEach(c=>names['card|'+c.id]=c.name+' (CC)');
+  const rows=Object.entries(paid).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at))).slice(0,10);
+  if(!rows.length) return '<div style="font-size:12px;color:var(--text3)">Nothing ticked as paid yet.</div>';
+  return rows.map(([k,v])=>{ const [kind,id,ymd]=k.split('|'); return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--surface2);font-size:12px"><span>✅ <b>'+xmlEsc(names[kind+'|'+id]||'(removed)')+'</b> · due '+ymd.split('-').reverse().join('-')+'</span><span style="color:var(--text3)">'+xmlEsc(v.by||'')+' · '+new Date(v.at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' <a style="color:var(--navy);cursor:pointer;margin-left:6px" onclick="emiUndoPaid(\''+k.replace(/'/g,'')+'\')">↩ undo</a></span></div>'; }).join('');
 }
 
 // ─── CREDIT CARD PHASE-AWARE RENDER ──────────────────

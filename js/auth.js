@@ -297,7 +297,7 @@ function renderCFunds(){
   // Per-project fund summary — contractor sees amount deployed, not full transaction log
   let totalDeployed=0, totalSettled=0;
   myProjects.forEach(p=>{totalDeployed+=totRel(p);totalSettled+=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);});
-  const outstanding=Math.max(0,totalDeployed-totalSettled);
+  const outstanding=Math.max(0,totalDeployed);   // totRel is already net of settlements and receipts
 
   el.innerHTML=`
     <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">My Funds</h2>
@@ -320,7 +320,7 @@ function renderCFunds(){
         <div class="fr"><span class="fl">Max Allowed (70% of agreement)</span><span class="fv">${fmt(max)}</span></div>
         <div class="fr"><span class="fl">Cap Used</span><span class="fv" style="color:${capPct>=70?'var(--red)':capPct>=55?'var(--amber)':'var(--green)'}">${capPct}%</span></div>
         <div class="fr"><span class="fl">Government Payment Received</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
-        <div class="fr"><span class="fl">Balance Owed to RSR</span><span class="fv" style="color:${(rel-settled)>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel-settled))}</span></div>
+        <div class="fr"><span class="fl">Balance Owed to RSR</span><span class="fv" style="color:${rel>0?'var(--red)':'var(--green)'}">${fmt(Math.max(0,rel))}</span></div>
         <div style="margin-top:10px">
           <div class="prog-lbl"><span style="font-size:12px">Funding used</span><span style="font-size:12px">${capPct}% of cap</span></div>
           <div class="prog-track" style="height:8px"><div class="prog-fill ${capPct>=85?'pf-red':capPct>=55?'pf-amber':'pf-green'}" style="width:${Math.min(capPct,100)}%"></div></div>

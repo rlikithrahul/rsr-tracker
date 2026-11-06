@@ -26,6 +26,12 @@ function tvLinkInfo(p){
 const tvLinked = p => !!tvLinkInfo(p);
 function _tvOnly(){ if(!(CU&&CU.role==='contractor')) return undefined;
   const me=(typeof GC==='function'&&GC(CU.id))||{}; return {tenders:(D.projects||[]).filter(p=>p.contractorId===CU.id&&p.tender).map(p=>String(p.tender)), contractor:me.name||CU.name||''}; }
+function tvOtherReceipts(p){
+  if(!tvSwitchOn() || !p || !p.tender) return 0;
+  const t=TV.snap&&TV.snap.projects&&TV.snap.projects[String(p.tender)]; if(!t||!t.tx) return 0;
+  const used=new Set(); (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>rcGuids(s).forEach(g=>used.add(g)));
+  return t.tx.filter(x=>x.amt>0 && !used.has(x.g)).reduce((s,x)=>s+x.amt,0);
+}
 function tvRel(p){
   if(!tvSwitchOn() || !p || !p.tender) return null; const k=String(p.tender);
   if(k in TV.relCache) return TV.relCache[k];

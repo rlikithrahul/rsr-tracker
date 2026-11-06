@@ -6,7 +6,7 @@
 const SB_URL = 'https://qflczjaugzaryfcfcqor.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmbGN6amF1Z3phcnlmY2ZjcW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzM1MDQsImV4cCI6MjA5NDc0OTUwNH0.IrBrqM-VSIBeOGUzBqjmZmEcKUseuJhIE3koCSNnc5g';
 const OPW_KEY = 'rsr_owner_pw_v1';
-const APP_VERSION = 'v27s';
+const APP_VERSION = 'v27t';
 
 // ─── CLOUDFLARE R2 — PUBLIC READ URLS ONLY ───────────
 // Secret keys are now in the Cloudflare Worker (server-side)

@@ -1091,7 +1091,7 @@ async function exportAllData(){
         Math.round(agAmt(p)), Math.round(max),
         Math.round(rel), Math.round(rel/max*100)+'%',
         Math.round(verPct(p))+'%',
-        Math.round(settled), Math.round(Math.max(0,rel-settled)),
+        Math.round(settled), Math.round(Math.max(0,rel)),
         (()=>{ const i=typeof tvProjInterest==='function'?tvProjInterest(p):{state:'noload'}; return (i.state==='open'||i.state==='closed')?Math.round(i.amt||0):''; })(),
         pStat(p)==='green'?'On Track':pStat(p)==='red'?'High Risk':'Caution'
       ]);

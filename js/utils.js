@@ -80,7 +80,9 @@ function totPayments(p){ return relList(p).filter(r=>r.txType!=='receipt').reduc
 // genuinely confirmed recovered, not just because an unrelated receipt
 // happened to show up in Tally).
 function totReceipts(p){ return (p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+(x.amount||0),0); }
-function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p)); } // NET deployed = payments minus confirmed settlements
+// Money that came back through Tally on this project's cost centre / ledger but is NOT recorded as a settlement (a settlement already linked to its Tally receipt is counted once, as the settlement).
+function totTallyOtherReceipts(p){ return (typeof tvOtherReceipts==='function') ? tvOtherReceipts(p) : 0; }
+function totRel(p){ return Math.max(0, totPayments(p) - totReceipts(p) - totTallyOtherReceipts(p)); } // NET deployed = payments − settlements − other receipts in Tally
 function verPct(p){
   // Based on RSR physical verification only — controls funding
   const lv=(p.verifications||[]).slice(-1)[0]; if(!lv) return 0;

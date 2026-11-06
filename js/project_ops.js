@@ -652,7 +652,8 @@ function openSettle(pid){
   const rec=totReceipts(p);
   const net=totRel(p);
   const settled=(p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0);
-  const outstanding=Math.max(0,net-settled);
+  const outstanding=net;   // net deployed already has settlements and other Tally receipts taken off
+  const otherRec=(typeof totTallyOtherReceipts==='function')?totTallyOtherReceipts(p):0;
 
   // Build receipt transaction list from Tally imports for this project (not yet used as settlement)
   const availableReceipts=settleReceiptsFor(p);
@@ -673,6 +674,7 @@ function openSettle(pid){
     <div class="calc" style="margin-bottom:14px">
       <div class="fr"><span class="fl">Total Payments (gross)</span><span class="fv">${fmt(pay)}</span></div>
       <div class="fr"><span class="fl">Total Receipts</span><span class="fv" style="color:var(--green)">− ${fmt(rec)}</span></div>
+      ${otherRec>0?`<div class="fr"><span class="fl">Other receipts in Tally</span><span class="fv" style="color:var(--green)">− ${fmt(otherRec)}</span></div>`:''}
       <div class="fr"><span class="fl">Net Deployed</span><span class="fv" style="color:var(--navy)">${fmt(net)}</span></div>
       <div class="fr"><span class="fl">Already Settled</span><span class="fv" style="color:var(--green)">${fmt(settled)}</span></div>
       <div class="fr" style="border-top:2px solid var(--border);padding-top:6px;margin-top:4px"><span class="fl" style="font-weight:700">Outstanding Balance</span><span class="fv" style="color:var(--red);font-weight:700">${fmt(outstanding)}</span></div>

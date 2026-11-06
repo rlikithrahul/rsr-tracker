@@ -82,7 +82,7 @@ function renderContractorProfile(cid){
   // over-settled project offsets other work instead of being silently
   // floored to zero on its own.
   const totalDeployed  = projects.reduce((s,p)=>s+totPayments(p),0);
-  const totalChecksRcv = projects.reduce((s,p)=>s+totReceipts(p),0);
+  const totalChecksRcv = projects.reduce((s,p)=>s+totReceipts(p)+totTallyOtherReceipts(p),0);   // settlements + other receipts in Tally
   const rawNet         = totalDeployed - totalChecksRcv;
   const outstanding    = Math.max(0, rawNet);
   // Only JVs actually received (p.jvDate set) — p.jvAmount can exist

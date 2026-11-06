@@ -153,7 +153,7 @@ async function _buildMeetingSnapshot(){
   // Financial overview
   const totalDeployed = projects.reduce((s,p)=>s+totRel(p),0);
   const totalSettled = projects.reduce((s,p)=>s+(p.settlements||[]).filter(x=>!isArchived(x)).reduce((s2,x)=>s2+x.amount,0),0);
-  const totalOutstanding = Math.max(0, totalDeployed-totalSettled);
+  const totalOutstanding = Math.max(0, totalDeployed);   // totRel is already net of settlements and receipts
 
   return {
     generatedAt: new Date().toISOString(),

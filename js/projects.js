@@ -292,11 +292,12 @@ function renderDetail(id){
             null, // separator
             ['Paid to Contractor', fmt(totPayments(p)), 'color:var(--navy)'],
             ...(totReceipts(p)>0 ? [['Received from Govt (confirmed)', '− '+fmt(totReceipts(p)), 'color:var(--green);font-weight:700']] : []),
+            ...(totTallyOtherReceipts(p)>0 ? [['Other receipts in Tally', '− '+fmt(totTallyOtherReceipts(p)), 'color:var(--green);font-weight:700']] : []),
             ['Net Deployed (at risk)', fmt(rel), rel>max?'color:var(--red);font-weight:800':'color:var(--navy);font-weight:800'],
             ['Cap Used', Math.round(rel/Math.max(max,1)*100)+'%', rel/Math.max(max,1)>=0.85?'color:var(--red);font-weight:800':''],
             null, // separator
             ['Settled (govt payment)', fmt((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)), 'color:var(--green)'],
-            ['Outstanding', fmt(Math.max(0,rel-((p.settlements||[]).filter(s=>!isArchived(s)).reduce((s,x)=>s+x.amount,0)))), 'color:var(--red)'],
+            ['Outstanding', fmt(rel), 'color:var(--red)'],   // net deployed already has settlements and receipts taken off
             ['Eligible (verified)', fmt(el)],
           ].filter(x=>x!==undefined).map(row=>row===null
             ? `<div style="border-top:1px solid var(--border);margin:4px 0"></div>`
