@@ -12,9 +12,20 @@ const TV_CACHE   = 'rsr_tv_cache_v1';            // last snapshot kept in this b
 let TV = { snap:null, at:0, p:null, base:null, dec:[], err:'', sw:null, relCache:{}, sig:'' };
 try{ const c=JSON.parse(localStorage.getItem(TV_CACHE)||'null'); if(c&&c.snap){ TV.snap=c.snap; TV.sw=c.sw||null; TV.sig=_tvSig(c.snap); } }catch(e){}
 function _tvSig(s){ return s?((s.last_sync&&(s.last_sync.finished_at||s.last_sync.started_at))||'')+'|'+Object.keys(s.projects||{}).length+'|'+((s.receipt_guids||[]).length):''; }
-const tvSwitchOn = () => !!(CU && CU.role==='owner');   // owner / staff: Tally is the ONLY source of payments (Excel-imported entries stay stored but are never shown)
+const tvSwitchOn = () => !!(CU && (CU.role==='owner' || (CU.role==='contractor' && typeof CF!=='undefined' && CF.on)));   // owner / staff: Tally is the ONLY source of payments (Excel-imported entries stay stored but are never shown)
 // Tally payments for a linked project (null = use the normal releases). Receipts are NOT included: money received counts only through
 // confirmed settlements, exactly as the app already works.
+// Is this project linked in Tally (cost centre or ledger), even if no voucher exists yet? Uses the link lists, not the voucher list.
+function tvLinkInfo(p){
+  const s=TV.snap; if(!s||!p||p.tender==null) return null; const k=String(p.tender).trim(); const names=[];
+  (s.linked||[]).forEach(x=>{ if(String(x.t).trim()===k) names.push(x.name); });
+  (s.cost_centres||[]).forEach(c=>{ if((c.tenders||[]).some(t=>String(t).trim()===k) && !names.includes(c.name)) names.push(c.name); });
+  if(names.length || (s.projects&&s.projects[k])) return {names};
+  return null;
+}
+const tvLinked = p => !!tvLinkInfo(p);
+function _tvOnly(){ if(!(CU&&CU.role==='contractor')) return undefined;
+  const me=(typeof GC==='function'&&GC(CU.id))||{}; return {tenders:(D.projects||[]).filter(p=>p.contractorId===CU.id&&p.tender).map(p=>String(p.tender)), contractor:me.name||CU.name||''}; }
 function tvRel(p){
   if(!tvSwitchOn() || !p || !p.tender) return null; const k=String(p.tender);
   if(k in TV.relCache) return TV.relCache[k];
@@ -22,13 +33,13 @@ function tvRel(p){
 }
 function _tvRelRaw(t){ return t.tx.filter(x=>x.amt<0).map(x=>({id:'tv-'+x.g,date:x.d,amount:-x.amt,method:x.t,txType:'payment',ref:x.n,notes:x.nar||'',costCentre:x.cc||'',source:'tally-live',fromTally:true})); }
 function tvRerender(){
-  try{ if(typeof atab!=='undefined' && atab===18) return; if(typeof dpid!=='undefined' && dpid && typeof renderDetail==='function') renderDetail(dpid); else if(typeof ownerTab==='function' && typeof atab!=='undefined') ownerTab(atab); }catch(e){ console.warn('tally rerender',e); }
+  try{ if(!(CU&&CU.role==='owner')) return; if(typeof atab!=='undefined' && atab===18) return; if(typeof dpid!=='undefined' && dpid && typeof renderDetail==='function') renderDetail(dpid); else if(typeof ownerTab==='function' && typeof atab!=='undefined') ownerTab(atab); }catch(e){ console.warn('tally rerender',e); }
 }
 async function tvSwitchSet(on){
   const v={on:!!on,at:new Date().toISOString(),by:(CU&&CU.name)||''};
   await saveSetting(TV_SW_KEY,v); TV.sw=v; TV.relCache={}; _tvSave(); tvRerender();
 }
-function _tvSave(){ try{ localStorage.setItem(TV_CACHE,JSON.stringify({snap:TV.snap,sw:TV.sw})); }catch(e){} }
+function _tvSave(){ if(!(CU&&CU.role==='owner')) return; try{ localStorage.setItem(TV_CACHE,JSON.stringify({snap:TV.snap,sw:TV.sw})); }catch(e){} }
 // numbers that would change if the switch were turned on (computed without turning it on)
 function tvImpact(){
   const rows=[]; let linked=0, unlinked=0, oldT=0, newT=0;
@@ -51,7 +62,7 @@ async function tvLoad(force){
   if(TV.p) return TV.p;
   TV.p=(async()=>{
     try{
-      const r=await fetch(SB_URL+'/functions/v1/tally-api',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({action:'app_snapshot',fresh:!!force})});
+      const r=await fetch(SB_URL+'/functions/v1/tally-api',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({action:'app_snapshot',fresh:!!force,only:_tvOnly()})});
       const j=await r.json(); if(!r.ok) throw new Error(j.error||('Error '+r.status));
       const before=TV.sig; TV.snap=j; TV.at=Date.now(); TV.err=''; TV.relCache={}; TV.sig=_tvSig(j);
       try{ TV.sw=await getSetting(TV_SW_KEY,null); }catch(e){}
@@ -88,7 +99,7 @@ function tvInterest(txs, asOn){ // txs: [{d, amt}] amt in Tally sign (Dr negativ
 //  state: 'noload' (Tally numbers not loaded) | 'notlinked' | 'closed' (settled: shown as 0, atSettle = what it was) | 'open'
 function tvProjInterest(p){
   const snap=TV.snap; if(!snap||!snap.projects) return {state:'noload'};
-  const t=snap.projects[String(p.tender)]; if(!t||!t.tx||!t.tx.length) return {state:t?'open':'notlinked',amt:0,fy:null};
+  const t=snap.projects[String(p.tender)]; if(!t||!t.tx||!t.tx.length) return {state:tvLinked(p)?'open':'notlinked',amt:0,fy:null};
   const txs=t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar}));
   const cl=(typeof _tlProjClosed==='function')?_tlProjClosed(p.tender):{closed:false};
   if(cl.closed){
@@ -132,6 +143,7 @@ async function tvProjectFill(id){
   const snap=await tvLoad(); { const ib=document.getElementById('tv-pint-'+id); if(ib) ib.innerHTML=tvIntBoxHtml(p); } if(!document.getElementById('tv-proj-'+id)) return;
   if(!snap){ box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">Tally numbers could not be loaded (${_tvE(TV.err)}). The rest of the page is unaffected.</div>`; return; }
   const t=snap.projects[String(p.tender)];
+  if(!t && tvLinked(p)){ const li=tvLinkInfo(p); box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">Linked to <b>${_tvE(li.names.join(', ')||'Tally')}</b> — no transactions in Tally yet. Payments will appear here after the next sync (every 5 minutes).</div>`; if(typeof rcRender==='function') rcRender(id); return; }
   if(!t){ box.innerHTML=`<div class="st">📒 Tally transactions</div><div style="color:var(--text3);font-size:12px">This project is not linked to a Tally cost centre or ledger yet${CU&&CU.isSuperAdmin?' — link it in <a href="#" onclick="ownerTab(18);return false" style="color:var(--navy)">Tally Live → Needs linking</a>':''}.</div>`; return; }
   const net=t.paid-t.received, shared=t.tx.some(x=>x.sh>1);
   const it=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar})));
@@ -214,3 +226,53 @@ async function tvContractorFill(cid){
 
 // keep the numbers fresh for owner / staff only (never for contractor logins: the snapshot covers every contractor)
 (function(){ const wait=setInterval(()=>{ if(typeof CU!=='undefined' && CU){ clearInterval(wait); if(CU.role!=='owner'){ TV.snap=null; TV.sw=null; try{ localStorage.removeItem(TV_CACHE); }catch(e){} } if(CU.role==='owner'){ tvLoad(true).catch(()=>{}); setInterval(()=>{ if(document.visibilityState==='visible') tvLoad(true).catch(()=>{}); },5*60000); } } },1000); })();
+
+
+// ═══════════ CONTRACTOR FINANCE SWITCH (Settings → Contractor finance) ═══════════
+// OFF (default): contractors see "contact RSR office" instead of any money figure.  ON: they see the real Tally numbers of THEIR OWN projects only.
+const CF_KEY = 'rsr_contractor_fin_v1';
+var CF = { on:false, at:0, ready:false };
+const cfNeed = () => !CF.ready || Date.now()-CF.at > 60000;
+async function cfLoad(){ try{ const v=await getSetting(CF_KEY,null); CF.on=!!(v&&v.on); }catch(e){} CF.at=Date.now(); return CF.on; }
+async function cfSet(on){
+  try{ await saveSetting(CF_KEY,{on:!!on,at:new Date().toISOString(),by:(CU&&CU.name)||''}); CF.on=!!on; CF.at=Date.now(); CF.ready=true;
+    try{ writeActivityLog('settings','Contractor finance view turned '+(on?'ON':'OFF')); }catch(e){}
+    toast(on?'Contractors can now see their finance numbers':'Contractor finance numbers are hidden again','ok'); }
+  catch(e){ toast('Could not save: '+e.message,'error'); }
+  if(typeof _setRefreshCF==='function') _setRefreshCF();
+}
+async function cfPrepare(){
+  if(cfNeed()) await cfLoad();
+  CF.ready=true;
+  if(CF.on){ TV.relCache={}; try{ await tvLoad(); }catch(e){} }
+  return CF.on && !!TV.snap;
+}
+const cfLoadingHtml = () => '<div class="card" style="margin-bottom:12px;padding:14px;font-size:12px;color:var(--text3)">💰 Loading…</div>';
+const cfOffHtml = () => '<div class="card" style="margin-bottom:12px;padding:16px;text-align:center"><div style="font-size:22px;margin-bottom:6px">💰</div><div style="font-size:13px;font-weight:700;color:var(--navy)">Finance details</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Please contact the RSR office for payment and account details.</div></div>';
+const cfNoDataHtml = () => '<div class="card" style="margin-bottom:12px;padding:16px;text-align:center;font-size:12px;color:var(--text3)">💰 Finance numbers could not be loaded right now. Please try again in a little while, or contact the RSR office.</div>';
+function cfProjectCardHtml(p){
+  const rel=totRel(p), max=maxF(p), pay=relList(p).filter(r=>r.txType!=='receipt');
+  const cap=max>0?Math.round(rel/max*100):0, col=max>0&&rel/max>=0.85?'var(--red)':max>0&&rel/max>=0.70?'var(--amber)':'var(--navy)';
+  const tile=(l,v,c)=>`<div style="background:var(--surface2);padding:10px;border-radius:var(--rs)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${l}</div><div style="font-size:14px;font-weight:700;color:${c||'var(--navy)'}">${v}</div></div>`;
+  return `<div class="card" style="margin-bottom:12px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Project Financials</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${tile('Agreement Amount',fmt(agAmt(p)))}${tile('Max Fundable (70%)',fmt(maxF(p)))}${tile('Total Received',fmt(rel),'var(--green)')}${tile('Cap Used',cap+'%',col)}
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:var(--text2)">Estimated BOQ: <strong>${fmt(p.estimated||0)}</strong></span>
+        <span style="color:var(--text2)">Bid: <strong>${p.bidPct||0}%</strong></span>
+      </div>
+      ${pay.length?`<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--navy)">Payments from RSR (${pay.length})</summary>
+        <div style="overflow:auto;margin-top:6px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th style="text-align:right">Amount</th><th>Details</th></tr></thead><tbody>${pay.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>`<tr><td>${_tvD(r.date)}</td><td style="text-align:right">${_tvN(r.amount)}</td><td>${_tvE(r.notes||r.method||'')}</td></tr>`).join('')}</tbody></table></div></details>`:''}
+    </div>`;
+}
+async function cfFillProject(id){
+  if(!(CU&&CU.role==='contractor')) return;
+  const box=document.getElementById('cfin-'+id); if(!box) return;
+  const ok=await cfPrepare(); const p=GP(id); const b2=document.getElementById('cfin-'+id); if(!b2||!p) return;
+  b2.innerHTML = !CF.on ? cfOffHtml() : (!ok ? cfNoDataHtml() : capAlert(p)+cfProjectCardHtml(p));
+}
+(function(){ if(typeof cOpenProj==='function'){ const o=cOpenProj; cOpenProj=async function(id){ const r=await o.apply(this,arguments); try{ cfFillProject(id); }catch(e){ console.warn('contractor finance',e); } return r; }; } })();
+
+// ═══════════ link checks: warnings for typos, and receipts that changed in Tally ═══════════

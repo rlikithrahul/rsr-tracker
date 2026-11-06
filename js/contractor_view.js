@@ -227,34 +227,7 @@ async function cOpenProj(id){
     <button class="btn btn-gold btn-full" style="padding:16px;font-size:15px;margin-bottom:14px" onclick="cOpenUpd('${id}')">
       📸 Update Progress + Upload Photos
     </button>
-    ${capAlert(p)}
-
-    <!-- Project Financials for Contractor -->
-    <div class="card" style="margin-bottom:12px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Project Financials</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Agreement Amount</div>
-          <div style="font-size:14px;font-weight:700;color:var(--navy)">${fmt(agAmt(p))}</div>
-        </div>
-        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Max Fundable (70%)</div>
-          <div style="font-size:14px;font-weight:700;color:var(--navy)">${fmt(maxF(p))}</div>
-        </div>
-        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Total Received</div>
-          <div style="font-size:14px;font-weight:700;color:var(--green)">${fmt(totRel(p))}</div>
-        </div>
-        <div style="background:var(--surface2);padding:10px;border-radius:var(--rs)">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Cap Used</div>
-          <div style="font-size:14px;font-weight:700;color:${maxF(p)>0&&totRel(p)/maxF(p)>=0.85?'var(--red)':maxF(p)>0&&totRel(p)/maxF(p)>=0.70?'var(--amber)':'var(--navy)'}">${maxF(p)>0?Math.round(totRel(p)/maxF(p)*100):0}%</div>
-        </div>
-      </div>
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px">
-        <span style="color:var(--text2)">Estimated BOQ: <strong>${fmt(p.estimated||0)}</strong></span>
-        <span style="color:var(--text2)">Bid: <strong>${p.bidPct||0}%</strong></span>
-      </div>
-    </div>
+    <div id="cfin-${id}">${(CU&&CU.role==='contractor'&&typeof cfLoadingHtml==='function')?cfLoadingHtml():capAlert(p)+cfProjectCardHtml(p)}</div>
 
     <div class="card" style="margin-bottom:12px">
       <details data-toggle="cboq-${id}">

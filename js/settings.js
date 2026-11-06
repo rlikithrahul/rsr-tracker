@@ -75,6 +75,7 @@ async function renderSettings(){
     await loadStaff();
     await loadCustomWorkTypes();
     await loadWEXCustomTypes(); await loadWEXOverrides(); await loadWEXGroupOrder();
+    if(typeof cfLoad==='function') await cfLoad();
   }catch(e){
     console.error('Settings data failed to load:', e);
     toast('⚠️ Some settings data failed to load — please refresh and try again before making changes here','error',6000);
@@ -85,10 +86,18 @@ async function renderSettings(){
 
   el.innerHTML = `
     <div class="pg-hdr"><div class="pg-title">⚙️ Settings</div></div>
+    <div class="set-wrap">
+    ${_setContractorFinSection()}
+    
 
     <!-- STAFF MANAGEMENT -->
-    <div class="card" style="border-top:3px solid var(--gold);margin-bottom:16px">
-      <div class="st" style="margin-bottom:4px">👥 Staff Logins</div>
+    <div class="set-sec" id="set-staff">
+      <div class="set-hd" onclick="setToggle('staff')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('staff')}">
+        <span class="set-ic" style="background:#fef3c7">👥</span>
+        <span class="set-tt"><span class="set-t1">Staff Logins</span><span class="set-t2">Who can log in and use the owner screens</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
         Staff can log in and use all owner features. They cannot access Settings or Activity Log.
         You (Super Admin) are the master login — your password is set separately via the 🔑 Password button.
@@ -102,11 +111,18 @@ async function renderSettings(){
         </div>
         <button class="btn btn-navy" onclick="addStaffMember()" style="margin-top:8px">+ Add Staff Member</button>
       </div>
+    
+      </div></div></div>
     </div>
 
     <!-- WORK TYPES -->
-    <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
-      <div class="st" style="margin-bottom:4px">🏷️ Work Types</div>
+    <div class="set-sec" id="set-worktypes">
+      <div class="set-hd" onclick="setToggle('worktypes')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('worktypes')}">
+        <span class="set-ic" style="background:#e0e7ff">🏷️</span>
+        <span class="set-tt"><span class="set-t1">Work Types</span><span class="set-t2">One list used everywhere in the app</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
         Add a new work type here once and it's immediately available when creating or editing <strong>any</strong> project — old or new. This is the single list used everywhere (project creation, Work Experience "Similar Works Value" grouping, etc.) so grouping always stays consistent.
       </div>
@@ -115,11 +131,18 @@ async function renderSettings(){
         <input type="text" id="new-worktype-input" placeholder="e.g. Park, Gym Equipment" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:'Inter',sans-serif" onkeydown="if(event.key==='Enter')addCustomWorkTypeFromSettings()">
         <button class="btn btn-navy" onclick="addCustomWorkTypeFromSettings()">+ Add Work Type</button>
       </div>
+    
+      </div></div></div>
     </div>
 
     <!-- WORK EXPERIENCE QUANTITY TYPES -->
-    <div class="card" style="border-top:3px solid var(--navy);margin-bottom:16px">
-      <div class="st" style="margin-bottom:4px">📐 Work Experience Quantity Types</div>
+    <div class="set-sec" id="set-wex">
+      <div class="set-hd" onclick="setToggle('wex')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('wex')}">
+        <span class="set-ic" style="background:#e0e7ff">📐</span>
+        <span class="set-tt"><span class="set-t1">Work Experience Quantity Types</span><span class="set-t2">Items for Work Experience entries</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
         Add a new quantity item here (e.g. under Steel: HYSD Steel, Fabricated Steel, SS 304 Steel) and it appears in the Work Experience entry form for <strong>every</strong> project, old and new.
       </div>
@@ -137,10 +160,18 @@ async function renderSettings(){
         </div>
         <button class="btn btn-navy" onclick="addWEXCustomTypeFromSettings()" style="margin-top:8px">+ Add Quantity Type</button>
       </div>
+    
+      </div></div></div>
     </div>
 
     <!-- BACKUP HISTORY -->
-    <div class="card" style="border-top:3px solid var(--green);margin-bottom:16px">
+    <div class="set-sec" id="set-backup">
+      <div class="set-hd" onclick="setToggle('backup')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('backup')}">
+        <span class="set-ic" style="background:#dcfce7">💾</span>
+        <span class="set-tt"><span class="set-t1">Automatic Daily Backup</span><span class="set-t2">Full snapshot once a day</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">💾 Automatic Daily Backup</div>
@@ -149,10 +180,18 @@ async function renderSettings(){
         <button onclick="renderBackupHistory()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↻ Refresh</button>
       </div>
       <div id="backup-history-list"><div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">Loading…</div></div>
+    
+      </div></div></div>
     </div>
 
     <!-- SITE LOG ACCESS -->
-    <div class="card" style="border-top:3px solid var(--gold);margin-bottom:16px">
+    <div class="set-sec" id="set-sitelog">
+      <div class="set-hd" onclick="setToggle('sitelog')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('sitelog')}">
+        <span class="set-ic" style="background:#fef3c7">⚡</span>
+        <span class="set-tt"><span class="set-t1">Site Log Access</span><span class="set-t2">PIN-only pages for site supervisors</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">⚡ Site Log Access</div>
@@ -165,10 +204,18 @@ async function renderSettings(){
         <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Default Buttons (apply to every site)</div>
         <div id="sitelog-defaults-editor"></div>
       </div>
+    
+      </div></div></div>
     </div>
 
     <!-- DELETED BIN -->
-    <div class="card" style="border-top:3px solid var(--amber);margin-bottom:16px">
+    <div class="set-sec" id="set-bin">
+      <div class="set-hd" onclick="setToggle('bin')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('bin')}">
+        <span class="set-ic" style="background:#ffedd5">🗑️</span>
+        <span class="set-tt"><span class="set-t1">Deleted Items</span><span class="set-t2">Recoverable for 7 days</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">🗑️ Deleted Items (7-day recovery)</div>
@@ -177,10 +224,18 @@ async function renderSettings(){
         <button onclick="renderDeletedBin()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↻ Refresh</button>
       </div>
       <div id="deleted-bin-wrap"><div style="font-size:13px;color:var(--text3);text-align:center;padding:12px">Loading…</div></div>
+    
+      </div></div></div>
     </div>
 
     <!-- ACTIVITY LOG -->
-    <div class="card" style="border-top:3px solid var(--navy)">
+    <div class="set-sec" id="set-activity">
+      <div class="set-hd" onclick="setToggle('activity')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('activity')}">
+        <span class="set-ic" style="background:#e0e7ff">📋</span>
+        <span class="set-tt"><span class="set-t1">Activity Log</span><span class="set-t2">Every login, edit and settlement</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">📋 Activity Log</div>
@@ -191,6 +246,9 @@ async function renderSettings(){
       <div id="activity-log-full" style="max-height:600px;overflow-y:auto">
         <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Loading…</div>
       </div>
+    
+      </div></div></div>
+    </div>
     </div>`;
 
   // Load full activity log
@@ -469,3 +527,34 @@ async function removeSiteLogDefault(kind, idx){
   }catch(e){ toast('Save failed','error'); }
 }
 
+
+
+// ─── SETTINGS LAYOUT: tap a row to open / close it (all closed by default) ───
+function setToggle(id){
+  const sec=document.getElementById('set-'+id); if(!sec) return;
+  const open=!sec.classList.contains('open'); sec.classList.toggle('open',open);
+  const hd=sec.querySelector('.set-hd'); if(hd) hd.setAttribute('aria-expanded',open?'true':'false');
+}
+// iOS-style switch row: contractors see their real Tally finance numbers only while this is ON
+function _setContractorFinSection(){
+  const on = (typeof CF!=='undefined') && CF.on;
+  return `<!-- CONTRACTOR FINANCE -->
+    <div class="set-sec" id="set-contfin">
+      <div class="set-hd" onclick="setToggle('contfin')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('contfin')}">
+        <span class="set-ic" style="background:#dcfce7">💰</span>
+        <span class="set-tt"><span class="set-t1">Contractor Finance View</span><span class="set-t2" id="cf-sub">${on?'On — contractors see their finance numbers':'Off — contractors are told to contact the office'}</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
+        <div class="set-row">
+          <div class="set-rowt"><b>Let contractors see their finances</b><span>Their own projects only: agreement amount, funding cap, payments from RSR (live from Tally) and the My Funds page. While this is Off they see only "contact the RSR office" — no numbers at all.</span></div>
+          <label class="set-sw"><input type="checkbox" id="cf-sw" ${on?'checked':''} onchange="cfSet(this.checked)"><span class="set-sw-t"></span></label>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Takes effect the next time a contractor opens the page (within a minute). The old Excel numbers are never shown to contractors.</div>
+      </div></div></div>
+    </div>`;
+}
+function _setRefreshCF(){
+  const on=CF.on; const sw=document.getElementById('cf-sw'); if(sw) sw.checked=on;
+  const sub=document.getElementById('cf-sub'); if(sub) sub.textContent=on?'On — contractors see their finance numbers':'Off — contractors are told to contact the office';
+}

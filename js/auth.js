@@ -165,6 +165,7 @@ async function contLogin(){
 }
 
 function logout(){
+  try{ localStorage.removeItem('rsr_tv_cache_v1'); }catch(e){}
   if(CU) writeActivityLog('logout', `${CU.name} logged out`).catch(()=>{});
   if(typeof clearToggleStates === 'function') clearToggleStates();
   try{ sessionStorage.removeItem('rsr_session_state_v2'); }catch(e){}
@@ -283,6 +284,11 @@ function cTab(i){
 function renderCFunds(){
   const el=document.getElementById('cp-funds');
   el.classList.remove('hidden');
+  if(CU && CU.role==='contractor' && typeof cfNeed==='function'){
+    if(cfNeed()){ el.innerHTML='<h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:10px">My Funds</h2>'+cfLoadingHtml(); cfPrepare().then(()=>renderCFunds()); return; }
+    if(!CF.on){ el.innerHTML='<h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:10px">My Funds</h2>'+cfOffHtml(); return; }
+    if(!TV.snap){ el.innerHTML='<h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:10px">My Funds</h2>'+cfNoDataHtml(); return; }
+  }
   const myProjects = D.projects.filter(p=>p.contractorId===CU.id);
   if(!myProjects.length){
     el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">No projects assigned yet.</div></div>';

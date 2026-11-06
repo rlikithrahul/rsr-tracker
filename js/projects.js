@@ -322,7 +322,7 @@ function renderDetail(id){
       <div class="card">
         <details data-toggle="funds-${id}" open>
           <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
-            <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${relList(p).length} entries${(typeof tvRel==='function'&&tvRel(p))?' · from Tally':''})</span>${(typeof tvSwitchOn==='function'&&tvSwitchOn()&&!(TV.snap&&TV.snap.projects&&TV.snap.projects[String(p.tender)]))?' <span style="font-size:11px;color:var(--amber);font-weight:600">· not linked to Tally — link it in Tally Live to see payments</span>':''}</div>
+            <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${relList(p).length} entries${(typeof tvRel==='function'&&tvRel(p))?' · from Tally':''})</span>${(typeof tvSwitchOn==='function'&&tvSwitchOn()&&!(typeof tvLinked==='function'&&tvLinked(p)))?' <span style="font-size:11px;color:var(--amber);font-weight:600">· not linked to Tally — link it in Tally Live to see payments</span>':''}</div>
             <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>
           </summary>
           <div style="margin-top:12px">${relLog}</div>

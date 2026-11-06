@@ -641,7 +641,7 @@ async function _tlIntShow(){
       const r=await tlApi('cc_statement',{cost_centres:names}); _tlStatement({rows:r.rows.map(x=>({...x,ledger:x.ledger_name})),opening:null,title:a+' — '+names.length+' cost centres',interest:true}, out); }
     else if(lv==='cc'){ const c=TL.cc.find(x=>x.name.toLowerCase()===a.toLowerCase()); if(!c){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">No such cost centre.</div>'; return; }
       const r=await tlApi('cc_statement',{cost_centres:[c.name]}); _tlStatement({rows:r.rows.map(x=>({...x,ledger:x.ledger_name})),opening:null,title:'Cost centre '+c.name,interest:true}, out); }
-    else { const m=a.match(/^#?(\S+)/); const t=m&&TV.snap.projects[m[1]]; if(!t){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">This project has no Tally transactions (not linked yet).</div>'; return; }
+    else { const m=a.match(/^#?(\S+)/); const t=m&&TV.snap.projects[m[1]]; if(!t){ out.innerHTML='<div class="card" style="padding:16px;color:var(--text3)">'+((m&&tvLinked({tender:m[1]}))?'This project is linked in Tally but has no transactions yet.':'This project has no Tally transactions (not linked yet).')+'</div>'; return; }
       _tlStatement({rows:_tlSnapRows(t.tx),opening:null,title:'Project '+a+(t.shared?' (shared entries split equally)':''),interest:true}, out); }
   }catch(e){ _tlErr(e); }
 }
@@ -653,7 +653,7 @@ async function _tlNeeds(){
   const b=_tlBusy(); try{ await _tlLoadCC(); await _tlLoadLedgers(); await _tlLoadTotals(); await tvLoad(true); }catch(e){ return _tlErr(e); }
   if(!TV.snap) return _tlErr(new Error('Could not load the Tally snapshot: '+TV.err));
   const dec=id=>{ const d=_tvDec(id); return d&&d.action!=='reset'?d:null; };
-  const projs=_tlProjects().filter(p=>!TV.snap.projects[p.tender]);
+  const projs=_tlProjects().filter(p=>!tvLinked(p));
   const shown=projs.filter(p=>!dec('p|'+p.tender)), hidden=projs.filter(p=>dec('p|'+p.tender));
   const conts=_tlContractors().filter(n=>!TV.snap.contractors[n]); const cshown=conts.filter(n=>!dec('c|'+n));
   const T=TL.totals||{}; const ccs=TL.cc.filter(c=>T[c.name.toLowerCase()] && !_tlCCProjects(c).length && !c.contractor_name && !['ignore','general','closed_no_cc'].includes(c.cc_type) && !dec('k|'+c.guid));

@@ -1420,9 +1420,13 @@ async function runAutoBackupIfNeeded(){
       sbReq('contractors?order=created_at', 'GET'),
       sbReq('settings', 'GET'),
     ]);
+    // the Tally links (which cost centre / ledger belongs to which project) live only in Supabase's Tally tables: keep a copy in the backup too
+    let tallyLinks = null;
+    try{ const lr = await fetch(SB_URL+'/functions/v1/tally-api',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({action:'link_export'})}); if(lr.ok) tallyLinks = await lr.json(); }catch(e){ console.warn('Tally link export skipped:', e.message); }
     const backup = {
       exportedAt: new Date().toISOString(),
       version: APP_VERSION,
+      tallyLinks,
       projects: (projRows||[]).map(r=>({...r.data, id:r.id})),
       contractors: (contRows||[]).map(r=>({...r.data, id:r.id})),
       settings: settingsRows||[],

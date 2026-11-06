@@ -2,7 +2,7 @@
 // integrity.js — System Protection Layer
 // RSR Constructions Tracker v19
 //
-// 1. System Health Check Panel (10 checks)
+// 1. System Health Check Panel (14 checks)
 // 2. Anomaly Detection on contractor updates
 // 3. One-click full data backup
 // ═══════════════════════════════════════
@@ -23,6 +23,8 @@ async function runSystemChecks(){
     { id:'cap',   label:'70% cap calculation correct',  fn: checkCapCalc },
     { id:'intr',  label:'Interest calculation correct', fn: checkInterestCalc },
     { id:'tlink', label:'Active projects are linked to Tally', fn: checkTallyLinks },
+    { id:'tmis',  label:'Names and tender IDs match between app and Tally', fn: checkTallyMismatch },
+    { id:'trec',  label:'Linked receipts unchanged in Tally', fn: checkLinkedReceipts },
     { id:'tsync', label:'Tally sync', fn: checkTallySync },
     { id:'setrec',label:'Settlements without a linked Tally receipt', fn: checkSettlementsNoReceipt },
     { id:'cled',  label:'Contractors with a Tally ledger', fn: checkContractorsNoLedger },
@@ -177,10 +179,43 @@ async function hcApply(i,keys,action){
 async function checkTallyLinks(){
   const snap=await tvLoad();
   if(!snap) return { pass:false, detail:'Tally numbers could not be loaded, so links cannot be checked ('+(TV.err||'no data')+')' };
-  const all=D.projects.filter(p=>!isArchived(p)&&projStatus(p)==='active'&&!snap.projects[String(p.tender)]).map(p=>({key:'p|'+p.id,label:p.name+' (#'+p.tender+')',pid:p.id}));
+  const all=D.projects.filter(p=>!isArchived(p)&&projStatus(p)==='active'&&!tvLinked(p)).map(p=>({key:'p|'+p.id,label:p.name+' (#'+p.tender+')',pid:p.id}));
   const {items,ignored}=_hcSplit(all);
   if(!items.length) return { pass:true, detail:'Every active project is linked to Tally'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
   return { pass:false, detail:items.length+' active project'+(items.length>1?'s are':' is')+' not linked to a Tally cost centre — it shows no payments until linked (Tally Live → Needs linking):', items, ignored };
+}
+// Typos between the app and Tally: a project whose cost centre cannot be found, or a Tally cost centre whose tender ID matches no project
+async function checkTallyMismatch(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'Tally numbers could not be loaded' };
+  const ccs=snap.cost_centres||[]; const norm=x=>String(x||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const all=[]; const tenders=new Set(D.projects.filter(p=>!isArchived(p)).map(p=>String(p.tender||'').trim()));
+  D.projects.filter(p=>!isArchived(p)&&projStatus(p)==='active'&&p.tender&&!tvLinked(p)).forEach(p=>{
+    const typed=norm(p.costCentre);
+    if(typed && !ccs.some(c=>norm(c.name)===typed)) all.push({key:'m1|'+p.id+'|'+typed.replace(/[^A-Za-z0-9 ]/g,''),label:_tvE(p.name)+' (#'+_tvE(p.tender)+') — cost centre "'+_tvE(p.costCentre)+'" was not found in Tally. Fix the name in the project, or the cost centre in Tally.',pid:p.id});
+    else if(!typed) all.push({key:'m2|'+p.id,label:_tvE(p.name)+' (#'+_tvE(p.tender)+') — no cost centre typed and no Tally cost centre has tender ID '+_tvE(p.tender)+' in its second row.',pid:p.id}); });
+  ccs.filter(c=>(!c.tenders||!c.tenders.length)&&(c.type==='unmapped'||c.type==='project')&&c.alias).forEach(c=>{
+    const ids=String(c.alias).split(/[^A-Za-z0-9]+/).filter(x=>x.length>=5&&/\d/.test(x));
+    if(ids.length && !ids.some(i=>tenders.has(i))) all.push({key:'m3|'+String(c.name).replace(/[^A-Za-z0-9 ]/g,'')+'|'+ids.join(',').replace(/[^A-Za-z0-9,]/g,''),label:'Tally cost centre "'+_tvE(c.name)+'" has tender ID '+_tvE(ids.join(', '))+' in its second row, but no project in the app has that tender ID (typo in Tally or in the app?).'}); });
+  const {items,ignored}=_hcSplit(all);
+  if(!items.length) return { pass:true, detail:'No mismatched names or tender IDs between the app and Tally'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
+  return { pass:false, detail:items.length+' possible mismatch'+(items.length>1?'es':'')+' between the app and Tally — correct the spelling or tender ID on whichever side is wrong; the link then happens by itself within 5 minutes (or link it in Tally Live):', items, ignored };
+}
+// A receipt linked to a settlement that was changed or removed in Tally afterwards
+async function checkLinkedReceipts(){
+  const snap=await tvLoad();
+  if(!snap) return { pass:false, detail:'Tally numbers could not be loaded' };
+  const all=[];
+  D.projects.filter(p=>!isArchived(p)&&tvLinked(p)).forEach(p=>{
+    const t=snap.projects[String(p.tender)]; const m=new Map(((t&&t.tx)||[]).map(x=>[x.g,x]));
+    (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{ const gs=rcGuids(s); if(!gs.length) return;
+      const miss=gs.filter(g=>!m.has(g));
+      if(miss.length){ all.push({key:'d|'+s.id+'|gone|'+miss.join(',').replace(/[^A-Za-z0-9,-]/g,''),label:_tvE(p.name)+' — '+(s.billType||'Final Bill')+' '+fmt(s.amount)+' ('+s.date+'): the linked receipt is no longer in Tally (removed or changed there).',pid:p.id}); return; }
+      const sum=gs.reduce((a,g)=>a+m.get(g).amt,0);
+      if(!s.amountManual && Math.abs(sum-(s.amount||0))>=1) all.push({key:'d|'+s.id+'|amt|'+Math.round(sum),label:_tvE(p.name)+' — '+(s.billType||'Final Bill')+': settlement says '+fmt(s.amount)+' but the linked receipt in Tally is now '+fmt(sum)+'.',pid:p.id}); }); });
+  const {items,ignored}=_hcSplit(all);
+  if(!items.length) return { pass:true, detail:'Every receipt linked to a settlement still matches Tally'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
+  return { pass:false, detail:items.length+' settlement'+(items.length>1?'s have':' has')+' a Tally receipt that changed or disappeared. Check the project, then press OK if it is fine (nothing is changed automatically):', items, ignored };
 }
 async function checkTallySync(){
   const snap=await tvLoad();
@@ -194,7 +229,7 @@ async function checkTallySync(){
 async function checkSettlementsNoReceipt(){
   const snap=await tvLoad();
   if(!snap) return { pass:false, detail:'Tally numbers could not be loaded' };
-  const all=[]; D.projects.filter(p=>!isArchived(p)&&snap.projects[String(p.tender)]).forEach(p=>{
+  const all=[]; D.projects.filter(p=>!isArchived(p)&&tvLinked(p)).forEach(p=>{
     (p.settlements||[]).filter(s=>!isArchived(s)).forEach(s=>{ if(!rcGuids(s).length) all.push({key:'s|'+s.id,label:p.name+' — '+(s.billType||'Final Bill')+' '+fmt(s.amount)+' ('+s.date+')',pid:p.id}); }); });
   const {items,ignored}=_hcSplit(all);
   if(!items.length) return { pass:true, detail:'Every settlement has its Tally receipt linked'+(ignored.length?' ('+ignored.length+' marked as OK)':''), items, ignored };
