@@ -27,7 +27,10 @@
 
 const WXF_UNITS = {kg:'kg', cum:'cum', rmt:'rmt', sqm:'sqm', nos:'nos'};
 const WXF_EPS = 0.005;   // matches the 2-decimal display, so 49,999.998 is not "short"
-let _wxf = {firm:null, group:null, keys:[], reqValue:'', reqUnit:'', fy:null, sel:[], showNoCert:false, busy:false};
+let _wxf = {firm:null, blocks:[], busy:false};
+// One "block" = one requirement of the tender (e.g. steel 45,150 kg, or concrete 567 cum), each with its own types, quantity, financial year and projects.
+function _wxfNewBlock(){ return {group:null, keys:[], reqValue:'', reqUnit:'', fy:null, sel:[], showNoCert:false}; }
+function _wxfBlk(bi){ if(!_wxf.blocks.length) _wxf.blocks.push(_wxfNewBlock()); return _wxf.blocks[bi] || _wxf.blocks[0]; }
 
 // ─── PURE HELPERS (testable) ───────────────────────────
 function wxfN(n){ return Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:2}); }
@@ -96,73 +99,81 @@ function wxfBuildLinker(){
 
 // ─── STATE / HANDLERS ──────────────────────────────────
 function wxfRefresh(){ const el = document.getElementById('wxf-root'); if(el) el.innerHTML = _wxfBody(); }
-function wxfSetGroup(g){ _wxf.group = g; _wxf.keys = []; _wxf.fy = null; _wxf.sel = []; _wxf.reqUnit = ''; wxfRefresh(); }
-function wxfToggleKey(k){
-  const i = _wxf.keys.indexOf(k); if(i>=0) _wxf.keys.splice(i,1); else _wxf.keys.push(k);
-  _wxf.sel = []; if(!_wxf.keys.length) _wxf.reqUnit = ''; wxfRefresh();
+function wxfAddBlock(){ _wxf.blocks.push(_wxfNewBlock()); wxfRefresh(); }
+async function wxfRemoveBlock(bi){
+  if(_wxf.blocks.length<2) return;
+  const ok = await showConfirm({title:'Remove this quantity?', message:'Its types, year and ticked projects are cleared. Nothing in your records is changed.', confirmLabel:'Remove', danger:false});
+  if(!ok) return; _wxf.blocks.splice(bi,1); wxfRefresh();
 }
-function wxfTickAll(unit){
-  const items = getAllWEXItems().filter(i=>(i.group||'Other')===_wxf.group && i.unit===unit);
-  _wxf.keys = items.map(i=>i.key); _wxf.sel = []; _wxf.reqUnit = ''; wxfRefresh();
+function wxfSetGroup(bi,g){ const b=_wxfBlk(bi); b.group = g; b.keys = []; b.fy = null; b.sel = []; b.reqUnit = ''; wxfRefresh(); }
+function wxfToggleKey(bi,k){
+  const b=_wxfBlk(bi); const i = b.keys.indexOf(k); if(i>=0) b.keys.splice(i,1); else b.keys.push(k);
+  b.sel = []; if(!b.keys.length) b.reqUnit = ''; wxfRefresh();
 }
-function wxfClearKeys(){ _wxf.keys = []; _wxf.sel = []; _wxf.fy = null; _wxf.reqUnit = ''; wxfRefresh(); }
-function wxfSetReq(v){ _wxf.reqValue = v; wxfRefresh(); }
-function wxfSetUnit(u){ _wxf.reqUnit = u; wxfRefresh(); }
-function wxfPickFY(fy){ _wxf.fy = fy; _wxf.sel = []; wxfRefresh(); }
-function wxfToggleRow(id){ const i = _wxf.sel.indexOf(id); if(i>=0) _wxf.sel.splice(i,1); else _wxf.sel.push(id); wxfRefresh(); }
-function wxfClearSel(){ _wxf.sel = []; wxfRefresh(); }
-function wxfToggleNoCert(on){ _wxf.showNoCert = !!on; wxfRefresh(); }
+function wxfTickAll(bi,unit){
+  const b=_wxfBlk(bi); const items = getAllWEXItems().filter(i=>(i.group||'Other')===b.group && i.unit===unit);
+  b.keys = items.map(i=>i.key); b.sel = []; b.reqUnit = ''; wxfRefresh();
+}
+function wxfClearKeys(bi){ const b=_wxfBlk(bi); b.keys = []; b.sel = []; b.fy = null; b.reqUnit = ''; wxfRefresh(); }
+function wxfSetReq(bi,v){ _wxfBlk(bi).reqValue = v; wxfRefresh(); }
+function wxfSetUnit(bi,u){ _wxfBlk(bi).reqUnit = u; wxfRefresh(); }
+function wxfPickFY(bi,fy){ const b=_wxfBlk(bi); b.fy = fy; b.sel = []; wxfRefresh(); }
+function wxfToggleRow(bi,id){ const b=_wxfBlk(bi); const i = b.sel.indexOf(id); if(i>=0) b.sel.splice(i,1); else b.sel.push(id); wxfRefresh(); }
+function wxfClearSel(bi){ _wxfBlk(bi).sel = []; wxfRefresh(); }
+function wxfToggleNoCert(bi,on){ _wxfBlk(bi).showNoCert = !!on; wxfRefresh(); }
 
-// everything the current choices produce — one place, used by render + actions
-function _wxfModel(){
+// everything block bi's choices produce — one place, used by render + actions
+function _wxfModel(bi){
   const firm = (typeof _wexFirm!=='undefined' && _wexFirm) ? _wexFirm : 'RSR Constructions';
-  if(_wxf.firm!==firm){ _wxf.firm = firm; _wxf.sel = []; _wxf.fy = null; }
+  if(_wxf.firm!==firm){ _wxf.firm = firm; _wxf.blocks.forEach(b=>{ b.sel = []; b.fy = null; }); }
+  const bk = _wxfBlk(bi);
   const items = getAllWEXItems();
   const groups = [...new Set(items.map(i=>i.group||'Other'))];
-  if(!_wxf.group || !groups.includes(_wxf.group)){ _wxf.group = groups[0]; _wxf.keys = []; }
+  if(!bk.group || !groups.includes(bk.group)){ bk.group = groups[0]; bk.keys = []; }
   const records = ((D.wexData && D.wexData.records)||[]).filter(r=>!r._archived && (r.firm||'RSR Constructions')===firm);
-  const groupItems = items.filter(i=>(i.group||'Other')===_wxf.group);
-  const active = items.filter(i=>_wxf.keys.includes(i.key));
+  const groupItems = items.filter(i=>(i.group||'Other')===bk.group);
+  const active = items.filter(i=>bk.keys.includes(i.key));
   const unit = active.length ? active[0].unit : null;
-  const reqUnit = _wxf.reqUnit || unit;
-  const required = unit ? wxfToStored(_wxf.reqValue, unit, reqUnit) : 0;
-  const rows = unit ? wxfCollect(records, wxfBuildLinker(), firm, _wxf.keys) : [];
+  const reqUnit = bk.reqUnit || unit;
+  const required = unit ? wxfToStored(bk.reqValue, unit, reqUnit) : 0;
+  const rows = unit ? wxfCollect(records, wxfBuildLinker(), firm, bk.keys) : [];
   const fys = wxfFYSummary(rows);
-  if(unit && (!_wxf.fy || !fys.some(f=>f.fy===_wxf.fy))){ _wxf.fy = fys.length ? fys[0].fy : null; _wxf.sel = []; }
-  const fyRows = rows.filter(x=>x.fy===_wxf.fy).sort((a,b)=>b.total-a.total);
+  if(unit && (!bk.fy || !fys.some(f=>f.fy===bk.fy))){ bk.fy = fys.length ? fys[0].fy : null; bk.sel = []; }
+  const fyRows = rows.filter(x=>x.fy===bk.fy).sort((a,b)=>b.total-a.total);
   const certRows = fyRows.filter(x=>x.cert);
-  _wxf.sel = _wxf.sel.filter(id=>certRows.some(x=>x.id===id));
-  const selRows = _wxf.sel.map(id=>certRows.find(x=>x.id===id)).filter(Boolean);
+  bk.sel = bk.sel.filter(id=>certRows.some(x=>x.id===id));
+  const selRows = bk.sel.map(id=>certRows.find(x=>x.id===id)).filter(Boolean);
   const selTotal = selRows.reduce((s,x)=>s+x.total,0);
-  return {firm, items, groups, records, groupItems, active, unit, reqUnit, required, rows, fys, fyRows, certRows, selRows, selTotal, status:wxfStatus(selTotal, required)};
+  return {bk, bi, firm, items, groups, records, groupItems, active, unit, reqUnit, required, rows, fys, fyRows, certRows, selRows, selTotal, status:wxfStatus(selTotal, required)};
 }
-function wxfAutoPickClick(){
-  const m = _wxfModel();
+function _wxfAllModels(){ _wxfBlk(0); return _wxf.blocks.map((_,i)=>_wxfModel(i)); }
+function wxfAutoPickClick(bi){
+  const m = _wxfModel(bi);
   if(!(m.required>0)){ toast('Enter the required quantity first','error'); return; }
-  _wxf.sel = wxfAutoPick(m.certRows, m.required); wxfRefresh();
+  m.bk.sel = wxfAutoPick(m.certRows, m.required); wxfRefresh();
 }
 
 // ─── DOWNLOAD ──────────────────────────────────────────
 async function wxfDownload(){
   if(_wxf.busy) return;
-  const m = _wxfModel();
-  if(!m.selRows.length){ toast('Tick at least one project first','error'); return; }
+  const ms = _wxfAllModels(); const m = ms[0]; const allSel = ms.flatMap(x=>x.selRows);
+  if(!allSel.length){ toast('Tick at least one project first','error'); return; }
   if(typeof tdBuildPdf!=='function' || typeof tdPdfReady!=='function'){ toast('PDF tools are not available — hard refresh the page (Ctrl+Shift+R)','error'); return; }
   if(!tdPdfReady()) return;
   const seen = new Set(), docs = [];
-  m.selRows.forEach(x=>{
+  allSel.forEach(x=>{
     if(seen.has(x.cert.url)) return; seen.add(x.cert.url);
     // the file type is read from the file name; fall back to the link if the name has no extension
     const fileName = tdExt(x.cert.name) ? x.cert.name : String(x.cert.url).split('?')[0];
     docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
   });
-  const label = m.active.length===1 ? m.active[0].label : _wxf.group+' ('+m.active.length+' types)';
+  const label = ms.map(x=>x.active.length===1 ? x.active[0].label : (x.bk.group+' ('+x.active.length+' types)')).join(' + ');
   _wxf.busy = true; toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
   try{
     const bytes = await tdBuildPdf(PDFLib, docs, {getBytes:tdFetchBytes, imageToJpeg:tdImageToJpeg});
-    tdSaveBlob(bytes, tdSafeName(m.firm+' - Work experience - '+label+' FY '+_wxf.fy+' ('+docs.length+' certificates)')+'.pdf', 'application/pdf');
+    tdSaveBlob(bytes, tdSafeName(m.firm+' - Work experience - '+label+' FY '+ms.map(x=>x.bk.fy).join('/')+' ('+docs.length+' certificates)')+'.pdf', 'application/pdf');
     toast('✓ PDF downloaded — '+docs.length+' certificate'+(docs.length!==1?'s':''),'ok');
-    logActivity({category:'system', action:'wex_bundle_downloaded', description:(CU?CU.name:'')+' downloaded a work-experience bundle: '+label+', FY '+_wxf.fy+', '+docs.length+' certificates ('+m.firm+')'});
+    logActivity({category:'system', action:'wex_bundle_downloaded', description:(CU?CU.name:'')+' downloaded a work-experience bundle: '+label+', FY '+ms.map(x=>x.bk.fy).join('/')+', '+docs.length+' certificates ('+m.firm+')'});
   }catch(e){
     console.error(e);
     toast('Nothing was downloaded. '+tdExplainFailure(e),'error',8000);
@@ -172,8 +183,8 @@ async function wxfDownload(){
 // ─── RENDER ────────────────────────────────────────────
 function renderWexFinder(){ return '<div id="wxf-root">'+_wxfBody()+'</div>'; }
 
-function _wxfBody(){
-  const m = _wxfModel();
+function _wxfBlockBody(bi){
+  const m = _wxfModel(bi), bk = m.bk;
   const uLabel = wxfUnit(m.unit);
   const showT = u => (m.unit==='kg' ? ` <span style="color:var(--text3)">(${wxfN(u/1000)} MT)</span>` : '');
   const reqUnits = m.unit ? (m.unit==='kg' ? ['kg','MT'] : [m.unit]) : [];
@@ -183,21 +194,21 @@ function _wxfBody(){
   // 1 — what does the tender ask for?
   const step1 = `<div class="card" style="margin-bottom:14px">
     <div class="st">1 · What does the tender ask for?</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Choose the kind of work, then tick every type the tender accepts. Tick them all for “any ${wxfEsc(String(_wxf.group||'').toLowerCase())}”, or just the specific one (e.g. only M30).</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Choose the kind of work, then tick every type the tender accepts. Tick them all for “any ${wxfEsc(String(bk.group||'').toLowerCase())}”, or just the specific one (e.g. only M30).</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-      ${m.groups.map(g=>`<button onclick="wxfSetGroup('${wxfEsc(g).replace(/'/g,"\\'")}')" style="padding:7px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${_wxf.group===g?'var(--navy)':'var(--border)'};background:${_wxf.group===g?'var(--navy)':'#fff'};color:${_wxf.group===g?'#fff':'var(--text2)'}">${wxfEsc(g)}</button>`).join('')}
+      ${m.groups.map(g=>`<button onclick="wxfSetGroup(${bi},'${wxfEsc(g).replace(/'/g,"\\'")}')" style="padding:7px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${bk.group===g?'var(--navy)':'var(--border)'};background:${bk.group===g?'var(--navy)':'#fff'};color:${bk.group===g?'#fff':'var(--text2)'}">${wxfEsc(g)}</button>`).join('')}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
       ${m.groupItems.map(i=>{
-        const on = _wxf.keys.includes(i.key), blocked = !!m.unit && i.unit!==m.unit, n = cnt(i.key);
+        const on = bk.keys.includes(i.key), blocked = !!m.unit && i.unit!==m.unit, n = cnt(i.key);
         return `<label title="${blocked?'Uses a different unit ('+wxfUnit(i.unit)+') — can’t be added to the ticked types':''}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:var(--rs);font-size:12px;border:1.5px solid ${on?'var(--navy)':'var(--border)'};background:${on?'#eef2fb':'#fff'};${blocked?'opacity:.4;cursor:not-allowed':'cursor:pointer'}${n===0&&!on?';color:var(--text3)':''}">
-          <input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="wxfToggleKey('${i.key}')" style="margin:0"> ${wxfEsc(i.label)} <span style="color:var(--text3);font-size:10px">${wxfUnit(i.unit)} · ${n} record${n!==1?'s':''}</span>
+          <input type="checkbox" ${on?'checked':''} ${blocked?'disabled':''} onchange="wxfToggleKey(${bi},'${i.key}')" style="margin:0"> ${wxfEsc(i.label)} <span style="color:var(--text3);font-size:10px">${wxfUnit(i.unit)} · ${n} record${n!==1?'s':''}</span>
         </label>`;
       }).join('')}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      ${unitsInGroup.map(u=>`<button class="btn btn-sm" onclick="wxfTickAll('${u}')">☑ ${unitsInGroup.length>1?'All types in '+wxfUnit(u):'Any type — tick all'}</button>`).join('')}
-      ${m.active.length?`<button class="btn btn-sm" onclick="wxfClearKeys()">Clear</button>`:''}
+      ${unitsInGroup.map(u=>`<button class="btn btn-sm" onclick="wxfTickAll(${bi},'${u}')">☑ ${unitsInGroup.length>1?'All types in '+wxfUnit(u):'Any type — tick all'}</button>`).join('')}
+      ${m.active.length?`<button class="btn btn-sm" onclick="wxfClearKeys(${bi})">Clear</button>`:''}
     </div>
     ${m.active.length>1?`<div style="font-size:11px;color:var(--text3);margin-top:8px">Ticked types are <strong>added together</strong>. If one of them is already counted inside another (so it would count twice), untick it — each project below shows its quantity by type so you can check.</div>`:''}
   </div>`;
@@ -207,8 +218,8 @@ function _wxfBody(){
     <div class="st">2 · How much is required?</div>
     ${!m.unit ? '<div style="font-size:12px;color:var(--text3)">Tick at least one type above first.</div>' : `
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input type="number" min="0" step="any" value="${wxfEsc(_wxf.reqValue)}" placeholder="e.g. ${m.unit==='kg'?'50000':'250'}" onchange="wxfSetReq(this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:700">
-      ${reqUnits.length>1 ? `<select onchange="wxfSetUnit(this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px">${reqUnits.map(u=>`<option value="${u}" ${m.reqUnit===u?'selected':''}>${u==='MT'?'tonnes (MT)':wxfUnit(u)}</option>`).join('')}</select>`
+      <input type="number" min="0" step="any" value="${wxfEsc(bk.reqValue)}" placeholder="e.g. ${m.unit==='kg'?'50000':'250'}" onchange="wxfSetReq(${bi},this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:700">
+      ${reqUnits.length>1 ? `<select onchange="wxfSetUnit(${bi},this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px">${reqUnits.map(u=>`<option value="${u}" ${m.reqUnit===u?'selected':''}>${u==='MT'?'tonnes (MT)':wxfUnit(u)}</option>`).join('')}</select>`
                             : `<span style="font-size:13px;font-weight:700;color:var(--navy)">${uLabel}</span>`}
       ${m.required>0 && m.reqUnit==='MT' ? `<span style="font-size:12px;color:var(--text3)">= ${wxfN(m.required)} kg</span>`:''}
     </div>
@@ -219,11 +230,11 @@ function _wxfBody(){
   let step3 = '';
   if(m.unit){
     const fyCards = m.fys.map((f,idx)=>{
-      const on = f.fy===_wxf.fy;
+      const on = f.fy===bk.fy;
       const st = wxfStatus(f.total, m.required);
       const chip = st.state==='met' ? `<span style="color:var(--green);font-weight:700">✓ meets it${st.excess>0?' (+'+wxfN(st.excess)+')':''}</span>`
                  : st.state==='short' ? `<span style="color:var(--amber);font-weight:700">short by ${wxfN(st.short)}</span>` : '';
-      return `<div onclick="wxfPickFY('${f.fy}')" style="cursor:pointer;padding:10px 14px;border-radius:var(--rs);min-width:170px;border:2px solid ${on?'var(--navy)':'var(--border)'};background:${on?'#eef2fb':'#fff'}">
+      return `<div onclick="wxfPickFY(${bi},'${f.fy}')" style="cursor:pointer;padding:10px 14px;border-radius:var(--rs);min-width:170px;border:2px solid ${on?'var(--navy)':'var(--border)'};background:${on?'#eef2fb':'#fff'}">
         <div style="font-size:12px;font-weight:800;color:var(--navy)">FY ${wxfEsc(f.fy)} ${idx===0&&f.total>0?'<span title="Most of this quantity" style="color:var(--gold2)">★ best</span>':''}</div>
         <div style="font-size:14px;font-weight:800;margin-top:2px">${wxfN(f.total)} ${uLabel}${showT(f.total)}</div>
         <div style="font-size:11px;color:var(--text3)">${f.count} project${f.count!==1?'s':''} with certificate${f.count!==1?'s':''}</div>
@@ -241,7 +252,7 @@ function _wxfBody(){
 
   // 4 — pick the projects
   let step4 = '';
-  if(m.unit && _wxf.fy){
+  if(m.unit && bk.fy){
     const noCert = m.fyRows.filter(x=>!x.cert);
     const showParts = m.active.length>1;
     const stBar = (()=>{
@@ -257,20 +268,19 @@ function _wxfBody(){
       </div>`;
     })();
     step4 = `<div class="card" style="margin-bottom:14px">
-      <div class="st">4 · Choose the projects — FY ${wxfEsc(_wxf.fy)}</div>
+      <div class="st">4 · Choose the projects — FY ${wxfEsc(bk.fy)}</div>
       ${stBar}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn btn-sm" onclick="wxfAutoPickClick()" title="Ticks the biggest projects first until the requirement is covered — you can change the ticks afterwards">⚡ Pick largest first until met</button>
-        ${m.selRows.length?`<button class="btn btn-sm" onclick="wxfClearSel()">Clear ticks</button>`:''}
-        <button class="btn btn-sm btn-navy" onclick="wxfDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📎 Download ${m.selRows.length||''} certificate${m.selRows.length!==1?'s':''} as one PDF</button>
+        <button class="btn btn-sm" onclick="wxfAutoPickClick(${bi})" title="Ticks the biggest projects first until the requirement is covered — you can change the ticks afterwards">⚡ Pick largest first until met</button>
+        ${m.selRows.length?`<button class="btn btn-sm" onclick="wxfClearSel(${bi})">Clear ticks</button>`:''}
       </div>
       ${m.certRows.length ? `<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px">
         <thead><tr><th style="width:34px"></th><th style="text-align:left">Project</th>${showParts?'<th style="text-align:left">By type</th>':''}<th style="text-align:right">Quantity</th><th style="text-align:right">Work value</th><th style="text-align:left">Certificate</th></tr></thead>
         <tbody>${m.certRows.map(x=>{
-          const on = _wxf.sel.includes(x.id);
+          const on = bk.sel.includes(x.id);
           const nm = (x.project && x.project.name) || x.rec.genCode || '—';
           return `<tr style="border-bottom:1px solid var(--border);${on?'background:#eef2fb':''}">
-            <td style="padding:6px 8px"><input type="checkbox" ${on?'checked':''} onchange="wxfToggleRow('${x.id.replace(/'/g,"\\'")}')" style="width:16px;height:16px;cursor:pointer"></td>
+            <td style="padding:6px 8px"><input type="checkbox" ${on?'checked':''} onchange="wxfToggleRow(${bi},'${x.id.replace(/'/g,"\\'")}')" style="width:16px;height:16px;cursor:pointer"></td>
             <td style="padding:6px 8px"><div style="font-weight:700;color:var(--navy)">${wxfEsc(nm)}</div><div style="font-size:10px;color:var(--text3)">${wxfEsc(x.rec.genCode||'')}${x.rec.workType?' · '+wxfEsc(x.rec.workType):''}</div></td>
             ${showParts?`<td style="padding:6px 8px;font-size:11px;color:var(--text2)">${x.parts.map(p=>{ const it = m.items.find(i=>i.key===p.key); return wxfEsc(it?it.label:p.key)+' '+wxfN(p.qty); }).join('<br>')}</td>`:''}
             <td style="padding:6px 8px;text-align:right;font-weight:800">${wxfN(x.total)} ${uLabel}</td>
@@ -279,11 +289,37 @@ function _wxfBody(){
           </tr>`;
         }).join('')}</tbody></table></div>`
         : '<div style="font-size:13px;color:var(--text3);padding:6px 0">No projects with an uploaded certificate in this year.</div>'}
-      ${noCert.length ? `<div style="margin-top:10px;font-size:12px"><label style="cursor:pointer"><input type="checkbox" ${_wxf.showNoCert?'checked':''} onchange="wxfToggleNoCert(this.checked)"> Show the ${noCert.length} record${noCert.length!==1?'s':''} with no certificate uploaded <span style="color:var(--text3)">(can’t be put in the PDF — upload the certificate on the project first)</span></label></div>` : ''}
-      ${_wxf.showNoCert && noCert.length ? `<div class="tbl-wrap" style="margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:12px;opacity:.7"><tbody>${noCert.map(x=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span style="font-weight:700">${wxfEsc((x.project&&x.project.name)||x.rec.genCode||'—')}</span><div style="font-size:10px;color:var(--text3)">${wxfEsc(x.rec.genCode||'')}${x.rec.workType?' · '+wxfEsc(x.rec.workType):''} — no certificate uploaded</div></td><td style="padding:6px 8px;text-align:right">${wxfN(x.total)} ${uLabel}</td></tr>`).join('')}</tbody></table></div>`:''}
+      ${noCert.length ? `<div style="margin-top:10px;font-size:12px"><label style="cursor:pointer"><input type="checkbox" ${bk.showNoCert?'checked':''} onchange="wxfToggleNoCert(${bi},this.checked)"> Show the ${noCert.length} record${noCert.length!==1?'s':''} with no certificate uploaded <span style="color:var(--text3)">(can’t be put in the PDF — upload the certificate on the project first)</span></label></div>` : ''}
+      ${bk.showNoCert && noCert.length ? `<div class="tbl-wrap" style="margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:12px;opacity:.7"><tbody>${noCert.map(x=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span style="font-weight:700">${wxfEsc((x.project&&x.project.name)||x.rec.genCode||'—')}</span><div style="font-size:10px;color:var(--text3)">${wxfEsc(x.rec.genCode||'')}${x.rec.workType?' · '+wxfEsc(x.rec.workType):''} — no certificate uploaded</div></td><td style="padding:6px 8px;text-align:right">${wxfN(x.total)} ${uLabel}</td></tr>`).join('')}</tbody></table></div>`:''}
     </div>`;
   }
 
-  return `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Finding experience for <strong>${wxfEsc(m.firm)}</strong> (change the firm above). Quantity-wise requirements — “X of this work, from one financial year”.</div>`
-    + (typeof wexFlagsBanner==='function'?wexFlagsBanner():'') + step1 + step2 + step3 + step4;
+  const many = _wxf.blocks.length>1;
+  const title = many ? `<div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 8px"><div style="font-size:14px;font-weight:800;color:var(--navy)">Quantity ${bi+1}${m.active.length?' — '+wxfEsc(m.active.map(a=>a.label).join(' + ')):''}${m.status.state==='met'?' <span style="color:var(--green)">✓ met</span>':m.status.state==='short'?' <span style="color:var(--amber)">short</span>':''}</div><button class="btn btn-sm" onclick="wxfRemoveBlock(${bi})">✕ Remove</button></div>` : '';
+  return `<div style="${many?'border:2px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:14px;background:var(--surface2)':''}">${title}${step1 + step2 + step3 + step4}</div>`;
 }
+
+function _wxfBody(){
+  const ms = _wxfAllModels(), m0 = ms[0];
+  const nSel = ms.reduce((a,x)=>a+x.selRows.length,0);
+  const bar = `<div class="card" style="margin-bottom:14px;position:sticky;bottom:8px;z-index:5;box-shadow:0 4px 18px rgba(26,39,68,.15)">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" onclick="wxfAddBlock()" title="For a tender that asks for more than one quantity (for example steel and concrete)">➕ Add another quantity</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-sm btn-navy" onclick="wxfDownload()" ${nSel?'':'disabled style="opacity:.5"'}>📎 Download certificates as one PDF</button>
+      <button class="btn btn-sm btn-navy" onclick="wxfStatementDownload()" ${nSel?'':'disabled style="opacity:.5"'}>📝 Statement as Word</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">${nSel?nSel+' project selection'+(nSel!==1?'s':'')+' across '+ms.length+' quantit'+(ms.length!==1?'ies':'y')+'. ':''}The statement lists every ticked project once; a project ticked under two quantities gets both columns filled.</div>
+  </div>`;
+  return `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Finding experience for <strong>${wxfEsc(m0.firm)}</strong> (change the firm above). Quantity-wise requirements — each “X of this work, from one financial year”. Add one quantity for every item the tender asks for.</div>`
+    + (typeof wexFlagsBanner==='function'?wexFlagsBanner():'') + ms.map((_,i)=>_wxfBlockBody(i)).join('') + bar;
+}
+
+// ─── WORD STATEMENT (physical quantities) ──────────────
+async function wxfStatementDownload(){
+  const ms = _wxfAllModels().filter(x=>x.selRows.length);
+  if(!ms.length){ toast('Tick at least one project first','error'); return; }
+  if(typeof wxsQtyStatement!=='function'){ toast('Hard refresh the page (Ctrl+Shift+R) — the statement tool did not load','error'); return; }
+  await wxsQtyStatement(ms);
+}
+

@@ -22,7 +22,7 @@
 // ═══════════════════════════════════════════════════════
 
 const WXV_MULT = {inr:1, lakh:100000, crore:10000000};
-let _wxv = {firm:null, types:[], reqValue:'', reqUnit:'crore', fy:null, sel:[], showNoCert:false, busy:false};
+let _wxv = {kind:'', firm:null, types:[], reqValue:'', reqUnit:'crore', fy:null, sel:[], showNoCert:false, busy:false};
 
 // ─── PURE HELPERS ──────────────────────────────────────
 function wxvTypesOf(p){
@@ -159,6 +159,14 @@ async function wxvDownload(){
   finally{ _wxv.busy=false; }
 }
 
+async function wxvStatementDownload(){
+  const m=_wxvModel();
+  if(!m.selRows.length){ toast('Tick at least one project first','error'); return; }
+  if(typeof wxsValueStatement!=='function'){ toast('Hard refresh the page (Ctrl+Shift+R) — the statement tool did not load','error'); return; }
+  const allOn = m.allTypes.length>0 && _wxv.types.length===m.allTypes.length;
+  await wxsValueStatement(m, _wxv.fy, _wxv.kind || (allOn?'civil':'similar'));
+}
+
 // ─── RENDER ────────────────────────────────────────────
 function renderWexValueFinder(){ return '<div id="wxv-root">'+_wxvBody()+'</div>'; }
 function _wxvBody(){
@@ -221,7 +229,9 @@ function _wxvBody(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-sm" onclick="wxvAutoPickClick()">⚡ Pick largest first until met</button>
         ${m.selRows.length?'<button class="btn btn-sm" onclick="wxvClearSel()">Clear ticks</button>':''}
-        <button class="btn btn-sm btn-navy" onclick="wxvDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📎 Download ${m.selRows.length||''} certificate${m.selRows.length!==1?'s':''} as one PDF</button></div>
+        <button class="btn btn-sm btn-navy" onclick="wxvDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📎 Download ${m.selRows.length||''} certificate${m.selRows.length!==1?'s':''} as one PDF</button>
+        <button class="btn btn-sm btn-navy" onclick="wxvStatementDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📝 Statement as Word</button>
+        <select onchange="_wxv.kind=this.value" title="Wording used in the statement heading" style="padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"><option value="" ${!_wxv.kind?'selected':''}>Heading: automatic (${allOn?'civil':'similar'} works)</option><option value="similar" ${_wxv.kind==='similar'?'selected':''}>Heading: similar works</option><option value="civil" ${_wxv.kind==='civil'?'selected':''}>Heading: civil works</option></select></div>
       ${m.certRows.length?`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px">
         <thead><tr><th style="width:34px"></th><th style="text-align:left">Project</th><th style="text-align:left">Work type</th><th style="text-align:right">Work value</th><th style="text-align:left">Certificate</th></tr></thead>
         <tbody>${m.certRows.map(x=>{ const on=_wxv.sel.includes(x.id), nm=(x.project&&x.project.name)||x.rec.genCode||'—';
