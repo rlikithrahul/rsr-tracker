@@ -10,7 +10,7 @@ const TL_API = SB_URL + '/functions/v1/tally-api';
 const TL_RATE = 24;                                   // % per annum
 let TL = { token:null, admin:false, tab:'daybook', hist:false,
   ledgers:null, ledgerProj:{}, cc:null, ccLinks:null, totals:null,
-  dbq:{from:'',to:'',type:'',text:''}, led:'', cont:'', ccq:'', ccc:'', ccsel:null, prq:'', prsel:null,
+  dbq:{mode:'range',from:'',to:'',type:'',text:''}, led:'', cont:'', ccq:'', ccc:'', ccsel:null, prq:'', prsel:null,
   linkq:'', linkkind:'ledgers', ledEdit:{}, ccEdit:{}, stmt:null };
 
 function _tlE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -173,18 +173,15 @@ async function tlLogin(){
 }
 function _tlShell(el){
   _tlStyle();
-  const tabs=[['daybook','Day Book'],['contractor','Contractor'],['ledgers','Ledgers'],['cc','Cost Centres'],['projects','Projects'],['interest','💰 Interest']];
-  if(TL.admin){ tabs.push(['needs','⚠ Needs linking']); tabs.push(['linking','🔗 Linking']); }
+  const groups=[['Books',[['daybook','📅','Day Book'],['ledgers','📚','Ledgers'],['creditors','🧾','Creditors List'],['contractor','👷','Contractor'],['cc','🏗️','Cost Centres'],['projects','📁','Projects']]],['Analysis',[['interest','💰','Interest']]]];
+  if(TL.admin) groups.push(['Admin',[['needs','⚠️','Needs linking'],['linking','🔗','Linking']]]);
   el.innerHTML = `<div class="wrap">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <div style="font-size:18px;font-weight:700">📒 Tally Live</div>
-      <span id="tl-sync" style="font-size:12px;color:var(--text3)">…</span>
-      <label style="font-size:12px;display:flex;gap:5px;align-items:center;margin-left:auto" title="Also use the old FY2024-25 company (1-Apr-2024 to 31-Mar-2025) in statements, totals and interest"><input type="checkbox" ${TL.hist?'checked':''} onchange="TL.hist=this.checked;TL.totals=null;_tlTab(TL.tab)"> Include FY2024-25 history</label>
-      <button class="btn btn-sm" onclick="tlSyncNow()">⟳ Sync now</button>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${tabs.map(t=>`<button class="btn btn-sm${TL.tab===t[0]?' btn-primary':''}" onclick="_tlTab('${t[0]}')">${t[1]}</button>`).join('')}
-    </div>
+    <div class="tl-head">
+      <div class="tl-title"><span class="tl-logo">📒</span><div><div style="font-size:18px;font-weight:700;line-height:1.1">Tally Live</div><div id="tl-sync" class="tl-syncchip">…</div></div></div>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;display:flex;gap:5px;align-items:center" title="Also use the old FY2024-25 company (1-Apr-2024 to 31-Mar-2025) in statements, totals and interest"><input type="checkbox" ${TL.hist?'checked':''} onchange="TL.hist=this.checked;TL.totals=null;if(typeof CR!=='undefined'){CR.stm={};CR.res={};}_tlTab(TL.tab)"> Include FY2024-25 history</label>
+        <button class="btn btn-sm" onclick="tlSyncNow()">⟳ Sync now</button></div></div>
+    <div class="tl-nav">${groups.map(g=>`<div class="tl-ng"><div class="tl-gl">${g[0]}</div><div class="tl-gp">${g[1].map(t=>`<button class="tl-pill${TL.tab===t[0]?' on':''}" onclick="_tlTab('${t[0]}')"><span>${t[1]}</span> ${t[2]}</button>`).join('')}</div></div>`).join('')}</div>
     <div id="tl-body"></div></div>`;
   tlApi('overview').then(o=>{
     const s=o.last_sync, e=document.getElementById('tl-sync'); if(!e) return;
@@ -199,7 +196,7 @@ function _tlErr(e){
 }
 function _tlTab(t){
   TL.tab=t; _tlShell(document.getElementById('sec-tally'));
-  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, switch:_tlSwitch, linking:_tlLinking})[t]();
+  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, creditors:_tlCreditors, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, switch:_tlSwitch, linking:_tlLinking})[t]();
 }
 function _tlBusy(){ const b=document.getElementById('tl-body'); if(b) b.innerHTML='<div style="padding:30px;text-align:center;color:var(--text3)">⏳ Loading…</div>'; return b; }
 async function _tlLoadLedgers(){
@@ -226,16 +223,25 @@ function _tlCCContractor(c){
 
 // ───────── Day Book ─────────
 async function _tlDaybook(){
-  const q=TL.dbq; const b=document.getElementById('tl-body');
-  b.innerHTML = `<div class="card" style="padding:12px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
-    <label style="font-size:11px">From<br><input type="date" id="tl-f" value="${_tlA(q.from)}"></label>
-    <label style="font-size:11px">To<br><input type="date" id="tl-t" value="${_tlA(q.to)}"></label>
+  const q=TL.dbq; const b=document.getElementById('tl-body'); const day=q.mode==='day';
+  b.innerHTML = `<div class="card" style="padding:12px;margin-bottom:10px">
+    <div style="display:flex;gap:6px;margin-bottom:10px"><button class="tl-pill${day?'':' on'}" onclick="_tlDbMode('range')">📆 Date range</button><button class="tl-pill${day?' on':''}" onclick="_tlDbMode('day')">📍 One day</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+    ${day?`<label style="font-size:11px">Date<br><input type="date" id="tl-d" value="${_tlA(q.from&&q.from===q.to?q.from:(q.from||_tlToday()))}" onchange="_tlDbGo()"></label>
+      <button class="btn btn-sm" onclick="_tlDbStep(-1)" title="Previous day">◀</button><button class="btn btn-sm" onclick="_tlDbStep(1)" title="Next day">▶</button>
+      <button class="btn btn-sm" onclick="_tlDbSet(_tlToday())">Today</button><button class="btn btn-sm" onclick="_tlDbSet(_tlPrev(_tlToday()))">Yesterday</button>`
+    :`<label style="font-size:11px">From<br><input type="date" id="tl-f" value="${_tlA(q.from)}"></label>
+      <label style="font-size:11px">To<br><input type="date" id="tl-t" value="${_tlA(q.to)}"></label>`}
     <label style="font-size:11px">Type<br><select id="tl-ty"><option value="">All</option><option${q.type==='Payment'?' selected':''}>Payment</option><option${q.type==='Receipt'?' selected':''}>Receipt</option></select></label>
     <label style="font-size:11px">Search name / narration<br><input id="tl-x" value="${_tlA(q.text)}" style="min-width:180px" onkeydown="if(event.key==='Enter')_tlDbGo()"></label>
-    <button class="btn btn-primary btn-sm" onclick="_tlDbGo()">Show</button></div><div id="tl-db"></div>`;
+    <button class="btn btn-primary btn-sm" onclick="_tlDbGo()">Show</button></div></div><div id="tl-db"></div>`;
   _tlDbRun();
 }
-function _tlDbGo(){ TL.dbq={from:tlv('tl-f'),to:tlv('tl-t'),type:tlv('tl-ty'),text:tlv('tl-x')}; _tlDbRun(); }
+function _tlPrev(d){ const t=new Date(_tlMs(d)-86400000); return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0'); }
+function _tlDbMode(m){ const q=TL.dbq; q.mode=m; if(m==='day'){ q.from=q.to=(q.to||q.from||_tlToday()); } _tlDaybook(); }
+function _tlDbSet(d){ TL.dbq.from=TL.dbq.to=d; _tlDaybook(); }
+function _tlDbStep(n){ const d=tlv('tl-d')||_tlToday(); _tlDbSet(n>0?_tlNextDay(d):_tlPrev(d)); }
+function _tlDbGo(){ const day=TL.dbq.mode==='day'; const f=day?tlv('tl-d'):tlv('tl-f'), t=day?f:tlv('tl-t'); TL.dbq={mode:TL.dbq.mode||'range',from:f,to:t,type:tlv('tl-ty'),text:tlv('tl-x')}; _tlDbRun(); }
 async function _tlDbRun(){
   const d=document.getElementById('tl-db'); d.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">⏳ Loading…</div>';
   try{
@@ -584,6 +590,19 @@ function _tlStyle(){
   #sec-tally .tl-noint th:first-child,#sec-tally .tl-noint td:first-child{display:none}
   #sec-tally .btn-sm{border-radius:20px}
   #sec-tally input,#sec-tally select{border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;background:var(--surface);color:var(--text)}
+  #sec-tally .tl-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:12px 14px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:16px}
+  #sec-tally .tl-head label,#sec-tally .tl-head .btn{color:#fff}
+  #sec-tally .tl-head .btn{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28)}
+  #sec-tally .tl-head .btn:hover{background:rgba(255,255,255,.25)}
+  #sec-tally .tl-title{display:flex;align-items:center;gap:10px}
+  #sec-tally .tl-logo{font-size:26px;background:rgba(255,255,255,.14);border-radius:12px;width:42px;height:42px;display:flex;align-items:center;justify-content:center}
+  #sec-tally .tl-syncchip{font-size:11px;color:rgba(255,255,255,.75);margin-top:2px}
+  #sec-tally .tl-nav{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:14px}
+  #sec-tally .tl-gl{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin:0 0 4px 6px;font-weight:600}
+  #sec-tally .tl-gp{display:flex;gap:4px;flex-wrap:wrap}
+  #sec-tally .tl-pill{border:0;background:transparent;padding:7px 12px;border-radius:10px;font-size:13px;cursor:pointer;color:var(--text);font-family:inherit;transition:background .15s,color .15s}
+  #sec-tally .tl-pill:hover{background:var(--surface2)}
+  #sec-tally .tl-pill.on{background:var(--navy);color:#fff;font-weight:600}
   @keyframes tlfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   #sec-tally #tl-body>*{animation:tlfade .18s ease}
   #sec-tally .btn{transition:background .15s,box-shadow .15s}
