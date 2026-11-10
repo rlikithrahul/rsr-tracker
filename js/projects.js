@@ -469,7 +469,7 @@ function buildLifecycleTimeline(p, id){
   const today = new Date();
 
   // ── Determine each stage ──────────────────────────
-  const hasJV = !!p.jvDate;
+  const hasJV = hasJvOrMb(p);
   const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
   const wecApplied = !!p.wecApplied;
   // WEC is considered "done" if EITHER: formally marked received, OR the
@@ -494,8 +494,8 @@ function buildLifecycleTimeline(p, id){
   // EMD/FSD refund eligibility (2 years from JV)
   let refundDaysLeft = null;
   let refundEligible = false;
-  if(p.jvDate){
-    const twoYears = new Date(p.jvDate);
+  if(refundBase(p)){
+    const twoYears = new Date(refundBase(p));
     twoYears.setFullYear(twoYears.getFullYear()+2);
     refundDaysLeft = Math.round((twoYears-today)/86400000);
     refundEligible = refundDaysLeft <= 0;
@@ -535,7 +535,7 @@ function buildLifecycleTimeline(p, id){
     {
       icon:'📄', label:'JV Received',
       done: hasJV,
-      date: hasJV ? fmtDate(p.jvDate)+' · JV #'+(p.jvNumber||'—') : '',
+      date: p.jvDate ? fmtDate(p.jvDate)+' · JV #'+(p.jvNumber||'—')+(p.mbDate?' · MB '+fmtDate(p.mbDate):'') : (p.mbDate ? 'MB recorded '+fmtDate(p.mbDate) : ''),
       pending: !hasJV ? 'Waiting for JV from GVMC' : '',
       action: null
     },
@@ -598,8 +598,8 @@ function buildLifecycleTimeline(p, id){
       icon:'🏦', label:'EMD / FSD Refund',
       done: refundReceived,
       date: refundReceived ? 'Refund received' : refundApplied ? '⏳ Applied '+fmtDate(p.refundAppliedDate)+' — awaiting refund' :
-        refundDaysLeft!==null ? (refundEligible ? '🔴 Eligible NOW — apply immediately' : 'Eligible in '+Math.max(0,refundDaysLeft)+' days ('+fmtDate(new Date(new Date(p.jvDate).setFullYear(new Date(p.jvDate).getFullYear()+2)))+')') : '',
-      pending: refundEligible && !refundApplied ? '⚠️ 2 years since JV — apply for EMD/FSD refund NOW' : '',
+        refundDaysLeft!==null ? (refundEligible ? '🔴 Eligible NOW — apply immediately' : 'Eligible in '+Math.max(0,refundDaysLeft)+' days ('+fmtDate(new Date(new Date(refundBase(p)).setFullYear(new Date(refundBase(p)).getFullYear()+2)))+')') : '',
+      pending: refundEligible && !refundApplied ? '⚠️ 2 years since JV / MB date — apply for EMD/FSD refund NOW' : '',
       warning: refundEligible && !refundReceived,
       locked: !hasJV,
       detail: (p.emd||p.fsd) ? 'EMD: '+fmt(p.emd||0)+' · FSD: '+fmt(p.fsd||0) : '',

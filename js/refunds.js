@@ -18,7 +18,7 @@
 function getRefundData(p){
   // Compute all deposit amounts and statuses for a project
   const today = new Date();
-  const hasJV = !!p.jvDate;
+  const hasJV = hasJvOrMb(p);   // JV date or MB (Measurement Book) date
   const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
   const agreeAmt = agAmt(p)||0;
   const asdEligible = Math.abs(p.bidPct||0) > 25;
@@ -26,10 +26,12 @@ function getRefundData(p){
   // ── EMD ──────────────────────────────────────────
   // Total EMD = 2.5% of agreement amount
   // Stored as p.emd (may already be set), otherwise auto-calculate
-  const emdAmt = p.emd > 0 ? p.emd : Math.round(agreeAmt * 0.025);
+  // EMD = 2.5% of the ESTIMATED BOQ (ECV) value, not the bid-adjusted agreement amount. A typed-in p.emd is always kept.
+  const estAmt = Number(p.estimated)||(p.boq||[]).reduce((t,x)=>t+(Number(x.amount)||0),0)||0;
+  const emdAmt = p.emd > 0 ? p.emd : Math.round(estAmt * 0.025);
   let emdEligibleDate = null, emdDaysLeft = null;
-  if(p.jvDate){
-    const d = new Date(p.jvDate);
+  if(refundBase(p)){
+    const d = new Date(refundBase(p));
     d.setFullYear(d.getFullYear()+2);
     emdEligibleDate = d;
     emdDaysLeft = Math.round((d-today)/86400000);
@@ -70,7 +72,7 @@ function getRefundData(p){
 }
 
 const STATUS_LABEL = {
-  no_jv:          {label:'Waiting for JV',    color:'var(--text3)',  bg:'var(--surface2)'},
+  no_jv:          {label:'Waiting for JV / MB',  color:'var(--text3)',  bg:'var(--surface2)'},
   not_eligible:   {label:'Not Eligible Yet',  color:'var(--text3)',  bg:'var(--surface2)'},
   eligible:       {label:'Apply Now',         color:'#b45309',       bg:'#fef9c3'},
   applied:        {label:'Applied — Pending', color:'#7c3aed',       bg:'#f5f3ff'},
@@ -100,7 +102,7 @@ async function renderRefunds(){
 
 function _renderRefundsTab(el){
   const today = new Date();
-  const projects = D.projects.filter(p=>!isArchived(p) && (projStatus(p)==='completed'||p.jvDate));
+  const projects = D.projects.filter(p=>!isArchived(p) && (projStatus(p)==='completed'||hasJvOrMb(p)));
 
   // Aggregate totals
   let totEMD=0, totFSD=0, totASD=0;
@@ -132,6 +134,7 @@ function _renderRefundsTab(el){
     {key:'emd',     label:'🏦 EMD'},
     {key:'fsd',     label:'📄 FSD'},
     {key:'asd',     label:'💵 ASD'},
+    {key:'master',  label:'🗂️ Master Sheet'},
   ];
 
   el.innerHTML=`<div class="wrap">
@@ -176,6 +179,61 @@ function _renderRefundsTab(el){
   else if(_refView==='emd') body.innerHTML = _renderRefTable(projects, 'emd');
   else if(_refView==='fsd') body.innerHTML = _renderRefTable(projects, 'fsd');
   else if(_refView==='asd') body.innerHTML = _renderRefTable(projects, 'asd');
+  else if(_refView==='master') body.innerHTML = _renderRefMaster(projects);
+}
+
+// shows which date the 2-year clock runs from
+function _refDateLbl(p){
+  const b=refundBase(p); if(!b) return 'No JV / MB date';
+  const tag=(p.jvDate&&p.mbDate)?(p.jvDate<=p.mbDate?'JV':'MB'):(p.jvDate?'JV':'MB');
+  return tag+' '+fmtDate(b);
+}
+
+// ─── MASTER SHEET: every project in date order, EMD / FSD / ASD side by side ───
+let _refMasterFsdOnly = false;
+function _renderRefMaster(projects){
+  const rows = projects.map(p=>({p, r:getRefundData(p)})).sort((a,b)=>{
+    const da=a.r.emdDaysLeft===null?Infinity:a.r.emdDaysLeft, db=b.r.emdDaysLeft===null?Infinity:b.r.emdDaysLeft;
+    const pa=(a.r.emdStatus==='paid')?1:0, pb=(b.r.emdStatus==='paid')?1:0;
+    return pa-pb || da-db;
+  });
+  const noFsd = rows.filter(x=>x.r.fsdAmt<=0).length;
+  const shown = _refMasterFsdOnly ? rows.filter(x=>x.r.fsdAmt<=0) : rows;
+  const cell=(amt,status)=>`<div style="font-weight:700">${fmt(amt)}</div>${_statusBadge(status)}`;
+  const trs = shown.map((x,i)=>{
+    const {p,r}=x; const c=GC(p.contractorId);
+    const days = r.emdDaysLeft===null ? '—' : (r.emdStatus==='paid'?'—':(r.emdDaysLeft<=0?`<span style="color:#c0392b;font-weight:700">${Math.abs(r.emdDaysLeft)}d overdue</span>`:r.emdDaysLeft+'d'));
+    const fsd = r.fsdAmt>0 ? cell(r.fsdAmt,r.fsdStatus)
+      : `<div style="display:flex;gap:4px;align-items:center"><input type="number" id="rm-fsd-${p.id}" placeholder="FSD ₹" style="width:92px;padding:4px 6px;font-size:11px;border:1px solid var(--border);border-radius:6px"><button onclick="saveMasterFSD('${p.id}')" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer">Save</button></div><div style="font-size:10px;color:#c0392b;margin-top:2px">FSD not entered</div>`;
+    const asd = (r.asdEligible||r.asdAmt>0) ? cell(r.asdAmt,r.asdStatus) : '<span style="color:var(--text3)">—</span>';
+    return `<tr style="border-top:1px solid var(--border)">
+      <td style="padding:8px;color:var(--text3)">${i+1}</td>
+      <td style="padding:8px"><div style="font-weight:600">${p.name.substring(0,60)}</div><div style="font-size:10px;color:var(--text3)">${p.tender?'#'+p.tender+' · ':''}${c?c.name:'—'}</div></td>
+      <td style="padding:8px;white-space:nowrap">${_refDateLbl(p)}</td>
+      <td style="padding:8px;white-space:nowrap">${r.emdEligibleDate?fmtDate(r.emdEligibleDate):'—'}</td>
+      <td style="padding:8px;white-space:nowrap">${days}</td>
+      <td style="padding:8px">${cell(r.emdAmt,r.emdStatus)}</td>
+      <td style="padding:8px">${fsd}</td>
+      <td style="padding:8px">${asd}</td></tr>`;
+  }).join('');
+  return `<div class="card" style="padding:12px;overflow:auto">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text3)">${rows.length} projects · date order (nearest refund first) · EMD and FSD refund 2 years after the earlier of JV / MB date; ASD after EA number</div>
+      <label style="margin-left:auto;font-size:12px;display:flex;gap:5px;align-items:center"><input type="checkbox" ${_refMasterFsdOnly?'checked':''} onchange="_refMasterFsdOnly=this.checked;_renderRefundsTab(document.getElementById('sec-refunds'))"> Only FSD not entered (${noFsd})</label>
+    </div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Project</th><th style="padding:6px 8px">JV / MB date</th><th style="padding:6px 8px">Eligible on</th><th style="padding:6px 8px">Days left</th><th style="padding:6px 8px">EMD</th><th style="padding:6px 8px">FSD</th><th style="padding:6px 8px">ASD</th></tr></thead><tbody>${trs||'<tr><td colspan="8" style="padding:16px;color:var(--text3)">Nothing to show.</td></tr>'}</tbody></table>
+  </div>`;
+}
+async function saveMasterFSD(pid){
+  const inp=document.getElementById('rm-fsd-'+pid); const v=parseFloat(inp&&inp.value)||0;
+  if(v<=0){ toast('Enter the FSD amount','error'); return; }
+  const p=await GPFull(pid); if(!p) return;
+  p.fsd=v;
+  try{
+    await saveProjectDB(p,{type:'fsd_set',amount:v,ref:null,meta:{}});
+    logActivity({category:'finance',action:'fsd_set',projectId:pid,projectName:p.name,amount:v,description:`FSD ₹${v} entered for ${p.name}`});
+    toast('✓ FSD saved','ok'); _renderRefundsTab(document.getElementById('sec-refunds'));
+  }catch(e){ toast('Save failed','error'); }
 }
 
 // ─── OVERVIEW TAB ────────────────────────────────────
@@ -249,7 +307,7 @@ function _renderRefOverview(projects, totals){
         return `<div onclick="openDetail('${p.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:var(--rs);margin-bottom:6px;cursor:pointer;flex-wrap:wrap;gap:6px">
           <div>
             <div style="font-size:12px;font-weight:700;color:var(--navy)">${p.name.substring(0,55)}</div>
-            <div style="font-size:11px;color:var(--text3)">JV: ${fmtDate(p.jvDate)} · Eligible: ${fmtDate(r.emdEligibleDate)}</div>
+            <div style="font-size:11px;color:var(--text3)">${_refDateLbl(p)} · Eligible: ${fmtDate(r.emdEligibleDate)}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <span style="font-size:11px;font-weight:700;color:var(--navy)">${fmt(total)}</span>
@@ -289,8 +347,8 @@ function _renderRefTable(projects, type){
       // ASD has no fixed waiting period (eligible immediately on EA number)
       // — the closest equivalent to "days left" is how long it's already
       // been waiting on JV, oldest JV first.
-      const da = a.p.jvDate ? new Date(a.p.jvDate).getTime() : Infinity;
-      const db = b.p.jvDate ? new Date(b.p.jvDate).getTime() : Infinity;
+      const da = refundBase(a.p) ? new Date(refundBase(a.p)).getTime() : Infinity;
+      const db = refundBase(b.p) ? new Date(refundBase(b.p)).getTime() : Infinity;
       return da - db;
     }
     const da = a.r.emdDaysLeft===null||a.r.emdDaysLeft===undefined ? Infinity : a.r.emdDaysLeft;
@@ -331,7 +389,7 @@ function _renderRefTable(projects, type){
         return `<tr style="border-bottom:1px solid var(--surface2);background:${i%2?'var(--surface2)':'#fff'}">
           <td style="padding:8px 12px">
             <div style="font-weight:700;font-size:12px;cursor:pointer;color:var(--navy)" onclick="openDetail('${p.id}')">${p.name.substring(0,50)}</div>
-            <div style="font-size:10px;color:var(--text3)">${p.firm||'—'} · JV: ${fmtDate(p.jvDate)||'—'}</div>
+            <div style="font-size:10px;color:var(--text3)">${p.firm||'—'} · ${_refDateLbl(p)}</div>
           </td>
           <td style="padding:8px 12px;font-size:11px">${c?c.name:'—'}</td>
           <td style="padding:8px 12px;text-align:right;font-weight:700">${fmt(amt)}</td>
@@ -383,18 +441,18 @@ async function exportRefunds(){
     try{/* XLSX pre-loaded */}
     catch(e){toast('Could not load Excel','error');return;}
   }
-  const projects = D.projects.filter(p=>!isArchived(p)&&(projStatus(p)==='completed'||p.jvDate));
+  const projects = D.projects.filter(p=>!isArchived(p)&&(projStatus(p)==='completed'||hasJvOrMb(p)));
   const wb = window.XLSX.utils.book_new();
 
   // Overview sheet
-  const hdr=['Project Name','Contractor','Firm','JV Date','EMD Amount','EMD Status','FSD Amount','FSD Status','ASD Amount','ASD Eligible','ASD Status','EMD Eligible Date','Total Deposit','Total Pending'];
+  const hdr=['Project Name','Contractor','Firm','JV / MB date used','EMD Amount','EMD Status','FSD Amount','FSD Status','ASD Amount','ASD Eligible','ASD Status','EMD Eligible Date','Total Deposit','Total Pending'];
   const rows=[hdr];
   projects.forEach(p=>{
     const r=getRefundData(p);
     const c=GC(p.contractorId);
     const pending=(r.emdStatus==='eligible'||r.emdStatus==='applied'?r.emdAmt:0)+(r.fsdStatus==='eligible'||r.fsdStatus==='applied'?r.fsdAmt:0)+(r.asdStatus==='eligible'||r.asdStatus==='applied'?r.asdAmt:0);
     rows.push([
-      p.name, c?c.name:'—', p.firm||'—', p.jvDate||'—',
+      p.name, c?c.name:'—', p.firm||'—', refundBase(p)||'—',
       r.emdAmt, r.emdStatus,
       r.fsdAmt, r.fsdStatus,
       r.asdAmt, r.asdEligible?'YES':'No', r.asdStatus,

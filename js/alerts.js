@@ -78,8 +78,8 @@ function getAllAlerts(){
     }
 
     // 4. EMD/FSD/ASD REFUND
-    if(p.jvDate && !p.refundReceived){
-      const twoYears = new Date(p.jvDate);
+    if(refundBase(p) && !p.refundReceived){
+      const twoYears = new Date(refundBase(p));
       twoYears.setFullYear(twoYears.getFullYear() + 2);
       const daysUntil = Math.round((twoYears - today) / 86400000);
       if(daysUntil <= 0){

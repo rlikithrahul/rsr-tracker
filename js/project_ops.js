@@ -807,6 +807,7 @@ function openEditProject(pid){
   document.getElementById('ep-tender').value = p.tender||'';
   document.getElementById('ep-date').value = p.agreeDate||'';
   document.getElementById('ep-jvdate').value = p.jvDate||'';
+  document.getElementById('ep-mbdate').value = p.mbDate||'';
   document.getElementById('ep-jvnum').value = p.jvNumber||'';
   document.getElementById('ep-jvamt').value = p.jvAmount||'';
   document.getElementById('ep-emd').value = p.emd||'';
@@ -837,6 +838,7 @@ async function saveEditProject(){
   p.tender = document.getElementById('ep-tender').value.trim();
   p.agreeDate = document.getElementById('ep-date').value;
   p.jvDate = document.getElementById('ep-jvdate').value;
+  p.mbDate = document.getElementById('ep-mbdate').value;
   p.jvNumber = document.getElementById('ep-jvnum').value.trim();
   p.jvAmount = parseFloat(document.getElementById('ep-jvamt').value)||0;
   p.emd = parseFloat(document.getElementById('ep-emd').value)||0;

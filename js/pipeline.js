@@ -111,7 +111,7 @@ function renderPipeline(){
   };
 
   projects.forEach(p=>{
-    const hasJV = !!p.jvDate;
+    const hasJV = hasJvOrMb(p);
     const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length > 0;
     const wecApplied = !!p.wecApplied;
@@ -132,8 +132,8 @@ function renderPipeline(){
 
     // Days until/since 2-year mark
     let daysTo2yr = null;
-    if(p.jvDate){
-      const twoYrs = new Date(p.jvDate);
+    if(refundBase(p)){
+      const twoYrs = new Date(refundBase(p));
       twoYrs.setFullYear(twoYrs.getFullYear()+2);
       daysTo2yr = Math.round((twoYrs-today)/86400000);
     }
@@ -499,7 +499,7 @@ function renderPipeline(){
           detail = 'Payment: '+(firstCheck?fmt(firstCheck.amount)+' on '+fmtDate(firstCheck.date):'—');
         }
         if(def.key==='emd_overdue'||def.key==='emd_to_apply'){
-          const twoYrs = new Date(p.jvDate); twoYrs.setFullYear(twoYrs.getFullYear()+2);
+          const twoYrs = new Date(refundBase(p)); twoYrs.setFullYear(twoYrs.getFullYear()+2);
           const days = Math.round((twoYrs-today)/86400000);
           detail = 'JV: '+fmtDate(p.jvDate)+' · '+(days<=0?Math.abs(days)+'d overdue':days+'d remaining')+' · EMD: '+fmt(p.emd||0)+' FSD: '+fmt(p.fsd||0);
         }
@@ -597,12 +597,12 @@ async function exportActionCentre(format){
   { const df=acDocFlagStages(projects); stages.no_billform=df.no_billform; stages.no_workorder=df.no_workorder; }
 
   projects.forEach(p=>{
-    const hasJV=!!p.jvDate;
+    const hasJV=hasJvOrMb(p);
     const hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment=(p.settlements||[]).filter(s=>!isArchived(s)).length>0;
     const asdAmt=p.asd||0;
     let daysTo2yr=null;
-    if(p.jvDate){const t=new Date(p.jvDate);t.setFullYear(t.getFullYear()+2);daysTo2yr=Math.round((t-today)/86400000);}
+    if(refundBase(p)){const t=new Date(refundBase(p));t.setFullYear(t.getFullYear()+2);daysTo2yr=Math.round((t-today)/86400000);}
     if(!hasJV){
       if(typeof projStatus==='function'&&projStatus(p)==='completed') stages.completed_no_jv.push(p);
       return;
@@ -745,7 +745,7 @@ function getPipelineDashboardAlert(){
 
   let urgent = 0, warning = 0;
   projects.forEach(p=>{
-    const hasJV = !!p.jvDate;
+    const hasJV = hasJvOrMb(p);
     if(!hasJV) return;
     const hasEA = !!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment = (p.settlements||[]).filter(s=>!isArchived(s)).length>0;
@@ -758,8 +758,8 @@ function getPipelineDashboardAlert(){
     // GST pending after payment
     if(hasPayment && !gstFiled) urgent++;
     // EMD overdue
-    if(p.jvDate && !refundApplied){
-      const twoYrs = new Date(p.jvDate); twoYrs.setFullYear(twoYrs.getFullYear()+2);
+    if(refundBase(p) && !refundApplied){
+      const twoYrs = new Date(refundBase(p)); twoYrs.setFullYear(twoYrs.getFullYear()+2);
       const days = Math.round((twoYrs-today)/86400000);
       if(days<=0) urgent++;
       else if(days<=90) warning++;

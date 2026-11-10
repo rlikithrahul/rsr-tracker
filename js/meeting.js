@@ -177,7 +177,7 @@ function _buildStageData(projects, today){
     payment_pending:0, gst_pending:0, emd_overdue:0, emd_to_apply:0
   };
   projects.forEach(p=>{
-    const hasJV=!!p.jvDate, hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
+    const hasJV=hasJvOrMb(p), hasEA=!!(p.eaNumber||(p.documents&&p.documents.ea));
     const hasPayment=(p.settlements||[]).filter(s=>!isArchived(s)).length>0;
     const asdEligible=Math.abs(p.bidPct||0)>25;
     if(!hasJV&&projStatus(p)==='completed'){counts.completed_no_jv++;return;}
@@ -190,8 +190,8 @@ function _buildStageData(projects, today){
     else if(!p.wecReceived&&p.wecApplied) counts.wec_applied++;
     if(p.wecReceived&&!hasPayment) counts.payment_pending++;
     if(hasPayment&&!p.gstFiled) counts.gst_pending++;
-    if(p.jvDate){
-      const t=new Date(p.jvDate);t.setFullYear(t.getFullYear()+2);
+    if(refundBase(p)){
+      const t=new Date(refundBase(p));t.setFullYear(t.getFullYear()+2);
       const d=Math.round((t-today)/86400000);
       if(d<=0&&!p.refundReceived&&!p.refundApplied) counts.emd_overdue++;
       else if(d<=90&&d>0&&!p.refundReceived&&!p.refundApplied) counts.emd_to_apply++;

@@ -50,6 +50,9 @@ function GP(id){
   return null;
 }
 function GC(id){ return D.contractors.find(c=>c.id===id)||null; }
+// Date the 2-year EMD/FSD clock starts from: earliest of JV date and MB (Measurement Book) recording date
+function refundBase(p){ const a=(p&&p.jvDate)||'', b=(p&&p.mbDate)||''; return (a&&b)?(a<b?a:b):(a||b); }
+function hasJvOrMb(p){ return !!(p&&(p.jvDate||p.mbDate)); }
 function agAmt(p){ return p.estimated*(1+p.bidPct/100); }
 function maxF(p){ return agAmt(p)*0.7; }
 // isArchived() check is critical here — without it, a deleted or

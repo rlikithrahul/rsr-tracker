@@ -9,6 +9,7 @@
 // Document slot definitions — every project has these
 const DOC_SLOTS = [
   { id: 'jv',       label: 'Journal Voucher (JV)',        icon: '📋', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after work completion & recording' },
+  { id: 'mb',       label: 'Measurement Book (MB) page', icon: '📏', accept: '.pdf,.jpg,.jpeg,.png', note: 'Optional — photo of the MB page showing the recording date (enter the date in Edit Project)' },
   { id: 'ea',       label: 'EA Number',                   icon: '🔢', type: 'text', note: 'Accounts number — filled after 1-2 months of receiving JV' },
   { id: 'gencode',  label: 'Gen Code',                    icon: '🏷️', type: 'text', note: 'Unique generation code for this tender' },
   { id: 'wec',      label: 'Work Experience Certificate', icon: '🏆', accept: '.pdf,.jpg,.jpeg,.png', note: 'Upload after certificate is issued' },
