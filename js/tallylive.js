@@ -418,13 +418,13 @@ function _tlProjClosed(tender){
 }
 // "Still fundable" for ONE project, same rules as the project page:
 //  settled / Final Bill received -> 0
-//  part bill received            -> 70% of (agreement - bills received) + any under-funding vs the billed amount (= the Additional Funding Opportunity panel)
+//  part bill received            -> the project-page figure (70% of unbilled + under-funding) MINUS net still with RSR (paid - received)  [Tally Live only; the project page itself is unchanged]
 //  otherwise                     -> 70% of agreement - net deployed (payments - receipts)
 function _tlProjFundable(tender){
   const p=(D.projects||[]).find(x=>String(x.tender)===String(tender)); if(!p) return null;
   const ci=_tlProjClosed(tender); if(ci.closed) return 0;
   let ag=0,rec=0,paid=0; try{ ag=Number(agAmt(p))||0; rec=totReceipts(p); paid=totPayments(p); }catch(e){ return null; }
-  if(rec>0) return Math.max(0,ag-rec)*0.7+Math.max(0,rec*0.7-paid);
+  if(rec>0) return Math.max(0,ag-rec)*0.7+Math.max(0,rec*0.7-paid)-Math.max(0,paid-rec);   // Tally Live: the project-page figure MINUS what RSR still has out (net)
   return ag*0.7-Math.max(0,paid-rec);
 }
 function _tlCCList(){
