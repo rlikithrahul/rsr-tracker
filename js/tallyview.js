@@ -52,7 +52,7 @@ function tvImpact(){
   for(const p of (D.projects||[])){ if(isArchived(p)||!p.tender) continue;
     const all=(p.releases||[]).filter(r=>!isArchived(r)); const oldV=all.filter(r=>r.txType!=='receipt').reduce((s,r)=>s+(r.amount||0),0);
     const t=TV.snap&&TV.snap.projects[String(p.tender)]; if(!t){ unlinked++; oldT+=oldV; newT+=oldV; continue; } linked++;
-    const manual=all.filter(r=>!(r.source==='tally'||r.source==='tally-manual'||r.source==='tally-fuzzy')&&r.txType!=='receipt').reduce((s,r)=>s+(r.amount||0),0);
+    const manual=all.filter(r=>!isExcelRel(r)&&r.txType!=='receipt').reduce((s,r)=>s+(r.amount||0),0);
     const newV=_tvRelRaw(t).reduce((s,r)=>s+r.amount,0)+manual; oldT+=oldV; newT+=newV;
     if(Math.abs(newV-oldV)>1) rows.push({p,oldV,newV,diff:newV-oldV}); }
   rows.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)); return {rows,linked,unlinked,oldT,newT};

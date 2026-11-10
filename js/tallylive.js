@@ -173,7 +173,7 @@ async function tlLogin(){
 }
 function _tlShell(el){
   _tlStyle();
-  const groups=[['Books',[['daybook','📅','Day Book'],['ledgers','📚','Ledgers'],['creditors','🧾','Creditors List'],['contractor','👷','Contractor'],['cc','🏗️','Cost Centres'],['projects','📁','Projects']]],['Analysis',[['interest','💰','Interest']]]];
+  const groups=[['Books',[['daybook','📅','Day Book'],['ledgers','📚','Ledgers'],['creditors','🧾','Creditors List'],['contractor','👷','Contractor'],['ccledger','🗂️','Contractor · cost centres'],['cc','🏗️','Cost Centres'],['projects','📁','Projects']]],['Analysis',[['interest','💰','Interest']]]];
   if(TL.admin) groups.push(['Admin',[['needs','⚠️','Needs linking'],['linking','🔗','Linking']]]);
   el.innerHTML = `<div class="wrap">
     <div class="tl-head">
@@ -196,7 +196,7 @@ function _tlErr(e){
 }
 function _tlTab(t){
   TL.tab=t; _tlShell(document.getElementById('sec-tally'));
-  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, creditors:_tlCreditors, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, switch:_tlSwitch, linking:_tlLinking})[t]();
+  ({daybook:_tlDaybook, contractor:_tlContractor, ledgers:_tlLedgers, creditors:_tlCreditors, ccledger:_tlCCLedger, cc:_tlCC, projects:_tlProjectsTab, interest:_tlInterestTab, needs:_tlNeeds, switch:_tlSwitch, linking:_tlLinking})[t]();
 }
 function _tlBusy(){ const b=document.getElementById('tl-body'); if(b) b.innerHTML='<div style="padding:30px;text-align:center;color:var(--text3)">⏳ Loading…</div>'; return b; }
 async function _tlLoadLedgers(){

@@ -146,7 +146,7 @@ function renderDetail(id){
           </div>
         </div>`:''}
       </div>
-    </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No transactions yet. Import from Tally to populate.</div>';
+    </div>`).join('')||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No Tally transactions for this project yet.</div>';
 
   const settled=(p.settlements||[]).reduce((s,x)=>s+x.amount,0);
   const settleLog=(p.settlements||[]).filter(s=>!isArchived(s)).slice().reverse().map(s=>{
@@ -321,7 +321,7 @@ function renderDetail(id){
 
       <!-- Fund Releases -->
       <div class="card">
-        <details data-toggle="funds-${id}" open>
+        <details data-toggle="funds-${id}">
           <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:4px">
             <div class="st" style="margin:0;border:none;padding:0">Fund Releases <span style="font-size:11px;font-weight:500;color:var(--text3)">(${relList(p).length} entries${(typeof tvRel==='function'&&tvRel(p))?' · from Tally':''})</span>${(typeof tvSwitchOn==='function'&&tvSwitchOn()&&!(typeof tvLinked==='function'&&tvLinked(p)))?' <span style="font-size:11px;color:var(--amber);font-weight:600">· not linked to Tally — link it in Tally Live to see payments</span>':''}</div>
             <span style="font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span>

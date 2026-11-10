@@ -65,8 +65,11 @@ function relList(p){
   const all=(p.releases||[]).filter(r=>!isArchived(r));
   const t=(typeof tvRel==='function')?tvRel(p):null;
   if(!t) return all;
-  return t.concat(all.filter(r=>!(r.source==='tally'||r.source==='tally-manual'||r.source==='tally-fuzzy')));
+  return t.concat(all.filter(r=>!isExcelRel(r)));
 }
+// An entry that came from the old Excel upload (any of its import paths: tally, tally-manual, tally-fuzzy, tally-forced, tally-monthly, or an old entry with no source at all).
+// These are HIDDEN everywhere while Tally Live is the source (still stored, never deleted). Settlement-origin entries are not Excel entries and stay.
+function isExcelRel(r){ const s=String(r&&r.source||''); if(s==='settlement'||s==='manual'||s==='tally-live') return false; return s===''||s.indexOf('tally')===0; }
 function totPayments(p){ return relList(p).filter(r=>r.txType!=='receipt').reduce((s,r)=>s+r.amount,0); }
 // Only receipts that have been explicitly confirmed as a real government
 // settlement count toward reducing at-risk capital. A raw Tally "Receipt"
