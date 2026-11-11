@@ -62,6 +62,7 @@ function backToContractorList(){
   renderConts();
 }
 
+const _cpAsked = new Set();
 function renderContractorProfile(cid){
   const c = D.contractors.find(x=>x.id===cid); if(!c) return;
   const el = document.getElementById('cont-profile');
@@ -103,11 +104,17 @@ function renderContractorProfile(cid){
   // from others (Outstanding) follow an edit made upstream.
   if(typeof cxEnsureLoaded==='function') cxEnsureLoaded(c.id);
   const ef = (key, calc)=> (typeof cxEffective==='function') ? cxEffective(c.id, key, calc) : {value:calc, edited:false, calc};
-  const eDeployed = ef('deployed', totalDeployed);
+  // Deployed / Outstanding / Interest come straight from the contractor's Tally ledger (all linked ledgers, FY2024-25 history,
+  // brought-forward and opening balances included). JVs, checks received and check pending stay from the app.
+  const _tl = (typeof TV!=='undefined' && TV.snap && TV.snap.contractors) ? TV.snap.contractors[c.name] : null;
+  if(!_tl && typeof tvLoad==='function' && !_cpAsked.has(cid)){ _cpAsked.add(cid); tvLoad().then(sn=>{ const pe=document.getElementById('cont-profile'); if(sn && pe && !pe.classList.contains('hidden')) renderContractorProfile(cid); }).catch(()=>{}); }
+  const _tlDep = _tl ? (_tl.tx||[]).reduce((t,x)=>t+(Number(x.amt)<0?-Number(x.amt):0),0) : null;
+  const _tlOut = _tl ? Math.max(0, -(Number(_tl.closing)||0)) : null;
+  const eDeployed = ef('deployed', _tl?_tlDep:totalDeployed);
   const eJVs      = ef('jvs', totalJVsValue);
   const eChecks   = ef('checks', totalChecksRcv);
   const ePending  = ef('pending', checkPending);
-  const eOutst    = ef('outstanding', Math.max(0, eDeployed.value - eChecks.value));
+  const eOutst    = ef('outstanding', _tl?_tlOut:Math.max(0, eDeployed.value - eChecks.value));
   const ledger = { fyBreakdown: (typeof tvContFyBreakdown==='function')?tvContFyBreakdown(c):{} };   // per-FY interest from the Tally ledger
   const _ci = typeof tvContInterestFY==='function'?tvContInterestFY(c):null;
   const eInterest = ef('interest', _ci==null?0:_ci);
@@ -165,7 +172,7 @@ function renderContractorProfile(cid){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
       ${[
         {k:'deployed',    e:eDeployed, l:'💰 Deployed to Contractor', c:'var(--navy)',
-          sub:'Total funds released so far'},
+          sub:_tl?'From the Tally ledger · all years':'Total funds released so far (Tally not linked/loaded)'},
         {k:'jvs',         e:eJVs,      l:'📋 JVs Received (value)', c:'#7c3aed',
           sub:'Sum of all JV amounts received'},
         {k:'checks',      e:eChecks,   l:'✅ Checks Received', c:'var(--green)',
@@ -173,7 +180,7 @@ function renderContractorProfile(cid){
         {k:'pending',     e:ePending,  l:'🏦 Check Pending', c:(ePending.value>0?'var(--amber)':'var(--green)'),
           sub:'Owed by govt. against JVs issued'},
         {k:'outstanding', e:eOutst,    l:'⏳ Outstanding', c:(eOutst.value>0?'var(--red)':'var(--green)'),
-          sub:'Released minus checks received'},
+          sub:_tl?'Tally ledger closing balance':'Released minus checks received'},
         {k:'interest',    e:eInterest, l:'📈 Interest (this FY)', c:'var(--amber)',
           sub:'This financial year, from the Tally ledger'},
       ].map(x=>`<div class="card" style="text-align:center;padding:12px;border-top:3px solid ${x.c}">
@@ -370,11 +377,13 @@ async function saveContractor(){
     toast('Username already taken — choose a different one','error'); return;
   }
   const c={id:uid(),name,phone,username:username||'', ...pwData,notes,createdAt:new Date().toISOString()};
+  c.agr=_cAgrRead('nc');
   D.contractors.push(c);
   try {
     await saveContractorDB(c);
     CM('modal-nc');
     ['nc-name','nc-phone','nc-pw','nc-notes'].forEach(id=>document.getElementById(id).value='');
+    _cAgrFill('nc',null);
     renderConts();
     toast('✓ Contractor added','ok');
     if(typeof writeActivityLog==='function') writeActivityLog('contractor_add',`Contractor added: ${name}`).catch(()=>{});
@@ -398,6 +407,7 @@ function openEditContractor(cid){
   document.getElementById('ec-gst').value = c.gst||'';
   document.getElementById('ec-address').value = c.address||'';
   document.getElementById('ec-notes').value = c.notes||'';
+  _cAgrFill('ec',c.agr);
   OM('modal-edit-contractor');
 }
 
@@ -418,6 +428,7 @@ async function saveEditContractor(){
   c.gst = document.getElementById('ec-gst').value.trim();
   c.address = document.getElementById('ec-address').value.trim();
   c.notes = document.getElementById('ec-notes').value.trim();
+  c.agr = _cAgrRead('ec');
   try{
     await saveContractorDB(c);
     CM('modal-edit-contractor');
@@ -429,3 +440,25 @@ async function saveEditContractor(){
     toast('✓ Contractor updated','ok');
   }catch(e){ toast('Save failed','error'); }
 }
+
+
+// ─── Details used in the sub-contract agreement (asked once per contractor; later filled into each project's agreement) ───
+const C_AGR_FIELDS = [
+  ['firm','Firm / trade name','e.g. GKS Infra Projects'],
+  ['constitution','Constitution','Proprietorship / Partnership / Company / Individual'],
+  ['repName','Represented by (name)','Proprietor / partner / director'],
+  ['designation','Designation','e.g. Proprietor'],
+  ['fatherName','S/o, D/o, W/o','Father / husband name'],
+  ['agrAddress','Address for the agreement','Door no., street, area, city'],
+  ['pan','PAN','PAN number'],
+  ['bankName','Bank & branch','For payments'],
+  ['bankAcct','Account number',''],
+  ['ifsc','IFSC','']
+];
+function _cAgrHtml(p){
+  return `<details style="margin:6px 0 10px;background:var(--surface2);border-radius:var(--rs);padding:8px 10px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">📄 Sub-contract agreement details <span style="font-weight:400;color:var(--text3)">(optional — used to fill his agreements)</span></summary>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">${C_AGR_FIELDS.map(([k,l,ph])=>`<div class="fg" style="margin:0${k==='agrAddress'?';grid-column:1/-1':''}"><label style="font-size:11px">${l}</label><input type="text" id="${p}-agr-${k}" placeholder="${ph}"></div>`).join('')}</div></details>`;
+}
+function _cAgrRead(p){ const o={}; C_AGR_FIELDS.forEach(([k])=>{ const e=document.getElementById(p+'-agr-'+k); if(e&&e.value.trim()) o[k]=e.value.trim(); }); return o; }
+function _cAgrFill(p,v){ v=v||{}; C_AGR_FIELDS.forEach(([k])=>{ const e=document.getElementById(p+'-agr-'+k); if(e) e.value=v[k]||''; }); }
+(function(){ ['nc','ec'].forEach(p=>{ const h=document.getElementById(p+'-agr'); if(h) h.innerHTML=_cAgrHtml(p); }); })();

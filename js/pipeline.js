@@ -450,7 +450,8 @@ function renderPipeline(){
     if(!list.length) return;
 
     html += '<div class="card" data-stage="'+def.key+'" '+(_acCan?'ondragstart="acDragStart(event)" ondragover="acDragOver(event)" ondragleave="acDragLeave(event)" ondrop="acDrop(event)" ondragend="acDragEnd(event)" ':'')+'style="margin-bottom:16px;border-top:3px solid '+def.color+'">'
-      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+      +'<details data-toggle="ac-'+def.key+'"><summary style="list-style:none;cursor:pointer;outline:none">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">'
       +(_acCan?'<div title="Drag to move this section" onmousedown="acArm(true,this)" onmouseup="acArm(false,this)" ontouchstart="acArm(true,this)" style="cursor:grab;font-size:18px;color:var(--text3);padding:0 4px;user-select:none">⠿</div>':'')
       +'<div style="width:36px;height:36px;border-radius:50%;background:'+def.bg+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+def.icon+'</div>'
       +'<div style="flex:1">'
@@ -461,7 +462,13 @@ function renderPipeline(){
       +'</div>'
       +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+def.desc+'</div>'
       +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">'
+      +'<button onclick="event.preventDefault();event.stopPropagation();exportActionCentre(\'excel\',\''+def.key+'\')" style="background:var(--gold);color:var(--navy);border:none;border-radius:var(--rs);padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">⬇ Excel</button>'
+      +'<button onclick="event.preventDefault();event.stopPropagation();exportActionCentre(\'print\',\''+def.key+'\')" style="background:var(--navy);color:#fff;border:none;border-radius:var(--rs);padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif">⬇ PDF</button>'
+      +'<span style="font-size:11px;color:var(--text3);margin-left:4px">▼</span>'
       +'</div>'
+      +'</div></summary>'
+      +'<div style="margin-top:10px"></div>'
 
       // Action banner
       +'<div style="background:'+def.bg+';border-radius:var(--rs);padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:'+def.color+'">'
@@ -525,6 +532,7 @@ function renderPipeline(){
           +'</div>';
       }).join('')
       +'</div>'
+      +'</details>'
       +'</div>';
   });
 
@@ -563,7 +571,7 @@ function renderPipeline(){
 }
 
 // ─── EXPORT ACTION CENTRE ─────────────────────────────
-async function exportActionCentre(format){
+async function exportActionCentre(format, onlyKey){
   try{ await loadWEXData(); }catch(e){ toast('Work-experience data could not load — export stopped so it is not wrong','error'); return; }
   const today = new Date();
   const projects = D.projects.filter(p=>!isArchived(p));
@@ -592,7 +600,7 @@ async function exportActionCentre(format){
 
   const stages = {};
   stageDefs.forEach(d=>stages[d.key]=[]);
-  const stageDefsX = acSortDefs(stageDefs);
+  const stageDefsX = acSortDefs(stageDefs).filter(d=>!onlyKey||d.key===onlyKey);
   if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
   { const df=acDocFlagStages(projects); stages.no_billform=df.no_billform; stages.no_workorder=df.no_workorder; }
 
@@ -645,7 +653,7 @@ async function exportActionCentre(format){
     const ws=window.XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:18},{wch:28},{wch:55},{wch:22},{wch:14},{wch:16},{wch:14},{wch:18}];
     window.XLSX.utils.book_append_sheet(wb,ws,'Action Centre');
-    window.XLSX.writeFile(wb,'RSR_Action_Centre_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    window.XLSX.writeFile(wb,'RSR_Action_Centre_'+(onlyKey?onlyKey+'_':'')+new Date().toISOString().slice(0,10)+'.xlsx');
     toast('✓ Excel exported','ok');
 
   } else {

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="RSR Tracker">
 <link rel="manifest" id="pwa-manifest">
 <title>RSR Constructions</title>
-<link rel="stylesheet" href="css/style.css?v=27w">
+<link rel="stylesheet" href="css/style.css?v=27z">
 </head>
 <body>
 
@@ -348,6 +348,7 @@
     <button class="pw-eye" onclick="togglePw('nc-pw',this)" type="button">👁️</button>
   </div>
   <div class="fg"><label>Notes</label><input type="text" id="nc-notes" placeholder="e.g. Specialises in roads"></div>
+  <div id="nc-agr"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end">
     <button class="btn" onclick="CM('modal-nc')">Cancel</button>
     <button class="btn btn-navy" onclick="saveContractor()">Save Contractor</button>
@@ -425,7 +426,7 @@
 
 <!-- Edit Contractor Details -->
 <div class="mov" id="modal-edit-contractor">
-<div class="mbox" style="max-width:420px">
+<div class="mbox" style="max-width:460px;max-height:92vh;overflow:auto">
   <div class="mhdr"><h2>✏️ Edit Contractor</h2><button class="mx" onclick="CM('modal-edit-contractor')">✕</button></div>
   <div class="fg"><label>Full Name</label><input type="text" id="ec-name" placeholder="Contractor full name"></div>
   <div class="frow">
@@ -439,6 +440,7 @@
   </div>
   <div class="fg"><label>Address</label><input type="text" id="ec-address" placeholder="Full address"></div>
   <div class="fg"><label>Notes</label><input type="text" id="ec-notes" placeholder="Any notes"></div>
+  <div id="ec-agr"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
     <button class="btn" onclick="CM('modal-edit-contractor')">Cancel</button>
     <button class="btn btn-navy" onclick="saveEditContractor()">✓ Save Changes</button>
@@ -642,63 +644,63 @@
      JS MODULES — load order is critical
      Each file can only use functions defined in files above it
      ═══════════════════════════════════════ -->
-<script src="js/config.js?v=27w"></script>
-<script src="js/alerts.js?v=27w"></script>
-  <script src="js/settings.js?v=27w"></script>
-  <script src="js/emi.js?v=27w"></script>
-  <script src="js/gst.js?v=27w"></script>
-  <script src="js/matcredit.js?v=27w"></script>
-  <script src="js/pipeline.js?v=27w"></script>
-  <script src="js/gst_calc.js?v=27w"></script>
-  <script src="js/gstsplit.js?v=27w"></script>
-  <script src="js/contractorx.js?v=27w"></script>
-  <script src="js/tenderdocs.js?v=27w"></script>
-  <script src="js/wexfinder.js?v=27w"></script>
-  <script src="js/wexvalue.js?v=27w"></script>
-  <script src="js/wexpotential.js?v=27w"></script>
-  <script src="js/filesticker.js?v=27w"></script>
-  <script src="js/letterhead.js?v=27w"></script>
-  <script src="js/pdf-lib.min.js?v=27w"></script>
-  <script src="js/wex.js?v=27w"></script>
-  <script src="js/meeting.js?v=27w"></script>
-  <script src="js/tasks.js?v=27w"></script>
-  <script src="js/cashregister.js?v=27w"></script>
-  <script src="js/tallylive.js?v=27w"></script>
-  <script src="js/creditors.js?v=27w"></script>
-<script src="js/ccledger.js?v=27w"></script>
-  <script src="js/chequeprint.js?v=27w"></script>
-  <script src="js/growthpool.js?v=27w"></script>
-  <script src="js/refunds.js?v=27w"></script>
-  <script src="js/personal_projects.js?v=27w"></script>
-  <script src="js/letters.js?v=27w"></script>
-  <script src="js/wexstatement.js?v=27w"></script>
-  <script src="js/premium.js?v=27w"></script>
-  <script src="js/labour.js?v=27w"></script>
-  <script src="js/utils.js?v=27w"></script>
-<script src="js/db.js?v=27w"></script>
-<script src="js/activity.js?v=27w"></script>
-<script src="js/softdelete.js?v=27w"></script>
-  <script src="js/auth.js?v=27w"></script>
-<script src="js/ui.js?v=27w"></script>
-<script src="js/boq.js?v=27w"></script>
-<script src="js/projects.js?v=27w"></script>
-<script src="js/project_ops.js?v=27w"></script>
-<script src="js/contractors.js?v=27w"></script>
-<script src="js/xlsx.min.js?v=27w"></script>
-<script src="js/jspdf.umd.min.js?v=27w"></script>
-<script src="js/jspdf.plugin.autotable.min.js?v=27w"></script>
-  <script src="js/finance.js?v=27w"></script>
-  <script src="js/ccref.js?v=27w"></script>
-<script src="js/documents.js?v=27w"></script>
-  <script src="js/reports.js?v=27w"></script>
-<script src="js/integrity.js?v=27w"></script>
-<script src="js/contractor_view.js?v=27w"></script>
-<script src="js/tallyview.js?v=27w"></script>
-<script src="js/receipts.js?v=27w"></script>
-<script src="js/exports.js?v=27w"></script>
-<script src="js/appinfo.js?v=27w"></script>
-<script src="js/access.js?v=27w"></script>
-<script src="js/offline.js?v=27w"></script>
+<script src="js/config.js?v=27z"></script>
+<script src="js/alerts.js?v=27z"></script>
+  <script src="js/settings.js?v=27z"></script>
+  <script src="js/emi.js?v=27z"></script>
+  <script src="js/gst.js?v=27z"></script>
+  <script src="js/matcredit.js?v=27z"></script>
+  <script src="js/pipeline.js?v=27z"></script>
+  <script src="js/gst_calc.js?v=27z"></script>
+  <script src="js/gstsplit.js?v=27z"></script>
+  <script src="js/contractorx.js?v=27z"></script>
+  <script src="js/tenderdocs.js?v=27z"></script>
+  <script src="js/wexfinder.js?v=27z"></script>
+  <script src="js/wexvalue.js?v=27z"></script>
+  <script src="js/wexpotential.js?v=27z"></script>
+  <script src="js/filesticker.js?v=27z"></script>
+  <script src="js/letterhead.js?v=27z"></script>
+  <script src="js/pdf-lib.min.js?v=27z"></script>
+  <script src="js/wex.js?v=27z"></script>
+  <script src="js/meeting.js?v=27z"></script>
+  <script src="js/tasks.js?v=27z"></script>
+  <script src="js/cashregister.js?v=27z"></script>
+  <script src="js/tallylive.js?v=27z"></script>
+  <script src="js/creditors.js?v=27z"></script>
+<script src="js/ccledger.js?v=27z"></script>
+  <script src="js/chequeprint.js?v=27z"></script>
+  <script src="js/growthpool.js?v=27z"></script>
+  <script src="js/refunds.js?v=27z"></script>
+  <script src="js/personal_projects.js?v=27z"></script>
+  <script src="js/letters.js?v=27z"></script>
+  <script src="js/wexstatement.js?v=27z"></script>
+  <script src="js/premium.js?v=27z"></script>
+  <script src="js/labour.js?v=27z"></script>
+  <script src="js/utils.js?v=27z"></script>
+<script src="js/db.js?v=27z"></script>
+<script src="js/activity.js?v=27z"></script>
+<script src="js/softdelete.js?v=27z"></script>
+  <script src="js/auth.js?v=27z"></script>
+<script src="js/ui.js?v=27z"></script>
+<script src="js/boq.js?v=27z"></script>
+<script src="js/projects.js?v=27z"></script>
+<script src="js/project_ops.js?v=27z"></script>
+<script src="js/contractors.js?v=27z"></script>
+<script src="js/xlsx.min.js?v=27z"></script>
+<script src="js/jspdf.umd.min.js?v=27z"></script>
+<script src="js/jspdf.plugin.autotable.min.js?v=27z"></script>
+  <script src="js/finance.js?v=27z"></script>
+  <script src="js/ccref.js?v=27z"></script>
+<script src="js/documents.js?v=27z"></script>
+  <script src="js/reports.js?v=27z"></script>
+<script src="js/integrity.js?v=27z"></script>
+<script src="js/contractor_view.js?v=27z"></script>
+<script src="js/tallyview.js?v=27z"></script>
+<script src="js/receipts.js?v=27z"></script>
+<script src="js/exports.js?v=27z"></script>
+<script src="js/appinfo.js?v=27z"></script>
+<script src="js/access.js?v=27z"></script>
+<script src="js/offline.js?v=27z"></script>
 <script>init();</script>
 <!-- Global Search Results — fixed position, always on top -->
 

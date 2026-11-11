@@ -88,7 +88,9 @@ function _statusBadge(status){
 }
 
 // ─── TAB VIEWS ────────────────────────────────────────
-let _refView = 'overview'; // 'overview' | 'emd' | 'fsd' | 'asd'
+let _refView = 'overview'; // 'overview' | 'deposits' | 'master'
+let _refSub = 'emd';      // inside Deposits: 'emd' | 'fsd' | 'asd'
+let _refMSub = 'all';     // inside Master Sheet: 'all' | 'contractor'
 
 async function renderRefunds(){
   const el = document.getElementById('sec-refunds');
@@ -131,11 +133,11 @@ function _renderRefundsTab(el){
 
   const tabs=[
     {key:'overview',label:'📊 Overview'},
-    {key:'emd',     label:'🏦 EMD'},
-    {key:'fsd',     label:'📄 FSD'},
-    {key:'asd',     label:'💵 ASD'},
+    {key:'deposits',label:'🏦 Deposits'},
     {key:'master',  label:'🗂️ Master Sheet'},
   ];
+  if(_refView==='emd'||_refView==='fsd'||_refView==='asd'){ _refSub=_refView; _refView='deposits'; }
+  const subBar=(items,cur,setter)=>`<div style="display:flex;gap:6px;margin:-6px 0 14px;flex-wrap:wrap">${items.map(t=>`<button onclick="${setter}='${t.key}';_renderRefundsTab(document.getElementById('sec-refunds'))" style="padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${cur===t.key?'var(--navy)':'var(--border)'};background:${cur===t.key?'var(--navy)':'#fff'};color:${cur===t.key?'#fff':'var(--text2)'}">${t.label}</button>`).join('')}</div>`;
 
   el.innerHTML=`<div class="wrap">
     <div class="pg-hdr">
@@ -168,6 +170,8 @@ function _renderRefundsTab(el){
       </button>`).join('')}
     </div>
 
+    ${_refView==='deposits'?subBar([{key:'emd',label:'🏦 EMD'},{key:'fsd',label:'📄 FSD'},{key:'asd',label:'💵 ASD'}],_refSub,'_refSub'):''}
+    ${_refView==='master'?subBar([{key:'all',label:'All projects'},{key:'contractor',label:'👷 Contractor-wise'}],_refMSub,'_refMSub'):''}
     <!-- Tab content -->
     <div id="refunds-body"></div>
   </div>`;
@@ -176,10 +180,8 @@ function _renderRefundsTab(el){
   if(!body) return;
 
   if(_refView==='overview') body.innerHTML = _renderRefOverview(projects, {totEMD,totFSD,totASD,paidEMD,paidFSD,paidASD,pendEMD,pendFSD,pendASD,eligEMD,eligFSD,eligASD});
-  else if(_refView==='emd') body.innerHTML = _renderRefTable(projects, 'emd');
-  else if(_refView==='fsd') body.innerHTML = _renderRefTable(projects, 'fsd');
-  else if(_refView==='asd') body.innerHTML = _renderRefTable(projects, 'asd');
-  else if(_refView==='master') body.innerHTML = _renderRefMaster(projects);
+  else if(_refView==='deposits') body.innerHTML = _renderRefTable(projects, _refSub);
+  else if(_refView==='master') body.innerHTML = _refMSub==='contractor' ? _renderRefMasterContractor(projects) : _renderRefMaster(projects);
 }
 
 // shows which date the 2-year clock runs from
@@ -221,8 +223,38 @@ function _renderRefMaster(projects){
       <div style="font-size:12px;color:var(--text3)">${rows.length} projects · date order (nearest refund first) · EMD and FSD refund 2 years after the earlier of JV / MB date; ASD after EA number</div>
       <label style="margin-left:auto;font-size:12px;display:flex;gap:5px;align-items:center"><input type="checkbox" ${_refMasterFsdOnly?'checked':''} onchange="_refMasterFsdOnly=this.checked;_renderRefundsTab(document.getElementById('sec-refunds'))"> Only FSD not entered (${noFsd})</label>
     </div>
-    <table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Project</th><th style="padding:6px 8px">JV / MB date</th><th style="padding:6px 8px">Eligible on</th><th style="padding:6px 8px">Days left</th><th style="padding:6px 8px">EMD</th><th style="padding:6px 8px">FSD</th><th style="padding:6px 8px">ASD</th></tr></thead><tbody>${trs||'<tr><td colspan="8" style="padding:16px;color:var(--text3)">Nothing to show.</td></tr>'}</tbody></table>
+    <table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Project</th><th style="padding:6px 8px">JV / MB date</th><th style="padding:6px 8px">Eligible on</th><th style="padding:6px 8px">Days left</th><th style="padding:6px 8px">EMD</th><th style="padding:6px 8px">FSD</th><th style="padding:6px 8px">ASD</th></tr></thead><tbody>${trs||'<tr><td colspan="8" style="padding:16px;color:var(--text3)">Nothing to show.</td></tr>'}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--navy);background:var(--surface2);font-weight:800"><td style="padding:9px 8px" colspan="5">Total (${shown.length} projects)</td><td style="padding:9px 8px">${fmt(shown.reduce((t,x)=>t+x.r.emdAmt,0))}</td><td style="padding:9px 8px">${fmt(shown.reduce((t,x)=>t+x.r.fsdAmt,0))}</td><td style="padding:9px 8px">${fmt(shown.reduce((t,x)=>t+((x.r.asdEligible||x.r.asdAmt>0)?x.r.asdAmt:0),0))}</td></tr></tfoot></table>
   </div>`;
+}
+// ─── MASTER SHEET, CONTRACTOR-WISE: each contractor's works in date order + what is still to be refunded to him ───
+function _renderRefMasterContractor(projects){
+  const groups={};
+  projects.forEach(p=>{ const c=GC(p.contractorId); const k=c?c.name:'— No contractor —'; (groups[k]=groups[k]||[]).push({p,r:getRefundData(p)}); });
+  const asdAmt=r=>(r.asdEligible||r.asdAmt>0)?r.asdAmt:0;
+  const unpaid=(amt,st)=>st==='paid'?0:amt;
+  const dl=r=>r.emdDaysLeft===null?Infinity:r.emdDaysLeft;
+  const names=Object.keys(groups).sort();
+  let G={e:0,f:0,a:0,ue:0,uf:0,ua:0};
+  const blocks=names.map(n=>{
+    const rows=groups[n].sort((a,b)=>((a.r.emdStatus==='paid')-(b.r.emdStatus==='paid'))||dl(a.r)-dl(b.r));
+    const T=rows.reduce((t,x)=>{ const r=x.r; t.e+=r.emdAmt; t.f+=r.fsdAmt; t.a+=asdAmt(r); t.ue+=unpaid(r.emdAmt,r.emdStatus); t.uf+=unpaid(r.fsdAmt,r.fsdStatus); t.ua+=unpaid(asdAmt(r),r.asdStatus); return t; },{e:0,f:0,a:0,ue:0,uf:0,ua:0});
+    Object.keys(G).forEach(k=>G[k]+=T[k]);
+    const cellA=(amt,st)=>amt>0?`<div style="font-weight:700">${fmt(amt)}</div>${_statusBadge(st)}`:'<span style="color:var(--text3)">—</span>';
+    const trs=rows.map(({p,r})=>`<tr style="border-top:1px solid var(--border)">
+      <td style="padding:7px 8px"><div style="font-weight:600;cursor:pointer;color:var(--navy)" onclick="openDetail('${p.id}')">${p.name.substring(0,55)}</div><div style="font-size:10px;color:var(--text3)">${p.tender?'#'+p.tender:''}</div></td>
+      <td style="padding:7px 8px;white-space:nowrap">${_refDateLbl(p)}</td>
+      <td style="padding:7px 8px;white-space:nowrap">${r.emdEligibleDate?fmtDate(r.emdEligibleDate):'—'}${r.emdDaysLeft!==null&&r.emdStatus!=='paid'?`<div style="font-size:10px;color:${r.emdDaysLeft<=0?'#c0392b':'var(--amber)'}">${r.emdDaysLeft<=0?Math.abs(r.emdDaysLeft)+'d overdue':r.emdDaysLeft+'d left'}</div>`:''}</td>
+      <td style="padding:7px 8px">${cellA(r.emdAmt,r.emdStatus)}</td><td style="padding:7px 8px">${cellA(r.fsdAmt,r.fsdStatus)}</td><td style="padding:7px 8px">${cellA(asdAmt(r),r.asdStatus)}</td></tr>`).join('');
+    return `<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--surface2)"><b style="font-size:14px;color:var(--navy)">${n}</b><span style="font-size:11px;color:var(--text3)">${rows.length} work(s)</span>
+        <span style="margin-left:auto;font-size:12px">Total deposits <b>${fmt(T.e+T.f+T.a)}</b> · Still to come back to him <b style="color:#b45309">${fmt(T.ue+T.uf+T.ua)}</b></span></div>
+      <div style="overflow:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase"><th style="padding:6px 8px">Work</th><th style="padding:6px 8px">JV / MB date</th><th style="padding:6px 8px">Eligible on</th><th style="padding:6px 8px">EMD</th><th style="padding:6px 8px">FSD</th><th style="padding:6px 8px">ASD</th></tr></thead><tbody>${trs}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--navy);font-weight:800;background:#fff"><td style="padding:8px" colspan="3">Total — ${n}</td><td style="padding:8px">${fmt(T.e)}</td><td style="padding:8px">${fmt(T.f)}</td><td style="padding:8px">${fmt(T.a)}</td></tr>
+      <tr style="font-weight:700;color:#b45309"><td style="padding:4px 8px 8px" colspan="3">Still to be refunded (not yet received)</td><td style="padding:4px 8px 8px">${fmt(T.ue)}</td><td style="padding:4px 8px 8px">${fmt(T.uf)}</td><td style="padding:4px 8px 8px">${fmt(T.ua)}</td></tr></tfoot></table></div></div>`;
+  }).join('');
+  return `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${names.length} contractors · each contractor's works in date order (nearest refund first). "Still to be refunded" = deposits the department has not yet paid back.</div>${blocks||'<div class="card" style="padding:16px;color:var(--text3)">Nothing to show.</div>'}
+  <div class="card" style="padding:12px;display:flex;gap:18px;flex-wrap:wrap;font-weight:800;border-top:3px solid var(--navy)"><span>ALL CONTRACTORS</span><span>EMD ${fmt(G.e)}</span><span>FSD ${fmt(G.f)}</span><span>ASD ${fmt(G.a)}</span><span style="margin-left:auto;color:#b45309">Still to be refunded: ${fmt(G.ue+G.uf+G.ua)}</span></div>`;
 }
 async function saveMasterFSD(pid){
   const inp=document.getElementById('rm-fsd-'+pid); const v=parseFloat(inp&&inp.value)||0;
@@ -364,7 +396,7 @@ function _renderRefTable(projects, type){
 
   return `<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
     ${[
-      {l:'Total ${col.title}',v:fmt(totalAmt),c:col.color},
+      {l:'Total '+col.title,v:fmt(totalAmt),c:col.color},
       {l:'Pending Recovery',v:fmt(pendingAmt),c:'var(--amber)'},
       {l:'Received Back',v:fmt(paidAmt),c:'var(--green)'},
     ].map(x=>`<div style="flex:1;min-width:130px;padding:12px;background:#fff;border:1px solid var(--border);border-radius:10px;text-align:center;border-top:3px solid ${x.c}">
@@ -405,6 +437,7 @@ function _renderRefTable(projects, type){
         </tr>`;
       }).join('')}
     </tbody>
+    <tfoot><tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--navy)"><td style="padding:9px 12px" colspan="2">Total ${col.title} (${rows.length} projects)</td><td style="padding:9px 12px;text-align:right">${fmt(totalAmt)}</td><td style="padding:9px 12px" colspan="${type==='asd'||type==='emd'||type==='fsd'?3:2}"></td></tr></tfoot>
   </table></div>`;
 }
 
