@@ -20,6 +20,7 @@
 const GST_FILER_KEY = 'rsr_gst_filer_v1';
 const GST_MANUAL_KEY = 'rsr_gst_manual_bills_v1';
 const GST_SPLIT_START = '2026-04-01';
+const GST_MASTER_START = '2025-04-01';   // master sheet runs from 1 Apr 2025
 const GST_SPLIT_DEFAULT_TARGET = 70;
 
 let _gsTab = 'split';
@@ -240,6 +241,7 @@ function _gsDrawPage(){
       </div>
       <button class="btn btn-sm" onclick="openOldGSTCalc()">🧮 Old calculators</button>
     </div>
+    ${_gsToggleHTML('split')}
 
     <div class="card" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <div>
@@ -272,6 +274,7 @@ function _gsDrawPage(){
 // totals, who-filed-what) — the dropdowns themselves already show the new
 // value natively, so the bills table isn't rebuilt (keeps scroll position).
 function gsRefreshDerived(){
+  if(_gsTab==='master'){ if(typeof _gmSummary==='function') _gmSummary(); return; }
   if(!_gsQuarter) return;
   const statsEl = document.getElementById('gs-qstats');
   const ledgerEl = document.getElementById('gs-ledger');
@@ -521,7 +524,7 @@ function _gsLedgerHTML(bills, qs, qe){
 }
 
 // Who has filed how much, across ALL owners (includes cross-filing).
-function _gsPartiesHTML(bills){
+function _gsPartiesHTML(bills, note){
   const parties = {};
   bills.forEach(b=>{
     const f = gsGetFiler(b.key); if(!f) return;
@@ -532,7 +535,7 @@ function _gsPartiesHTML(bills){
   const list = Object.values(parties).sort((a,b)=>b.value-a.value);
   if(!list.length) return '';
   return `<div class="card" style="margin-bottom:14px">
-    <div class="st">🧾 Who files how much <span style="font-size:11px;font-weight:400;color:var(--text3)">— all bills, from 1 Apr 2026 to end of selected quarter</span></div>
+    <div class="st">🧾 Who files how much <span style="font-size:11px;font-weight:400;color:var(--text3)">— ${note||'all bills, from 1 Apr 2026 to end of selected quarter'}</span></div>
     <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr><th style="text-align:left">Filer</th><th style="text-align:right">Bills</th><th style="text-align:right">Value filed</th><th style="text-align:right">Own bills</th><th style="text-align:right">Others' bills</th></tr></thead>
       <tbody>
@@ -642,4 +645,74 @@ async function fillContractorBills(cid){
       </tbody>
     </table></div>`}
     <div style="font-size:11px;color:var(--text3);margin-top:8px">GST filing is tracked from bills received on or after 1 Apr 2026. Change who files a bill on the <a href="#" onclick="ownerTab(10);return false" style="color:var(--navy);font-weight:600">GST Split</a> page.</div>`;
+}
+
+
+// ═══ MASTER SHEET — every bill received from 1 Apr 2025, with FY / quarter filters and running totals ═══
+let _gmFY = '', _gmQ = '';
+function _gsToggleHTML(cur){
+  const b=(k,l)=>`<button onclick="_gsSetTab('${k}')" style="padding:7px 16px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1.5px solid ${cur===k?'var(--navy)':'var(--border)'};background:${cur===k?'var(--navy)':'#fff'};color:${cur===k?'#fff':'var(--text2)'}">${l}</button>`;
+  return `<div style="display:flex;gap:8px;margin-bottom:12px">${b('split','🧾 Quarter split')}${b('master','📑 Master sheet')}</div>`;
+}
+function _gsSetTab(t){ if(t==='master'){ _gsTab='master'; _gsMasterPage(); } else { _gsTab='split'; _gsDrawPage(); } }
+function _gmFYOf(d){ const y=+d.slice(0,4), m=+d.slice(5,7); return m>=4?y:y-1; }
+function _gmQOf(d){ const m=+d.slice(5,7); return m>=4&&m<=6?1:m>=7&&m<=9?2:m>=10?3:4; }
+function _gmFYLabel(y){ return 'FY'+String(y).slice(2)+'-'+String(y+1).slice(2); }
+function _gmBills(){
+  return gsCollectBills().filter(b=>b.date>=GST_MASTER_START)
+    .filter(b=>(_gmFY===''||_gmFYOf(b.date)===+_gmFY)&&(_gmQ===''||_gmQOf(b.date)===+_gmQ))
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+}
+function _gsMasterPage(){
+  const el=document.getElementById('sec-gst-calc'); if(!el) return;
+  const cur=getCurrentQuarter(); const fys=[]; for(let y=2025;y<=cur.year;y++) fys.push(y);
+  const qn={1:'Q1 (Apr–Jun)',2:'Q2 (Jul–Sep)',3:'Q3 (Oct–Dec)',4:'Q4 (Jan–Mar)'};
+  el.innerHTML=`<div class="wrap">
+    <div class="pg-hdr"><div><div class="pg-title">🧾 GST Filing Split <span style="font-size:11px;background:#7c3aed;color:#fff;padding:2px 10px;border-radius:8px;font-weight:700;vertical-align:middle;margin-left:8px">SUPER ADMIN ONLY</span></div>
+      <div style="font-size:12px;color:var(--text3)">Master sheet: every bill received from 1 April 2025.</div></div>
+      <button class="btn btn-sm" onclick="_gmExcel()">⬇ Excel</button></div>
+    ${_gsToggleHTML('master')}
+    <div class="card" style="margin-bottom:14px;display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+      <div><div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Financial year</div>
+        <select onchange="_gmFY=this.value;_gsMasterPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px"><option value="">All (from Apr 2025)</option>${fys.map(y=>`<option value="${y}" ${String(_gmFY)===String(y)?'selected':''}>${_gmFYLabel(y)}</option>`).join('')}</select></div>
+      <div><div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Quarter</div>
+        <select onchange="_gmQ=this.value;_gsMasterPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px"><option value="">All quarters</option>${[1,2,3,4].map(q=>`<option value="${q}" ${String(_gmQ)===String(q)?'selected':''}>${qn[q]}</option>`).join('')}</select></div>
+      <button class="btn btn-sm" onclick="_gmFY='';_gmQ='';_gsMasterPage()">Clear filters</button>
+      <div style="font-size:12px;color:var(--text3)">${_gmFY===''&&_gmQ===''?'Showing everything':'Showing '+(_gmFY!==''?_gmFYLabel(+_gmFY):'all years')+(_gmQ!==''?' · '+qn[_gmQ]:'')}</div></div>
+    <div id="gm-table"></div><div id="gm-sum"></div></div>`;
+  const bills=_gmBills(); const tot=bills.reduce((s,b)=>s+b.amount,0);
+  document.getElementById('gm-table').innerHTML=bills.length?`<div class="card" style="margin-bottom:14px;padding:0"><div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+    <thead><tr><th style="text-align:left;padding:7px 8px">#</th><th style="text-align:left">Date received</th><th style="text-align:left">Project</th><th style="text-align:left">Contractor</th><th style="text-align:left">Firm</th><th style="text-align:right">Amount</th><th style="text-align:left">Bill type</th><th style="text-align:left;min-width:170px">GST filed by</th></tr></thead>
+    <tbody>${bills.map((b,i)=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text3)">${i+1}</td><td style="padding:6px 8px;white-space:nowrap">${b.manual?'Q'+_gmQOf(b.date)+' '+_gmFYLabel(_gmFYOf(b.date)):fmtDate(b.date)}</td>
+      <td style="padding:6px 8px">${b.projectId?`<a href="#" onclick="openDetail('${b.projectId}');return false" style="color:var(--navy);font-weight:600">${gsEsc(b.projectName)}</a>`:gsEsc(b.projectName)}</td>
+      <td style="padding:6px 8px;color:var(--text2)">${gsEsc(b.contractorName)}</td><td style="padding:6px 8px;color:var(--text3)">${gsEsc(b.firm)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${fmt(b.amount)}</td><td style="padding:6px 8px;color:var(--text3)">${gsEsc(b.billType||'—')}</td><td style="padding:6px 8px">${gsFilerSelectHTML(b)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--navy);background:var(--surface2);font-weight:800"><td style="padding:8px" colspan="5">Total — ${bills.length} bill${bills.length!==1?'s':''}</td><td style="padding:8px;text-align:right">${fmt(tot)}</td><td colspan="2"></td></tr></tfoot></table></div></div>`
+    :'<div class="card" style="text-align:center;color:var(--text3);padding:24px;margin-bottom:14px">No bills in this selection.</div>';
+  _gmSummary();
+}
+// running totals under the sheet — follow the same filters
+function _gmSummary(){
+  const el=document.getElementById('gm-sum'); if(!el) return; const bills=_gmBills(); if(!bills.length){ el.innerHTML=''; return; }
+  const st=gsStats(bills), target=gsTarget();
+  const cell=(v,t)=>`<td style="padding:6px 8px;text-align:right"><div style="font-weight:700">${fmt(v)}</div><div style="font-size:10px;color:var(--text3)">${gsPct(v,t)}</div></td>`;
+  const by={}; bills.forEach(b=>{ const k=b.contractorId||'_none'; (by[k]=by[k]||[]).push(b); });
+  const rows=Object.keys(by).map(k=>({k,name:k==='_none'?'(No contractor)':gsFilerName(k),st:gsStats(by[k])})).sort((a,b)=>a.name.localeCompare(b.name));
+  el.innerHTML=`<div class="card" style="margin-bottom:14px"><div class="st">📒 Running totals <span style="font-size:11px;font-weight:400;color:var(--text3)">— for the bills above (${bills.length})</span></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin-bottom:8px"><span>Total bills <b>${fmt(st.total)}</b></span><span>Contractors file <b>${fmt(st.self)}</b> (${gsPct(st.self,st.total)})</span><span>RSR files <b>${fmt(st.rsr)}</b> (${gsPct(st.rsr,st.total)})</span><span>Other contractor <b>${fmt(st.others)}</b> (${gsPct(st.others,st.total)})</span><span style="color:${st.undecidedCount?'var(--amber)':'inherit'}">Not decided <b>${fmt(st.undecided)}</b> (${st.undecidedCount})</span></div>
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:760px"><thead><tr><th style="text-align:left">Contractor</th><th style="text-align:right">Bills</th><th style="text-align:right">Total bills</th><th style="text-align:right">Contractor files</th><th style="text-align:right">RSR files</th><th style="text-align:right">Other contractor</th><th style="text-align:right">Not decided</th><th style="text-align:left">Gap to ${target}%</th></tr></thead><tbody>
+    ${rows.map(r=>{ const own=gsIsOwnProjects(r.name); const gap=r.st.total*target/100-r.st.self;
+      const g=own?'—':gap>0.5?`<span style="color:var(--amber);font-weight:700">Contractor ${fmt(gap)} below</span>`:gap<-0.5?`<span style="color:var(--navy);font-weight:700">Contractor ${fmt(-gap)} above</span>`:'<span style="color:var(--green);font-weight:700">✓ On target</span>';
+      return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700">${gsEsc(r.name)}</td><td style="padding:6px 8px;text-align:right">${r.st.count}</td><td style="padding:6px 8px;text-align:right;font-weight:700">${fmt(r.st.total)}</td>${cell(r.st.self,r.st.total)}${cell(r.st.rsr,r.st.total)}${cell(r.st.others,r.st.total)}${cell(r.st.undecided,r.st.total)}<td style="padding:6px 8px">${g}</td></tr>`; }).join('')}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--navy);background:var(--surface2);font-weight:800"><td style="padding:7px 8px">All</td><td style="padding:7px 8px;text-align:right">${st.count}</td><td style="padding:7px 8px;text-align:right">${fmt(st.total)}</td>${cell(st.self,st.total)}${cell(st.rsr,st.total)}${cell(st.others,st.total)}${cell(st.undecided,st.total)}<td></td></tr></tfoot></table></div></div>${_gsPartiesHTML(bills,'for the bills above')}`;
+}
+function _gmExcel(){
+  if(!window.XLSX){ toast('Excel library not loaded','error'); return; }
+  const bills=_gmBills(), st=gsStats(bills);
+  const sel=(_gmFY!==''?_gmFYLabel(+_gmFY):'All years')+(_gmQ!==''?' Q'+_gmQ:'');
+  const aoa=[['RSR CONSTRUCTIONS — GST filing master sheet'],['Selection',sel],['Generated',fmtDate(new Date().toISOString().slice(0,10))],[],['Date received','Project','Contractor','Firm','Amount','Bill type','GST filed by']];
+  bills.forEach(b=>aoa.push([b.manual?'Q'+_gmQOf(b.date)+' '+_gmFYLabel(_gmFYOf(b.date)):fmtDate(b.date),b.projectName,b.contractorName,b.firm,b.amount,b.billType||'',gsFilerName(gsGetFiler(b.key))]));
+  aoa.push([],['Total','','','',st.total],['Contractors file','','','',st.self],['RSR files','','','',st.rsr],['Other contractor','','','',st.others],['Not decided','','','',st.undecided]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[14,44,26,18,16,16,26].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Master'); XLSX.writeFile(wb,'RSR_GST_master_'+sel.replace(/\s+/g,'_')+'.xlsx');
 }
