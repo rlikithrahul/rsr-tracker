@@ -172,7 +172,7 @@ function gsFilerSelectHTML(bill){
 }
 
 async function setBillFiler(tok, value){
-  if(!CU || !CU.isSuperAdmin){ toast('Only Super Admin can change this','error'); return; }
+  if(!ownerOrGranted(10)){ toast('Only Super Admin can change this','error'); return; }
   const key = _gsTokMap[tok]; if(!key) return;
   try{ await loadGSTFilers(); }catch(e){ toast('Could not load filing data — reload and try again','error'); return; }
   const prev = D.gstFilers[key] ? {...D.gstFilers[key]} : undefined;
@@ -211,7 +211,7 @@ async function gsSetTarget(v){
 async function renderGSTSplit(){
   const el = document.getElementById('sec-gst-calc');
   if(!el) return;
-  if(!CU || !CU.isSuperAdmin){
+  if(!ownerOrGranted(10)){
     el.innerHTML = '<div class="wrap"><div class="empty"><div class="empty-icon">🔒</div><div class="empty-text">Access restricted to Super Admin only.</div></div></div>';
     return;
   }
@@ -563,7 +563,7 @@ function openOldGSTCalc(){
 
 // ─── CONTRACTOR PROFILE SECTION (Super Admin only) ─────
 function renderContractorBillsSection(cid){
-  if(!CU || !CU.isSuperAdmin) return '';
+  if(!ownerOrGranted(10)) return '';
   setTimeout(()=>fillContractorBills(cid), 0);
   return '<div id="cont-bills-'+cid+'" class="card" style="margin-bottom:14px;border-left:4px solid var(--gold)"><div class="st">🧾 Bills Received &amp; GST Filing</div><div style="font-size:12px;color:var(--text3);padding:8px 0">Loading…</div></div>';
 }

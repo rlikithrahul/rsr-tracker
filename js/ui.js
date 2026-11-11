@@ -990,7 +990,7 @@ function buildSidebar(isSuperAdmin){
 
   const tabs = isSuperAdmin
     ? [...SIDEBAR_TABS, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧾', label:'GST Split'}, {i:11, icon:'📐', label:'Work Experience'}, {i:12, icon:'📋', label:'Board Meeting'}, {i:13, icon:'🏦', label:'Deposit Refunds'}, {i:16, icon:'🌱', label:'Growth Pool'}, {i:19, icon:'🖨️', label:'Cheque Printing'}]
-    : [...SIDEBAR_TABS, {i:11, icon:'📐', label:'Work Experience'}, {i:13, icon:'🏦', label:'Deposit Refunds'}];
+    : [...SIDEBAR_TABS, {i:11, icon:'📐', label:'Work Experience'}, {i:13, icon:'🏦', label:'Deposit Refunds'}, {i:6, icon:'⚙️', label:'Settings'}, {i:10, icon:'🧾', label:'GST Split'}, {i:12, icon:'📋', label:'Board Meeting'}, {i:16, icon:'🌱', label:'Growth Pool'}, {i:19, icon:'🖨️', label:'Cheque Printing'}];  // access.js hides the ones this person has not been given
 
   linksEl.innerHTML = tabs.map(t=>`
     <button class="sidebar-link${t.i===0?' active':''}" id="sbl-${t.i}" onclick="ownerTab(${t.i});closeSidebar()">
@@ -1116,7 +1116,7 @@ function goBack(){
   const isSA = CU&&CU.isSuperAdmin;
   const mainSecs = isSA
     ? ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds']
-    : ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-wex','sec-refunds'];
+    : ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit','sec-pipeline','sec-gst-calc','sec-wex','sec-meeting','sec-refunds'];
 
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
   const targetId = mainSecs[targetTab];

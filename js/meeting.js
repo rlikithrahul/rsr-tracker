@@ -29,7 +29,7 @@ async function renderMeeting(){
 
 function _renderMeetingList(el){
   const meetings = (D.meetings||[]).filter(m=>!m._archived).sort((a,b)=>b.date.localeCompare(a.date));
-  const canEdit = CU&&CU.isSuperAdmin;
+  const canEdit = ownerOrGranted(12);
 
   el.innerHTML = `<div class="wrap">
     <div class="pg-hdr">
@@ -208,7 +208,7 @@ function openMeeting(id){
   if(!el) return;
 
   const sn = m.snapshot||{};
-  const canEdit = CU&&CU.isSuperAdmin;
+  const canEdit = ownerOrGranted(12);
 
   const sections = [
     {key:'action_overview', title:'⚡ Action Centre Overview', content:_renderActionOverview(sn)},

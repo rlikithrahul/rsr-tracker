@@ -2,8 +2,10 @@
 // appinfo.js — "About this app": which version is running, whether a newer one is already deployed, and what changed.
 // Also shows the version in the sidebar footer so you always know what you are looking at.
 // ═══════════════════════════════════════════════════════
-const APP_BUILD_DATE = '10 Nov 2026';
+const APP_BUILD_DATE = '11 Nov 2026';
 const APP_CHANGELOG = [
+  ['v28e','Staff Access now lists EVERY dashboard, including the owner-only ones (Settings, GST Split, Board Meeting, Growth Pool, Cheque Printing, marked ⚠). Staff keep exactly what they had by default; you switch the others on per person. New Settings → My Passwords: change your main login password, set your own Tally Live password, and a backup/recovery password (needs the updated tally-api function deployed for the Tally Live / recovery passwords).'],
+  ['v28d','Safety: a bad Tally snapshot reply can no longer replace the good one · Staff Logins text now points to Staff Access. Full check of all 18 pages, Settings sections, project and contractor pages.'],
   ['v28c','FIX: Settings → Staff Access (switch dashboards on/off per staff member, and their Tally Live passwords) had disappeared after the Settings redesign; it is back as its own section under Staff Logins.'],
   ['v28b','GST Split: new Master sheet view (button at the top of the page) listing every bill received from 1 Apr 2025 with date, project, contractor, firm, amount, bill type and who files GST (editable); Financial year and Quarter dropdowns filter the sheet; running totals (who filed what, percentages, gap to target) and who-files-how-much sit below and follow the filters; Excel download.'],
   ['v28a','Tally Live: new Payment types tab. Mark each contractor-ledger entry as Cash (by us / outside UPI-cash), Online transfer (RSR CONSTRUCTIONS / R SADHU RAO / R LIKITH RAHUL), Material (cement / steel / other + supplier), Other, or Received from GVMC; split one voucher into parts; tick many and apply at once; totals per type and bank with total paid, total received and the difference; Excel download. Stored in the app only, Tally is never changed.'],

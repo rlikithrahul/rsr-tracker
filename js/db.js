@@ -208,6 +208,7 @@ async function loadDB() {
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = _pickLatestSettingRow(s, OPW_KEY);
   if (pw) D.ownerPw = pw.value;
+  { const tp=_pickLatestSettingRow(s, OPW_TALLY_KEY), rp=_pickLatestSettingRow(s, OPW_RECOVERY_KEY); D.ownerTallyPw = tp?tp.value:''; D.ownerRecoveryPw = rp?rp.value:''; }
   const staffRow = _pickLatestSettingRow(s, 'rsr_staff_v1');
   D.staffMembers = staffRow ? JSON.parse(staffRow.value||'[]') : [];
 }
@@ -245,6 +246,7 @@ async function loadDBSummary() {
   Object.keys(projectCache).forEach(k => delete projectCache[k]);
   const pw = _pickLatestSettingRow(s, OPW_KEY);
   if (pw) D.ownerPw = pw.value;
+  { const tp=_pickLatestSettingRow(s, OPW_TALLY_KEY), rp=_pickLatestSettingRow(s, OPW_RECOVERY_KEY); D.ownerTallyPw = tp?tp.value:''; D.ownerRecoveryPw = rp?rp.value:''; }
   const staffRow2 = _pickLatestSettingRow(s, 'rsr_staff_v1');
   D.staffMembers = staffRow2 ? JSON.parse(staffRow2.value||'[]') : [];
 }
@@ -512,6 +514,9 @@ async function writeLedgerEvent(type, projectId, contractorId, amount, ref, meta
   }).catch(()=>{});
 }
 
+async function saveOwnerPwKey(key, val) {
+  await sbReq('settings', 'POST', {key, value:val});
+}
 async function savePwDB(val) {
   await sbReq('settings', 'POST', {key:OPW_KEY, value:val});
 }

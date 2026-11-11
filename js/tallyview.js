@@ -69,7 +69,8 @@ async function tvLoad(force){
   TV.p=(async()=>{
     try{
       const r=await fetch(SB_URL+'/functions/v1/tally-api',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({action:'app_snapshot',fresh:!!force,only:_tvOnly()})});
-      const j=await r.json(); if(!r.ok) throw new Error(j.error||('Error '+r.status));
+      const j=await r.json(); if(!r.ok) throw new Error((j&&j.error)||('Error '+r.status));
+      if(!j||typeof j!=='object'||!j.projects||!j.contractors) throw new Error('Tally snapshot came back in an unexpected shape');   // never replace good data with junk
       const before=TV.sig; TV.snap=j; TV.at=Date.now(); TV.err=''; TV.relCache={}; TV.sig=_tvSig(j);
       try{ TV.sw=await getSetting(TV_SW_KEY,null); }catch(e){}
       try{ if(typeof tlLoadIntSet==='function') await tlLoadIntSet(); }catch(e){}

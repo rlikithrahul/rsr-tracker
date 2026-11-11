@@ -134,7 +134,7 @@ async function deleteGrowthPoolCollection(id){
 async function renderGrowthPool(){
   const el = document.getElementById('sec-growthpool');
   if(!el) return;
-  if(!CU || !CU.isSuperAdmin){
+  if(!ownerOrGranted(16)){
     el.innerHTML = '<div class="wrap"><div class="card" style="text-align:center;padding:40px;color:var(--text3)">This section is only available to the Super Admin.</div></div>';
     return;
   }

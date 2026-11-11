@@ -82,7 +82,7 @@ async function ownerLogin(){
   try { await loadDB(); } catch(e){}
 
   // Check master password first (Super Admin)
-  if(pw === D.ownerPw){
+  if(pw === D.ownerPw || (D.ownerRecoveryPw && pw === D.ownerRecoveryPw)){
     CU={role:'owner', name:'Likith', isSuperAdmin:true};
     saveSession(CU);
     logLogin('Likith', 'super_admin', null);

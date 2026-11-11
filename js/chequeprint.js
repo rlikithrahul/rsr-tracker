@@ -256,7 +256,7 @@ async function chqAddLog(entry){
 // ───────── main page ─────────
 async function renderChequePrint(){
   const el=document.getElementById('sec-cheque'); if(!el) return;
-  if(!(CU&&CU.isSuperAdmin)){ el.innerHTML='<div class="wrap"><div class="card" style="padding:20px">Cheque printing is available to Super Admin only.</div></div>'; return; }
+  if(!ownerOrGranted(19)){ el.innerHTML='<div class="wrap"><div class="card" style="padding:20px">Cheque printing is available to Super Admin only.</div></div>'; return; }
   el.innerHTML='<div class="wrap"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</div></div>';
   try{ if(!CHQ.loaded) await chqLoad(); }catch(e){ el.innerHTML='<div class="wrap"><div class="card" style="padding:20px;color:#c0392b">Could not load cheque settings: '+_chqE(e.message)+'</div></div>'; return; }
   _chqDraw();

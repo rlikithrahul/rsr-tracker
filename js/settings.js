@@ -65,7 +65,7 @@ async function loadActivityLog(){
 // ─── RENDER SETTINGS PAGE ─────────────────────────────
 async function renderSettings(){
   // Only Super Admin can access
-  if(!CU || !CU.isSuperAdmin){
+  if(!CU || !(CU.isSuperAdmin || (typeof canTab==='function' && canTab(6)))){
     toast('Access denied — Super Admin only','error');
     ownerTab(0);
     return;
@@ -88,6 +88,7 @@ async function renderSettings(){
     <div class="pg-hdr"><div class="pg-title">⚙️ Settings</div></div>
     <div class="set-wrap">
     ${_setContractorFinSection()}
+    ${_setMyPasswordsSection()}
     
 
     <!-- STAFF MANAGEMENT -->
@@ -99,7 +100,7 @@ async function renderSettings(){
       </div>
       <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
-        Staff can log in and use all owner features. They cannot access Settings or Activity Log.
+        Staff can log in and open the dashboards you switch on for them under <b>Staff Access</b> (just below). They can never open Settings, GST Split, Board Meeting, Growth Pool or Cheque Printing.
         You (Super Admin) are the master login — your password is set separately via the 🔑 Password button.
       </div>
       <div id="staff-list" style="margin-bottom:14px">${renderStaffList()}</div>
@@ -284,7 +285,7 @@ async function addStaffMember(){
   if(!pw || pw.length<4){ toast('Password must be at least 4 characters','error'); return; }
 
   // Check no duplicate password (passwords must be unique to identify who logged in)
-  if(pw === D.ownerPw){ toast('Cannot use the master password as staff password','error'); return; }
+  if(typeof ownerPwList==='function' && ownerPwList().includes(pw)){ toast('Cannot use a Super Admin password as a staff password','error'); return; }
   if((D.staffMembers||[]).some(s=>s.password===pw)){ toast('Password already in use by another staff member','error'); return; }
 
   if(!D.staffMembers) D.staffMembers=[];
@@ -317,7 +318,7 @@ function editStaffPassword(i){
   const newPw = prompt(`New password for ${s.name}:`);
   if(!newPw) return;
   if(newPw.length<4){ toast('Password must be at least 4 characters','error'); return; }
-  if(newPw===D.ownerPw){ toast('Cannot use master password','error'); return; }
+  if(typeof ownerPwList==='function' && ownerPwList().includes(newPw)){ toast('Cannot use a Super Admin password','error'); return; }
   if(D.staffMembers.some((x,j)=>j!==i&&x.password===newPw)){ toast('Password already in use','error'); return; }
   s.password = newPw;
   saveStaff().then(()=>{
@@ -557,4 +558,57 @@ function _setContractorFinSection(){
 function _setRefreshCF(){
   const on=CF.on; const sw=document.getElementById('cf-sw'); if(sw) sw.checked=on;
   const sub=document.getElementById('cf-sub'); if(sub) sub.textContent=on?'On — contractors see their finance numbers':'Off — contractors are told to contact the office';
+}
+
+
+// ── My Passwords (Super Admin only): main login, own Tally Live password, backup/recovery password ──
+function _setMyPasswordsSection(){
+  if(!(CU && CU.isSuperAdmin)) return '';
+  const row=(k,t,d,ph)=>`<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:700;font-size:13px">${t}</div><div style="font-size:12px;color:var(--text2);margin:2px 0 8px">${d}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+        <input type="password" id="mp-${k}" placeholder="${ph}" autocomplete="new-password" style="flex:1;min-width:180px;padding:9px;border:1px solid var(--border);border-radius:8px">
+        <input type="password" id="mp-${k}2" placeholder="Type it again" autocomplete="new-password" style="flex:1;min-width:180px;padding:9px;border:1px solid var(--border);border-radius:8px">
+        <button class="btn btn-primary" onclick="myPwSave('${k}')">Save</button></div></div>`;
+  return `<!-- MY PASSWORDS -->
+    <div class="set-sec" id="set-mypw">
+      <div class="set-hd" onclick="setToggle('mypw')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('mypw')}">
+        <span class="set-ic" style="background:#fee2e2">🔑</span>
+        <span class="set-tt"><span class="set-t1">My Passwords</span><span class="set-t2">Main login · Tally Live · Backup / recovery</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
+        <div style="margin-bottom:10px"><input type="password" id="mp-cur" placeholder="Your current main password (needed for every change)" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:8px"></div>
+        ${row('main','Main login password','What you type on the login screen. Minimum 6 characters.','New main password')}
+        ${row('tally','Tally Live password (yours)',(D.ownerTallyPw?'<b>Set.</b> Your main password no longer opens Tally Live — only this one does.':'Not set — your main password opens Tally Live. Set one to keep Tally Live separate.')+' Needs the updated tally-api function to be deployed.','New Tally Live password')}
+        ${row('recovery','Backup / recovery password',(D.ownerRecoveryPw?'<b>Set.</b>':'Not set.')+' A second password that also logs you in as Super Admin, in case you forget the main one. Keep it somewhere safe.','New recovery password')}
+        <div style="font-size:11px;color:var(--text3)">All three must be different from each other and from any staff password. To remove the Tally Live or recovery password, leave both boxes empty and press Save.</div>
+        <div id="mp-err" style="display:none;color:#b91c1c;font-size:12px;margin-top:6px"></div>
+      </div></div></div>
+    </div>`;
+}
+async function myPwSave(kind){
+  const err=document.getElementById('mp-err'); const bad=m=>{ err.textContent=m; err.style.display='block'; };
+  err.style.display='none';
+  if(!(CU&&CU.isSuperAdmin)){ bad('Only the Super Admin can change these.'); return; }
+  const cur=document.getElementById('mp-cur').value, a=document.getElementById('mp-'+kind).value, b=document.getElementById('mp-'+kind+'2').value;
+  if(cur!==D.ownerPw){ bad('Your current main password is not correct.'); return; }
+  if(a!==b){ bad('The two boxes do not match.'); return; }
+  const clear=!a;
+  if(clear && kind==='main'){ bad('The main password cannot be empty.'); return; }
+  if(!clear){
+    if(a.length<6){ bad('Minimum 6 characters.'); return; }
+    const others={main:[D.ownerTallyPw,D.ownerRecoveryPw],tally:[D.ownerPw,D.ownerRecoveryPw],recovery:[D.ownerPw,D.ownerTallyPw]}[kind].filter(Boolean);
+    if(others.includes(a)){ bad('That is already one of your other passwords — use a different one.'); return; }
+    if((D.staffMembers||[]).some(s=>s.password===a||s.tallyPw===a)){ bad('A staff member already uses that password — use a different one.'); return; }
+  }
+  const key={main:OPW_KEY,tally:OPW_TALLY_KEY,recovery:OPW_RECOVERY_KEY}[kind];
+  try{
+    await saveOwnerPwKey(key,a);
+    if(kind==='main') D.ownerPw=a; else if(kind==='tally') D.ownerTallyPw=a; else D.ownerRecoveryPw=a;
+    try{ await writeActivityLog('password_change','Super Admin changed the '+({main:'main login',tally:'Tally Live',recovery:'recovery'}[kind])+' password'); }catch(e){}
+    ['mp-cur','mp-'+kind,'mp-'+kind+'2'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    toast(clear?'✓ Removed':'✓ Password saved','ok');
+    if(kind!=='main' && typeof renderSettings==='function'){ const o=document.getElementById('set-mypw'); const wasOpen=o&&o.classList.contains('open'); await renderSettings(); if(wasOpen) setToggle('mypw'); }
+  }catch(e){ bad('Save failed — nothing was changed. '+(e.message||'')); }
 }

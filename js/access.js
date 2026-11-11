@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
 // access.js — which dashboards each staff member can open (Super Admin controls it in Settings → 🔐 Staff Access)
 // • Staff with nothing configured keep what they could already open (Tally Live now needs to be switched on for them).
-// • Settings, GST Split, Board Meeting, Growth Pool and Cheque Printing stay Super Admin only.
+// • Pages marked ⚠ (Settings, GST Split, Board Meeting, Growth Pool, Cheque Printing) are the owner's own: off for staff unless the Super Admin switches them on.
 // • If staff reach a dashboard they are not allowed (from a link or a button) they can send a request; the Super Admin sees it
 //   in Settings (red badge on Settings) and approves or declines it there.
 // • Tally Live additionally needs the staff member's OWN Tally Live password (set here), separate from the app login.
@@ -12,16 +12,18 @@ let ACC = { reqs:[], sig:'' };
 
 function accessGrantable(){ // [{i,icon,label}] — what the Super Admin can switch on/off for a staff member
   const base=(typeof SIDEBAR_TABS!=='undefined'?SIDEBAR_TABS:[]).slice(); const have=new Set(base.map(t=>t.i));
-  [{i:11,icon:'📐',label:'Work Experience'},{i:13,icon:'🏦',label:'Deposit Refunds'}].forEach(t=>{ if(!have.has(t.i)) base.push(t); });
+  [{i:11,icon:'📐',label:'Work Experience'},{i:13,icon:'🏦',label:'Deposit Refunds'},{i:6,icon:'⚙️',label:'Settings'},{i:10,icon:'🧾',label:'GST Split'},{i:12,icon:'📋',label:'Board Meeting'},{i:16,icon:'🌱',label:'Growth Pool'},{i:19,icon:'🖨️',label:'Cheque Printing'}].forEach(t=>{ if(!have.has(t.i)) base.push(t); });
   return base.filter(t=>t.i!==0);                                   // the Dashboard is always open
 }
+function ownerPwList(){ return [D.ownerPw,D.ownerTallyPw,D.ownerRecoveryPw].filter(Boolean); }
 function accessLabel(i){ const t=accessGrantable().find(x=>x.i===i); return t?(t.icon+' '+t.label):('Dashboard '+i); }
 function accessStaffRec(){ if(!CU) return null; return (D.staffMembers||[]).find(s=>(CU.staffId&&s.id===CU.staffId)||s.name===CU.name)||null; }
-function accessDefaultTabs(){ return accessGrantable().map(t=>t.i).filter(i=>i!==18); }
+function accessDefaultTabs(){ return accessGrantable().map(t=>t.i).filter(i=>i!==18&&!ACCESS_ADMIN_ONLY.includes(i)); }
 function accessTabsOf(rec){ return rec&&rec.access&&Array.isArray(rec.access.tabs)?rec.access.tabs:accessDefaultTabs(); }
+// true for the Super Admin, or for a staff member the Super Admin has switched this page on for
+function ownerOrGranted(i){ return !!(CU && (CU.isSuperAdmin || (CU.role==='owner' && canTab(i)))); }
 function canTab(i){
   if(!CU) return false; if(CU.isSuperAdmin||CU.role!=='owner') return true; if(i===0) return true;
-  if(ACCESS_ADMIN_ONLY.includes(i)) return false;
   return accessTabsOf(accessStaffRec()).includes(i);
 }
 
@@ -29,7 +31,7 @@ function canTab(i){
 function accessDenied(i){
   const old=document.getElementById('acc-modal'); if(old) old.remove();
   const pending=(ACC.reqs||[]).find(r=>r.status==='pending'&&r.tab===i&&r.staff===CU.name);
-  const adminOnly=ACCESS_ADMIN_ONLY.includes(i);
+  const adminOnly=false;
   const d=document.createElement('div'); d.id='acc-modal'; d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
   d.innerHTML=`<div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:14px;max-width:420px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.35)">
     <div style="font-size:30px;text-align:center">🔒</div>
@@ -60,12 +62,12 @@ function accessCardHtml(){
     ${reqs.map(r=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid #f0dc96;font-size:13px"><span><b>${_aE(r.staff)}</b> wants <b>${_aE(r.label||accessLabel(r.tab))}</b>${r.note?' — “'+_aE(r.note)+'”':''}<span style="color:var(--text3);font-size:11px"> · ${new Date(r.at).toLocaleString('en-IN')}</span></span><span style="margin-left:auto"></span><button class="btn btn-sm btn-primary" onclick="accessDecide('${r.id}',true)">Approve</button><button class="btn btn-sm" onclick="accessDecide('${r.id}',false)">Decline</button></div>`).join('')}</div>`:'';
   return `<div class="card" id="acc-card" style="border-top:3px solid var(--navy);margin-bottom:16px">
     <div class="st" style="margin-bottom:4px">🔐 Staff Access — who can open which dashboard</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Switch dashboards on or off for each staff member. The Dashboard is always open. Settings, GST Split, Board Meeting, Growth Pool and Cheque Printing are Super Admin only. For <b>Tally Live</b> give the person their <b>own password</b> as well. Staff who open a page they don't have can ask you for it, and you will see it here.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Switch dashboards on or off for each staff member. The Dashboard is always open. ⚠ pages (Settings, GST Split, Board Meeting, Growth Pool, Cheque Printing) are off unless you switch them on. Switching on Settings gives that person full control of Settings, including staff logins and this page. For <b>Tally Live</b> give the person their <b>own password</b> as well. Staff who open a page they don't have can ask you for it, and you will see it here.</div>
     ${reqHtml}
     ${staff.length?staff.map((s,si)=>{ const on=new Set(accessTabsOf(s)); return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><b style="font-size:14px">${_aE(s.name)}</b><span style="font-size:11px;color:var(--text3)">${on.size} of ${tabs.length} dashboards on${s.access&&Array.isArray(s.access.tabs)?'':' (default)'}</span><span style="margin-left:auto"></span>
         <button class="btn btn-sm" onclick="accessPreset(${si},'all')">All on</button><button class="btn btn-sm" onclick="accessPreset(${si},'none')">All off</button><button class="btn btn-sm" onclick="accessPreset(${si},'default')">Reset</button></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px">${tabs.map(t=>`<label style="display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid ${on.has(t.i)?'var(--navy)':'var(--border)'};background:${on.has(t.i)?'rgba(26,39,68,.08)':'transparent'};border-radius:9px;cursor:pointer;font-size:12px"><input type="checkbox" data-s="${si}" data-t="${t.i}" ${on.has(t.i)?'checked':''} onchange="accessToggleStyle(this)"> ${t.icon} ${_aE(t.label)}</label>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px">${tabs.map(t=>`<label style="display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid ${on.has(t.i)?'var(--navy)':'var(--border)'};background:${on.has(t.i)?'rgba(26,39,68,.08)':'transparent'};border-radius:9px;cursor:pointer;font-size:12px"><input type="checkbox" data-s="${si}" data-t="${t.i}" ${on.has(t.i)?'checked':''} onchange="accessToggleStyle(this)"> ${t.icon} ${_aE(t.label)}${ACCESS_ADMIN_ONLY.includes(t.i)?' <span style="color:#b45309">⚠</span>':''}</label>`).join('')}</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><label style="font-size:12px">📒 Tally Live password<br><input type="text" id="acc-tp-${si}" value="${_aE(s.tallyPw||'')}" placeholder="${on.has(18)?'set a password for this person':'switch Tally Live on first'}" style="min-width:220px;padding:7px 9px;border:1px solid var(--border);border-radius:8px" autocomplete="off"></label><span style="margin-left:auto"></span><button class="btn btn-primary btn-sm" onclick="accessSave(${si})">Save ${_aE(s.name)}'s access</button></div></div>`; }).join(''):'<div style="font-size:13px;color:var(--text3);font-style:italic">No staff members yet — add them in Staff Logins above.</div>'}
     ${(ACC.reqs||[]).filter(r=>r.status!=='pending').length?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--text3)">Earlier requests (${(ACC.reqs||[]).filter(r=>r.status!=='pending').length})</summary>${(ACC.reqs||[]).filter(r=>r.status!=='pending').slice(-20).reverse().map(r=>`<div style="font-size:12px;padding:3px 0">${_aE(r.staff)} · ${_aE(r.label||'')} · <i>${_aE(r.status)}</i> · ${new Date(r.at).toLocaleDateString('en-IN')}</div>`).join('')}</details>`:''}
   </div>`;
@@ -81,7 +83,7 @@ async function accessSave(si){
   const tp=(document.getElementById('acc-tp-'+si)||{}).value.trim();
   if(tabs.includes(18) && !tp){ toast('Tally Live is on — give '+s.name+' a Tally Live password too','error'); return; }
   if(tp){ if(tp.length<4){ toast('Tally Live password must be at least 4 characters','error'); return; }
-    if(tp===D.ownerPw || (D.staffMembers||[]).some((x,j)=>j!==si&&(x.tallyPw===tp))){ toast('That Tally Live password is already used by someone else','error'); return; } }
+    if(ownerPwList().includes(tp) || (D.staffMembers||[]).some((x,j)=>j!==si&&(x.tallyPw===tp))){ toast('That Tally Live password is already used by someone else','error'); return; } }
   s.access={tabs}; if(tp) s.tallyPw=tp; else delete s.tallyPw;
   try{ await saveStaff(); await writeActivityLog('staff_access',`Access for ${s.name}: ${tabs.length} dashboards${tabs.includes(18)?', Tally Live on':''}`); toast('✓ Saved — '+s.name+' sees the change next time the page refreshes (within a couple of minutes)','ok'); const c=document.getElementById('acc-card'); if(c){ c.outerHTML=accessCardHtml(); } }
   catch(e){ toast('Save failed','error'); }
