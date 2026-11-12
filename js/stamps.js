@@ -29,7 +29,7 @@ const ST_FIRMS = {
   likith: {stamp:'likith_stamp', signs:[{id:'likith_signed',label:'with sign'}]},
   sadhu:  {stamp:'sadhu_stamp',  signs:[{id:'sadhu_signed',label:'with sign'}]}
 };
-const ST_WIDTH_CM = {stamp:6.3, address:6.6};   // printed width on the page
+const ST_WIDTH_CM = {stamp:4.2, address:5.2};   // printed width on the page
 const ST_KEY = id => 'rsr_stamp_'+id;
 const _stCache = {};     // id -> {dataUrl, bytes, w, h}  (memory only, this tab)
 let _stAvail = null;     // ids that have an image uploaded (null = not checked yet)
@@ -127,7 +127,7 @@ function stDocxBlock(res, width){
     const wl = Math.round(width*0.5), wr = width - wl;
     const cell = (w, jc, inner)=>`<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:vAlign w:val="bottom"/></w:tcPr>${p(jc, inner)}</w:tc>`;
     xml = `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>
-<w:tblGrid><w:gridCol w:w="${wl}"/><w:gridCol w:w="${wr}"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(wl,'left',add(res.addr,ST_WIDTH_CM.address-0.6))}${cell(wr,'right',add(res.main,ST_WIDTH_CM.stamp))}</w:tr></w:tbl>`;
+<w:tblGrid><w:gridCol w:w="${wl}"/><w:gridCol w:w="${wr}"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(wl,'left',add(res.addr,ST_WIDTH_CM.address-0.4))}${cell(wr,'right',add(res.main,ST_WIDTH_CM.stamp))}</w:tr></w:tbl>`;
   } else if(res.main){
     xml = p('right', add(res.main, ST_WIDTH_CM.stamp));
   } else {
@@ -140,7 +140,7 @@ function stDocxBlock(res, width){
 function stHtmlBlock(res){
   if(!res) return '';
   const im = (img,cm)=>`<img src="${img.dataUrl}" style="width:${cm}cm;height:auto;display:block">`;
-  if(res.main && res.addr) return `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px;page-break-inside:avoid">${im(res.addr,ST_WIDTH_CM.address-0.6)}${im(res.main,ST_WIDTH_CM.stamp)}</div>`;
+  if(res.main && res.addr) return `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px;page-break-inside:avoid">${im(res.addr,ST_WIDTH_CM.address-0.4)}${im(res.main,ST_WIDTH_CM.stamp)}</div>`;
   const one = res.main || res.addr;
   return `<div style="display:flex;justify-content:flex-end;margin-top:4px;page-break-inside:avoid">${im(one,res.main?ST_WIDTH_CM.stamp:ST_WIDTH_CM.address)}</div>`;
 }
