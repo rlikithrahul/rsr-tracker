@@ -440,28 +440,32 @@ function migrateAllProjects(){
   return migrated;
 }
 
-// ─── INDIAN DATE FORMAT ───────────────────────────────
-// Converts YYYY-MM-DD or ISO string to "27 May 2026"
-function fmtDate(dateStr){
-  if(!dateStr) return '—';
+// ─── DATE FORMAT — ONE STYLE EVERYWHERE: "05 Nov 2026" ───────────────
+// Every date the app shows goes through fmtDate / fmtDateTime. (datefmt.js also converts any date that slips through.)
+const _DF_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _dfOut(y,m,d){ return String(d).padStart(2,'0')+' '+_DF_MON[m-1]+' '+y; }
+function fmtDate(v){
+  if(v===null || v===undefined || v==='') return '—';
   try{
-    const d = new Date(dateStr);
-    if(isNaN(d.getTime())) return dateStr;
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  }catch(e){ return dateStr; }
+    if(v instanceof Date){ if(isNaN(v.getTime())) return '—'; return _dfOut(v.getFullYear(), v.getMonth()+1, v.getDate()); }
+    const s = String(v).trim();
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);                    // 2026-11-05  (no time-zone shifting)
+    if(m) return _dfOut(+m[1], +m[2], +m[3]);
+    m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s);         // 05/11/2026, 05-11-2026
+    if(m && +m[1]>=1 && +m[1]<=31 && +m[2]>=1 && +m[2]<=12) return _dfOut(+m[3], +m[2], +m[1]);
+    const d = new Date(s);                                             // full timestamps
+    if(isNaN(d.getTime())) return s;
+    return _dfOut(d.getFullYear(), d.getMonth()+1, d.getDate());
+  }catch(e){ return String(v); }
 }
-
-// Short date with time: "27 May 2026, 09:30"
-function fmtDateTime(dateStr){
-  if(!dateStr) return '—';
+// Date with time: "05 Nov 2026, 14:30"
+function fmtDateTime(v){
+  if(v===null || v===undefined || v==='') return '—';
   try{
-    const d = new Date(dateStr);
-    if(isNaN(d.getTime())) return dateStr;
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const time = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}, ${time}`;
-  }catch(e){ return dateStr; }
+    const d = (v instanceof Date) ? v : new Date(v);
+    if(isNaN(d.getTime())) return fmtDate(v);
+    return fmtDate(d)+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }catch(e){ return String(v); }
 }
 
 

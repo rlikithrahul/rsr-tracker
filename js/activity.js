@@ -304,7 +304,7 @@ function timeAgo(ts){
   if(diff<3600) return Math.round(diff/60)+'m ago';
   if(diff<86400) return Math.round(diff/3600)+'h ago';
   if(diff<604800) return Math.round(diff/86400)+'d ago';
-  return new Date(ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  return fmtDate(ts);
 }
 
 function fmtTS(ts){
@@ -329,7 +329,7 @@ async function renderActivityLog(containerId, options){
   // Group by date
   const groups = {};
   entries.forEach(e=>{
-    const date = new Date(e.ts).toLocaleDateString('en-IN',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+    const date = fmtDate(e.ts);
     if(!groups[date]) groups[date]=[];
     groups[date].push(e);
   });
@@ -446,7 +446,7 @@ async function applyActivityFilter(){
   // Group by date
   const groups = {};
   entries.forEach(e=>{
-    const date = new Date(e.ts).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+    const date = fmtDate(e.ts);
     if(!groups[date]) groups[date]=[];
     groups[date].push(e);
   });

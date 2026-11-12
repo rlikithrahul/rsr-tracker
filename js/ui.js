@@ -490,7 +490,7 @@ function printJVPending(){
   </body></html>`;
 
   const win = window.open('','_blank');
-  if(win){ win.document.write(html); win.document.close(); setTimeout(()=>win.print(),600); }
+  if(win){ win.document.write(fmtDatesInHtml(html)); win.document.close(); setTimeout(()=>win.print(),600); }
 }
 
 function showJVMonthDetail(monthKey, monthLabel){
@@ -609,7 +609,7 @@ function renderArchive(){
         <div>
           <div style="font-weight:700;font-size:14px">${p.name}</div>
           <div style="font-size:12px;color:var(--text3)">
-            #${p.tender||'—'} · Archived ${p._archivedAt?new Date(p._archivedAt).toLocaleDateString('en-IN'):''}
+            #${p.tender||'—'} · Archived ${p._archivedAt?fmtDate(p._archivedAt):''}
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -934,7 +934,7 @@ function renderProjectTable(list, el){
       const rel = totRel(p);
       const max70 = maxF(p);
       const capPct = max70>0?Math.round(rel/max70*100):0;
-      const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? new Date(p.documents.jv.uploadedAt).toLocaleDateString('en-IN') : '—');
+      const jvDate = p.jvDate || (p.documents?.jv?.uploadedAt ? fmtDate(p.documents.jv.uploadedAt) : '—');
       return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
         <td style="font-weight:600;color:var(--navy);max-width:200px">${p.name}${p.tender&&dupTenders.has((p.tender||'').toLowerCase())?' <span style="font-size:9px;background:var(--red);color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">⚠️ DUP</span>':''}</td>
         <td><span style="font-size:11px;font-weight:700;color:${firmColor};white-space:nowrap">${firmShort}</span></td>

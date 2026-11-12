@@ -223,7 +223,7 @@ async function checkTallySync(){
   const ls=snap.last_sync&&(snap.last_sync.finished_at||snap.last_sync.started_at);
   if(!ls) return { pass:false, detail:'Tally sync has never completed' };
   const days=Math.floor((Date.now()-new Date(ls).getTime())/86400000);
-  const when=new Date(ls).toLocaleString('en-IN');
+  const when=fmtDateTime(ls);
   return days>7 ? { pass:false, detail:'Last Tally sync was '+days+' days ago ('+when+'). Open Tally on the office PC.' } : { pass:true, detail:'Last Tally sync: '+when+(days>0?' ('+days+' day'+(days>1?'s':'')+' ago — fine if Tally was not opened)':'') };
 }
 async function checkSettlementsNoReceipt(){

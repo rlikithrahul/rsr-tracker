@@ -13,7 +13,7 @@ const FIRM_DISPLAY = {
 
 function getFirmDisplay(p){ return FIRM_DISPLAY[p.firm]||'RSR CONSTRUCTIONS'; }
 function fmtINR(n){ if(!n||n<=0) return '0/-'; return Number(n).toLocaleString('en-IN')+'/-'; }
-function todayLong(){ return new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'}); }
+function todayLong(){ return fmtDate(new Date()); }
 
 // ─── MODAL ────────────────────────────────────────────
 function openLetterModal(pid, defaultType){

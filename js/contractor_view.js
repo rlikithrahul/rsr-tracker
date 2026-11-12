@@ -430,7 +430,7 @@ function triggerGallery(){
 async function handlePhotos(evt, source='unknown'){
   const files=Array.from(evt.target.files);
   if(photos.length+files.length>5){alert('Maximum 5 photos per update.');return;}
-  const captureTime=new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const captureTime=fmtDateTime();
   for(const file of files){
     if(file.size>20*1024*1024){alert(file.name+' is too large. Max 20MB.');continue;}
     setBusy(true,'Compressing photo…');
@@ -599,7 +599,7 @@ function renderContractorNotes(pid){
           <div style="flex:1">
             ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">📅 ${n.date}</div>`:''}
             <div style="font-size:13px;color:var(--text)">${n.text.replace(/\n/g,'<br>')}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:4px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${n.editedAt?' · edited':''}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${fmtDateTime(n.createdAt)}${n.editedAt?' · edited':''}</div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             <button onclick="openEditContractorNote('${pid}','${n.id}')" title="Edit" style="background:none;border:none;color:var(--navy);cursor:pointer;font-size:13px">✏️</button>

@@ -168,7 +168,7 @@ function printGSTQuarterly(){
   </body></html>`;
 
   const win = window.open('','_blank');
-  if(win){ win.document.write(html); win.document.close(); setTimeout(()=>win.print(),600); }
+  if(win){ win.document.write(fmtDatesInHtml(html)); win.document.close(); setTimeout(()=>win.print(),600); }
 }
 
 function renderGSTQuarterlyCard(){

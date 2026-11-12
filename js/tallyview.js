@@ -60,7 +60,7 @@ function tvImpact(){
 
 function _tvE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function _tvN(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function _tvD(d){ if(!d) return ''; const p=String(d).split('-'); return p[2]+'-'+p[1]+'-'+p[0]; }
+function _tvD(d){ return d ? fmtDate(d) : ''; }
 function _tvToday(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 
 async function tvLoad(force){
@@ -156,7 +156,7 @@ async function tvProjectFill(id){
   const it=tvInterest(t.tx.map(x=>({d:x.d,amt:x.amt,nar:x.nar})));
   const attn=tvAttention(p,t);
   box.innerHTML=`<details data-toggle="tv-${id}" ${attn.length?'open':''}><summary style="cursor:pointer;list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div class="st" style="margin:0;border:none;padding:0">📒 Tally transactions <span style="font-size:11px;font-weight:500;color:var(--text3)">(${t.tx.length} entries · live from Tally${snap.last_sync?' · synced '+new Date(snap.last_sync.finished_at||snap.last_sync.started_at).toLocaleString('en-IN'):''})</span></div>
+      <div class="st" style="margin:0;border:none;padding:0">📒 Tally transactions <span style="font-size:11px;font-weight:500;color:var(--text3)">(${t.tx.length} entries · live from Tally${snap.last_sync?' · synced '+fmtDateTime(snap.last_sync.finished_at||snap.last_sync.started_at):''})</span></div>
       ${attn.length?`<span class="badge bg-red">${attn.length} to confirm</span>`:''}<span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--navy)">▼ Show / Hide</span></summary>
     <div style="margin-top:10px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
@@ -218,7 +218,7 @@ async function tvContractorFill(cid){
   const t=snap.contractors[c.name];
   if(!t){ box.innerHTML=`<div class="st">📒 Tally ledger</div><div style="font-size:12px;color:var(--text3)">No Tally ledger is linked to ${_tvE(c.name)} yet${CU&&CU.isSuperAdmin?' — link it in <a href="#" onclick="ownerTab(18);return false" style="color:var(--navy)">Tally Live → Linking</a>':''}.</div>`; return; }
   const it=tvInterest(t.tx); const closing=t.closing;
-  box.innerHTML=`<div class="st">📒 Tally ledger <span style="font-size:11px;font-weight:500;color:var(--text3)">(live from Tally${snap.last_sync?' · synced '+new Date(snap.last_sync.finished_at||snap.last_sync.started_at).toLocaleString('en-IN'):''})</span></div>
+  box.innerHTML=`<div class="st">📒 Tally ledger <span style="font-size:11px;font-weight:500;color:var(--text3)">(live from Tally${snap.last_sync?' · synced '+fmtDateTime(snap.last_sync.finished_at||snap.last_sync.started_at):''})</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px">
       ${[[closing<0?'Contractor owes RSR (Dr)':'RSR owes contractor (Cr)',Math.abs(closing)]].concat(it?[['Principal incl. compounded interest',it.principal],['Interest not yet compounded',it.accrued],['Total due with interest',it.due],['Total interest charged',it.totalInterest]]:[]).map(x=>`<div style="background:var(--surface2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">${x[0]}</div><div style="font-weight:700">₹ ${_tvN(x[1])}</div></div>`).join('')}</div>
     <div style="font-size:12px;color:var(--text2)">Ledgers: ${t.ledgers.map(l=>_tvE(l.name)+' <span style="color:var(--text3)">('+_tvE(l.role)+', '+_tvN(Math.abs(l.closing))+(l.closing<0?' Dr':' Cr')+')</span>').join(' · ')}</div>

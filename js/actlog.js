@@ -256,7 +256,7 @@ function actvList(){
   const box = document.getElementById('activity-log-full'); if(!box) return;
   const list = _actFiltered();
   if(!list.length){ box.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No activity matches.</div>'; return; }
-  const groups = {}; list.slice(0,ACTV.shown).forEach(e=>{ const d = new Date(e.ts).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}); (groups[d]=groups[d]||[]).push(e); });
+  const groups = {}; list.slice(0,ACTV.shown).forEach(e=>{ const d = fmtDate(e.ts); (groups[d]=groups[d]||[]).push(e); });
   let h = `<div style="font-size:11px;color:var(--text3);margin:4px 0 6px">${list.length} entr${list.length===1?'y':'ies'}${ACTV.all.length>=2000?' (newest 2,000 loaded — narrow the dates to see older)':''}</div>`;
   Object.entries(groups).forEach(([d,items])=>{
     h += `<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:10px 0 6px;border-bottom:1px solid var(--border)">${_aeL(d)}</div>`;

@@ -1073,7 +1073,7 @@ async function exportAllData(){
 
     try{ if(typeof tvLoad==='function') await tvLoad(); }catch(e){}   // so the interest column can come from Tally
     const wb = window.XLSX.utils.book_new();
-    const now = new Date().toLocaleString('en-IN');
+    const now = fmtDateTime();
 
     // ── SHEET 1: Projects Summary ──
     const projRows = [

@@ -17,7 +17,7 @@ function _tlE(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;
 function _tlA(s){ return _tlE(s).replace(/`/g,'&#96;'); }
 function _tlN(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _tlAmt(n){ n=Number(n)||0; const a=Math.abs(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); return a+(n<0?' Dr':n>0?' Cr':''); }
-function _tlDate(d){ if(!d) return ''; const p=String(d).split('-'); return p[2]+'-'+p[1]+'-'+p[0]; }
+function _tlDate(d){ return d ? fmtDate(d) : ''; }
 function _tlToday(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function tlv(id){ const e=document.getElementById(id); return e?e.value:''; }
 
@@ -185,7 +185,7 @@ function _tlShell(el){
     <div id="tl-body"></div></div>`;
   tlApi('overview').then(o=>{
     const s=o.last_sync, e=document.getElementById('tl-sync'); if(!e) return;
-    e.textContent = s ? `Last sync ${new Date(s.finished_at||s.started_at).toLocaleString('en-IN')} · ${s.status} · ${o.vouchers} vouchers` : 'No sync yet';
+    e.textContent = s ? `Last sync ${fmtDateTime(s.finished_at||s.started_at)} · ${s.status} · ${o.vouchers} vouchers` : 'No sync yet';
   }).catch(_tlErr);
 }
 async function tlSyncNow(){ try{ await tlApi('sync_now'); toast('Sync requested — the office PC picks it up within a minute.'); }catch(e){ _tlErr(e); } }
@@ -573,7 +573,7 @@ async function _tlSaveCC(i){
 }
 async function _tlLinkLog(){
   const b=_tlBusy(); try{ const r=await tlApi('link_log');
-    b.innerHTML=`<div style="overflow:auto"><table class="tbl" style="width:100%;font-size:11px"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Item</th><th>Was</th><th>Now</th></tr></thead><tbody>${r.log.map(x=>`<tr><td>${new Date(x.changed_at).toLocaleString('en-IN')}</td><td>${_tlE(x.changed_by)}</td><td>${_tlE(x.kind)}</td><td>${_tlE(x.item_name)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.old_value)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.new_value)}</td></tr>`).join('')}</tbody></table></div>`; }catch(e){ _tlErr(e); }
+    b.innerHTML=`<div style="overflow:auto"><table class="tbl" style="width:100%;font-size:11px"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Item</th><th>Was</th><th>Now</th></tr></thead><tbody>${r.log.map(x=>`<tr><td>${fmtDateTime(x.changed_at)}</td><td>${_tlE(x.changed_by)}</td><td>${_tlE(x.kind)}</td><td>${_tlE(x.item_name)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.old_value)}</td><td style="max-width:200px;overflow:hidden">${_tlE(x.new_value)}</td></tr>`).join('')}</tbody></table></div>`; }catch(e){ _tlErr(e); }
 }
 
 

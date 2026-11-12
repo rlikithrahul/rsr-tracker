@@ -331,7 +331,7 @@ function _emiRefreshViews(){
 }
 function _emiDueWhen(u){ return u.days<0 ? 'was due '+(-u.days)+' day'+(u.days===-1?'':'s')+' ago' : u.days===0?'due Today':u.days===1?'due Tomorrow':'due in '+u.days+' days'; }
 function _emiRowHtml(u){
-  const od=u.days<0; const nice=u.date.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  const od=u.days<0; const nice=fmtDate(u.date);
   return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:6px;border-radius:var(--rs);background:'+(od?'#fef2f2':u.days<=1?'#fffbeb':'transparent')+';border:'+(od?'1px solid #fca5a5':'1px solid var(--surface2)')+'">'
     +'<div style="min-width:0"><div style="font-size:12px;font-weight:700">'+u.icon+' '+xmlEsc(u.name)+'</div>'
     +'<div style="font-size:11px;color:'+(od?'var(--red)':'var(--text2)')+';font-weight:'+(od?'700':'400')+'">'+(od?'⚠ NOT MARKED PAID — ':'')+nice+' · '+_emiDueWhen(u)+(od?'. Please check and tick if it is paid.':'')+'</div></div>'
@@ -358,7 +358,7 @@ function _emiPaidLogHtml(){
   const paid=(D.emiData&&D.emiData.paid)||{}; const names={}; (D.emiData.emis||[]).forEach(e=>names['emi|'+e.id]=e.name); (D.emiData.cards||[]).forEach(c=>names['card|'+c.id]=c.name+' (CC)');
   const rows=Object.entries(paid).sort((a,b)=>String(b[1].at).localeCompare(String(a[1].at))).slice(0,10);
   if(!rows.length) return '<div style="font-size:12px;color:var(--text3)">Nothing ticked as paid yet.</div>';
-  return rows.map(([k,v])=>{ const [kind,id,ymd]=k.split('|'); return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--surface2);font-size:12px"><span>✅ <b>'+xmlEsc(names[kind+'|'+id]||'(removed)')+'</b> · due '+ymd.split('-').reverse().join('-')+'</span><span style="color:var(--text3)">'+xmlEsc(v.by||'')+' · '+new Date(v.at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' <a style="color:var(--navy);cursor:pointer;margin-left:6px" onclick="emiUndoPaid(\''+k.replace(/'/g,'')+'\')">↩ undo</a></span></div>'; }).join('');
+  return rows.map(([k,v])=>{ const [kind,id,ymd]=k.split('|'); return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--surface2);font-size:12px"><span>✅ <b>'+xmlEsc(names[kind+'|'+id]||'(removed)')+'</b> · due '+fmtDate(ymd)+'</span><span style="color:var(--text3)">'+xmlEsc(v.by||'')+' · '+fmtDate(v.at)+' <a style="color:var(--navy);cursor:pointer;margin-left:6px" onclick="emiUndoPaid(\''+k.replace(/'/g,'')+'\')">↩ undo</a></span></div>'; }).join('');
 }
 
 // ─── CREDIT CARD PHASE-AWARE RENDER ──────────────────

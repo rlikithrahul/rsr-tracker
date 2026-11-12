@@ -363,6 +363,6 @@ async function loadNotes(){
   el.innerHTML = notes.map(n=>`<div style="border-left:3px solid var(--gold);padding:8px 10px;margin-bottom:8px;background:var(--bg);border-radius:0 var(--rs) var(--rs) 0">
     ${n.date?`<div style="font-size:11px;color:var(--text3);font-weight:600">📅 ${n.date}</div>`:''}
     <div style="font-size:13px">${n.text.replace(/</g,'&lt;')}</div>
-    <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(n.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtDateTime(n.createdAt)}</div>
   </div>`).join('');
 }
