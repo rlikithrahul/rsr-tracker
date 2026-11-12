@@ -233,18 +233,18 @@ async function renderSettings(){
     <div class="set-sec" id="set-activity">
       <div class="set-hd" onclick="setToggle('activity')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('activity')}">
         <span class="set-ic" style="background:#e0e7ff">📋</span>
-        <span class="set-tt"><span class="set-t1">Activity Log</span><span class="set-t2">Every login, edit and settlement</span></span>
+        <span class="set-tt"><span class="set-t1">Activity Log</span><span class="set-t2">Every change, with who and old → new</span></span>
         <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
       </div>
       <div class="set-bd"><div class="set-bdi"><div class="set-pad">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="st" style="margin-bottom:2px">📋 Activity Log</div>
-          <div style="font-size:12px;color:var(--text2)">Complete audit trail — every login, project view, edit, fund release, settlement, and import.</div>
+          <div style="font-size:12px;color:var(--text2)">Complete audit trail of what happens in the web app — every login, edit (old → new value), upload and settlement. Tally syncs are not logged.</div>
         </div>
       </div>
       <div id="activity-filter-bar" style="margin-bottom:12px"></div>
-      <div id="activity-log-full" style="max-height:600px;overflow-y:auto">
+      <div id="activity-log-full">
         <div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">Loading…</div>
       </div>
     

@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════
 const APP_BUILD_DATE = '11 Nov 2026';
 const APP_CHANGELOG = [
+  ['v28f','Activity Log rebuilt (Settings → Activity Log): every change made in the web app is now recorded automatically with who, when and old → new value (projects, contractors and every settings page); two tabs — Our side and Contractor side; filter by person, type, date and search; Excel export. Tally imports/syncs are NOT logged; passwords are never written to the log. Old entries are kept.'],
   ['v28e','Staff Access now lists EVERY dashboard, including the owner-only ones (Settings, GST Split, Board Meeting, Growth Pool, Cheque Printing, marked ⚠). Staff keep exactly what they had by default; you switch the others on per person. New Settings → My Passwords: change your main login password, set your own Tally Live password, and a backup/recovery password (needs the updated tally-api function deployed for the Tally Live / recovery passwords).'],
   ['v28d','Safety: a bad Tally snapshot reply can no longer replace the good one · Staff Logins text now points to Staff Access. Full check of all 18 pages, Settings sections, project and contractor pages.'],
   ['v28c','FIX: Settings → Staff Access (switch dashboards on/off per staff member, and their Tally Live passwords) had disappeared after the Settings redesign; it is back as its own section under Staff Logins.'],
