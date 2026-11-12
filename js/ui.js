@@ -63,25 +63,41 @@ function hideSplash(){ const s=document.getElementById('splash'); if(s)s.style.d
 // ═══════════════════════════════════════════════════════
 // AUTO-REFRESH (poll DB every 30s when owner is viewing)
 // ═══════════════════════════════════════════════════════
+// To keep the database download small: refreshes only while the tab is visible AND someone has used the app in the last
+// 5 minutes; every 90 s (not 30 s); the background load is "light"; Work Experience data every 4th time. When you come
+// back to a hidden/idle tab it refreshes once straight away, so you never look at stale data.
+const AR_EVERY_MS = 90000, AR_IDLE_MS = 5*60*1000;
+let _arLastActive = Date.now(), _arSkipped = false, _arTicks = 0, _arBusy = false, _arWired = false;
+async function autoRefreshTick(force){
+  if (!CU || !dbOK || !navigator.onLine || _arBusy) return;
+  if (!force && (document.visibilityState !== 'visible' || Date.now()-_arLastActive > AR_IDLE_MS)) { _arSkipped = true; return; }
+  _arSkipped = false; _arBusy = true; _arTicks++;
+  try {
+    await loadDBSummary(true);
+    if (force || _arTicks % 4 === 1) { try{ if(typeof loadWEXData==='function') await loadWEXData(); }catch(e){ console.error('Work Experience data did not load at start — Action Centre will retry', e); } }
+    // Re-render current view silently
+    if (CU.role === 'owner') {
+      if (dpid) renderDetail(dpid);
+      else if (atab === 0) renderDash();
+      else if (atab === 1) renderProjects();
+      updateOfflineQueueBadge();
+    } else {
+      // Contractor: refresh their home if on home screen
+      if (!document.getElementById('cp-home').classList.contains('hidden')) renderCHome();
+    }
+  } catch(e){ console.error('Auto-refresh failed:', e); }
+  finally { _arBusy = false; }
+}
+function _arWake(){ _arLastActive = Date.now(); if(_arSkipped && document.visibilityState==='visible') autoRefreshTick(true); }
 function startAutoRefresh(){
   stopAutoRefresh();
-  autoRefreshTimer = setInterval(async () => {
-    if (!CU || !dbOK || !navigator.onLine) return;
-    try {
-      await loadDBSummary();
-    try{ if(typeof loadWEXData==='function') await loadWEXData(); }catch(e){ console.error('Work Experience data did not load at start — Action Centre will retry', e); }
-      // Re-render current view silently
-      if (CU.role === 'owner') {
-        if (dpid) renderDetail(dpid);
-        else if (atab === 0) renderDash();
-        else if (atab === 1) renderProjects();
-        updateOfflineQueueBadge();
-      } else {
-        // Contractor: refresh their home if on home screen
-        if (!document.getElementById('cp-home').classList.contains('hidden')) renderCHome();
-      }
-    } catch(e){ console.error('Auto-refresh failed:', e); }
-  }, 30000);
+  if(!_arWired){
+    _arWired = true;
+    ['mousemove','keydown','click','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{ const now=Date.now(); if(now-_arLastActive>1000) _arWake(); },{passive:true,capture:true}));
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') _arWake(); });
+  }
+  _arLastActive = Date.now(); _arTicks = 0;
+  autoRefreshTimer = setInterval(()=>autoRefreshTick(false), AR_EVERY_MS);
 }
 function stopAutoRefresh(){
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);

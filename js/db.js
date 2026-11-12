@@ -213,16 +213,21 @@ async function loadDB() {
   D.staffMembers = staffRow ? JSON.parse(staffRow.value||'[]') : [];
 }
 
-async function loadDBSummary() {
+async function loadDBSummary(light) {
   // LAZY: Only load what we need for the dashboard and list views
   // Contractors: always small, load fully
   // Projects: load full data but skip contractorUpdates photos (we strip them server-side by not sending photo arrays... 
   //   actually Supabase sends everything in data blob. So we fetch all but cache and re-use on project open.
   //   True lazy load: on project open, re-fetch single project fresh from DB.
+  // light = the background refresh: from the settings table it only needs the logins/staff rows (everything else is
+  // loaded when a page that needs it is opened), which keeps the background download small.
+  const settingsQ = light
+    ? 'settings?key=in.('+[OPW_KEY,OPW_TALLY_KEY,OPW_RECOVERY_KEY,'rsr_staff_v1'].join(',')+')'
+    : 'settings';
   const [c, p, s] = await Promise.all([
     sbReq('contractors?order=created_at', 'GET'),
     sbReq('projects?order=created_at', 'GET'),
-    sbReq('settings', 'GET')
+    sbReq(settingsQ, 'GET')
   ]);
   D.contractors = (c||[]).map(r => { const x={...r.data, id:r.id}; x._loadedSnapshot=_snapshotRecord(x); return x; });
   // Store lightweight summary (strip heavy arrays for initial render)

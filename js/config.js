@@ -8,7 +8,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const OPW_KEY = 'rsr_owner_pw_v1';
 const OPW_TALLY_KEY = 'rsr_owner_tally_pw_v1';       // Super Admin's own Tally Live password (optional)
 const OPW_RECOVERY_KEY = 'rsr_owner_recovery_pw_v1';  // Super Admin's backup / recovery password (optional)
-const APP_VERSION = 'v28h';
+const APP_VERSION = 'v28j';
 
 // ─── CLOUDFLARE R2 — PUBLIC READ URLS ONLY ───────────
 // Secret keys are now in the Cloudflare Worker (server-side)

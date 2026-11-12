@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════
 
 // ── 1. what is NOT logged ──
-const ACT_SKIP_SETTINGS = new Set(['rsr_activity_v2','rsr_tv_cache_v1','rsr_session_state_v2','rsr_np_draft_v1','rsr_access_requests_v1',
+const ACT_SKIP_SETTINGS = new Set(['rsr_ac_hidden_v1','rsr_activity_v2','rsr_tv_cache_v1','rsr_session_state_v2','rsr_np_draft_v1','rsr_access_requests_v1',
   'rsr_tally_baseline_v1','rsr_tally_unmatched_v1','rsr_tally_intset_v1','rsr_tally_switch_v1']);
 const ACT_SETTING_LABELS = {
   rsr_emi_data_v1:'EMI', rsr_expense_v1:'Expenses', rsr_labour_v1:'Labour', rsr_creditors_v1:'Creditors', rsr_wex_data_v3:'Work Experience',

@@ -19,6 +19,36 @@ function acDocFlagStages(projects){
 }
 const AC_ORDER_KEY = 'rsr_action_centre_order';
 let _acDragKey = null;
+
+// ── Hide a project from one Action Centre list (it stays in the data and shows under "Hidden" at the bottom of that list) ──
+const AC_HIDDEN_KEY = 'rsr_ac_hidden_v1';     // { listKey: [projectId, ...] }
+function acHiddenIds(key){ const h = D.acHidden && D.acHidden[key]; return Array.isArray(h) ? h : []; }
+function acVisible(key, list){ const h = acHiddenIds(key); return h.length ? list.filter(p=>!h.includes(p.id)) : list; }
+async function acLoadHidden(){
+  if(D.acHidden!==undefined || D._acHidLoading) return;
+  D._acHidLoading = true;
+  try{ const v = await getSetting(AC_HIDDEN_KEY, {}); D.acHidden = (v && typeof v==='object' && !Array.isArray(v)) ? v : {}; }
+  catch(e){ console.error('Action Centre hidden list could not load — nothing hidden for now', e); D.acHidden = {}; }
+  D._acHidLoading = false;
+  if(document.getElementById('sec-pipeline')) renderPipeline();
+}
+async function acHide(key, pid, hide){
+  if(!(CU && CU.isSuperAdmin)) return;
+  try{
+    const fresh = (await getSetting(AC_HIDDEN_KEY, {})) || {};          // read the latest first, so nobody else's change is lost
+    const cur = Array.isArray(fresh[key]) ? fresh[key].slice() : [];
+    const i = cur.indexOf(pid);
+    if(hide && i<0) cur.push(pid);
+    if(!hide && i>=0) cur.splice(i,1);
+    fresh[key] = cur;
+    await saveSetting(AC_HIDDEN_KEY, fresh);
+    D.acHidden = fresh;
+    const p = D.projects.find(x=>x.id===pid);
+    try{ logActivity({category:'project', action:hide?'ac_hide':'ac_unhide', projectId:pid, projectName:p?p.name:'', description:(hide?'Hid "':'Unhid "')+(p?p.name:pid)+'" '+(hide?'from':'in')+' Action Centre list: '+((D._acTitles&&D._acTitles[key])||key)}); }catch(e){}
+    renderPipeline();
+    toast(hide?'🙈 Hidden — it is under "Hidden" at the bottom of that list':'↩ Back in the list','ok',2500);
+  }catch(e){ console.error(e); toast('Could not save — nothing was changed','error'); }
+}
 function acSortDefs(defs){
   const ord = D.acOrder;
   if(!Array.isArray(ord) || !ord.length) return defs;
@@ -74,6 +104,7 @@ function renderPipeline(){
   const el = document.getElementById('sec-pipeline');
   if(!el) return;
   if(D.acOrder===undefined) acLoadOrder();
+  if(D.acHidden===undefined) acLoadHidden();
 
   // Work-experience data drives several stages (certificate / quantities).
   // It is loaded on demand, so wait for it rather than judging every project
@@ -221,6 +252,10 @@ function renderPipeline(){
   stages.no_billform = []; stages.no_workorder = [];
   { const df=acDocFlagStages(projects); stages.no_billform=df.no_billform; stages.no_workorder=df.no_workorder; }
   if(typeof wexFlagStages==='function'){ const wf=wexFlagStages(projects); stages.no_worktype=wf.no_worktype; stages.qty_no_cert=wf.qty_no_cert; stages.wex_pending=wf.wex_pending; }
+
+  // Hidden projects (per list) are taken out of the counts and shown at the bottom of their own list
+  const hiddenByStage = {};
+  Object.keys(stages).forEach(k=>{ const h = acHiddenIds(k); if(h.length){ hiddenByStage[k] = stages[k].filter(p=>h.includes(p.id)); stages[k] = stages[k].filter(p=>!h.includes(p.id)); } });
 
   // ── STAGE DEFINITIONS ────────────────────────────
   const stageDefs = [
@@ -435,7 +470,8 @@ function renderPipeline(){
     +'</div>'
     +'</div>';
 
-  if(totalPending === 0){
+  const _anyHidden = Object.values(hiddenByStage).some(a=>a.length);
+  if(totalPending === 0 && !_anyHidden){
     html += '<div class="empty"><div class="empty-icon">🎉</div><div class="empty-text">All clear! No pending actions right now.</div></div>';
     html += '</div>';
     el.innerHTML = html;
@@ -447,7 +483,9 @@ function renderPipeline(){
   if(_acCan) html += '<div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">↕ Drag a section by its ⠿ handle to put it where you want. The order is saved for everyone. <a href="#" onclick="acResetOrder();return false" style="color:var(--navy)">Reset to default</a></div>';
   stageDefsOrdered.forEach(def=>{
     const list = stages[def.key];
-    if(!list.length) return;
+    const hid = hiddenByStage[def.key] || [];
+    if(!list.length && !hid.length) return;
+    (D._acTitles = D._acTitles || {})[def.key] = def.title;
 
     html += '<div class="card" data-stage="'+def.key+'" '+(_acCan?'ondragstart="acDragStart(event)" ondragover="acDragOver(event)" ondragleave="acDragLeave(event)" ondrop="acDrop(event)" ondragend="acDragEnd(event)" ':'')+'style="margin-bottom:16px;border-top:3px solid '+def.color+'">'
       +'<details data-toggle="ac-'+def.key+'"><summary style="list-style:none;cursor:pointer;outline:none">'
@@ -458,7 +496,8 @@ function renderPipeline(){
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +'<div style="font-size:14px;font-weight:800;color:var(--navy)">'+def.title+'</div>'
       +(def.urgent?'<span style="font-size:10px;font-weight:800;background:var(--red);color:#fff;padding:2px 8px;border-radius:8px">URGENT</span>':'')
-      +'<span style="font-size:11px;background:'+def.bg+';color:'+def.color+';padding:2px 8px;border-radius:8px;font-weight:700">'+list.length+' project'+(list.length>1?'s':'')+'</span>'
+      +'<span style="font-size:11px;background:'+def.bg+';color:'+def.color+';padding:2px 8px;border-radius:8px;font-weight:700">'+list.length+' project'+(list.length!==1?'s':'')+'</span>'
+      +(hid.length?'<span style="font-size:11px;background:var(--surface2);color:var(--text3);padding:2px 8px;border-radius:8px;font-weight:700">🙈 '+hid.length+' hidden</span>':'')
       +'</div>'
       +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+def.desc+'</div>'
       +'</div>'
@@ -483,8 +522,8 @@ function renderPipeline(){
         return a.jvDate.localeCompare(b.jvDate);
       });
 
-      html += '<div style="display:flex;flex-direction:column;gap:8px">'
-      +sortedList.map(p=>{
+      const _sortFn = arr=>[...arr].sort((a,b)=>{ if(!a.jvDate && !b.jvDate) return 0; if(!a.jvDate) return 1; if(!b.jvDate) return -1; return a.jvDate.localeCompare(b.jvDate); });
+      const rowFn = (p, isHid)=>{
         const c = GC(p.contractorId);
         const firmShort = (p.firm||'RSR')==='RSR Constructions'?'RSR':(p.firm||'RSR')==='R Sadhu Rao'?'RS Rao':'RLR';
         const firmBg = (p.firm||'RSR')==='RSR Constructions'?'var(--navy)':(p.firm||'RSR')==='R Sadhu Rao'?'#7b3f00':'#1b5e20';
@@ -528,10 +567,14 @@ function renderPipeline(){
           +'</div>'
           +(typeof letterStatusLine==='function' ? letterStatusLine(p, def.key.startsWith('wec')?'wec':def.key.startsWith('asd')?'asd':def.key.startsWith('emd')?'emd_fsd':'') : '')
           +'</div>'
+          +(_acCan?'<button onclick="event.stopPropagation();acHide(\''+def.key+'\',\''+p.id+'\','+(isHid?'false':'true')+')" title="'+(isHid?'Put it back in this list':'Hide it from this list only')+'" style="background:transparent;color:var(--text3);border:1px solid var(--border);border-radius:var(--rs);padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">'+(isHid?'↩ Unhide':'🙈 Hide')+'</button>':'')
           +'<div style="font-size:12px;color:var(--navy);font-weight:700;flex-shrink:0">Open →</div>'
           +'</div>';
-      }).join('')
+      };
+      html += '<div style="display:flex;flex-direction:column;gap:8px">'
+      +(list.length ? sortedList.map(p=>rowFn(p,false)).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 2px">Nothing pending here — only hidden projects.</div>')
       +'</div>'
+      +(hid.length ? '<details style="margin-top:12px;border-top:1px dashed var(--border);padding-top:8px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text3)">🙈 Hidden ('+hid.length+') — not counted above</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;opacity:.8">'+_sortFn(hid).map(p=>rowFn(p,true)).join('')+'</div></details>' : '')
       +'</details>'
       +'</div>';
   });
@@ -635,7 +678,7 @@ async function exportActionCentre(format, onlyKey){
     const rows=[['Action Centre Export — '+fmtDate(new Date()),'','','',''],['','','','','']];
     rows.push(['Priority','Stage','Project Name','Contractor','JV Date','JV Amount (₹)','Days Waiting','Firm']);
     stageDefsX.forEach(def=>{
-      const list=stages[def.key];
+      const list=acVisible(def.key,stages[def.key]);
       if(!list.length) return;
       list.sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||'')).forEach(p=>{
         const c=GC(p.contractorId);
@@ -659,11 +702,11 @@ async function exportActionCentre(format, onlyKey){
   } else {
     // Print / PDF — open a clean printable HTML in a new window
     const dateStr=fmtDate(new Date());
-    const totalActions=stageDefs.reduce((s,d)=>s+stages[d.key].length,0);
+    const totalActions=stageDefs.reduce((s,d)=>s+acVisible(d.key,stages[d.key]).length,0);
 
     let body='';
     stageDefsX.forEach(def=>{
-      const list=stages[def.key];
+      const list=acVisible(def.key,stages[def.key]);
       if(!list.length) return;
       const sorted=list.slice().sort((a,b)=>(a.jvDate||'').localeCompare(b.jvDate||''));
       const isUrgent=def.priority.includes('🔴');
