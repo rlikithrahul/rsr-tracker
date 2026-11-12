@@ -101,7 +101,7 @@ function renderDocVault(p, isOwner) {
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <a href="${doc.url}" target="_blank" class="btn btn-sm">👁️ View</a>
-            <a href="${doc.url}" download="${doc.name}" class="btn btn-sm">⬇️ Download</a>
+            <a href="${doc.url}" data-fn="${_dlAttr(doc.name)}" onclick="return rsrDownload(this.href,this.dataset.fn,event)" class="btn btn-sm">⬇️ Download</a>
             ${isOwner ? `<button class="btn btn-sm" style="color:var(--red)" onclick="deleteDocument('${p.id}','${slot.id}')">🗑️ Delete</button>` : ''}
             ${isOwner ? `<label class="btn btn-sm" style="cursor:pointer">🔄 Replace<input type="file" accept="${slot.accept||'*'}" style="display:none" onchange="handleDocUpload(event,'${p.id}','${slot.id}')"></label>` : ''}
           </div>

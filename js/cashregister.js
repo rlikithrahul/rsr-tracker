@@ -83,7 +83,7 @@ function _sheetRow(s, highlighted){
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <a href="${s.fileUrl}" target="_blank" class="btn btn-sm">👁 View</a>
-      <a href="${s.fileUrl}" download="${s.fileName||('Sheet_'+s.sheetNo)}" class="btn btn-sm btn-navy">⬇️ Download</a>
+      <a href="${s.fileUrl}" data-fn="${_dlAttr(s.fileName||('Sheet_'+s.sheetNo))}" onclick="return rsrDownload(this.href,this.dataset.fn,event)" class="btn btn-sm btn-navy">⬇️ Download</a>
       ${CU&&CU.isSuperAdmin?`<button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteCashRegisterSheet('${s.id}')">🗑️</button>`:''}
     </div>
   </div>`;

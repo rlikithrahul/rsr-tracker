@@ -440,6 +440,36 @@ function migrateAllProjects(){
   return migrated;
 }
 
+// ─── FILE DOWNLOAD ───────────────────────────────────
+// Files live on another web address (Cloudflare storage). Browsers ignore <a download> for another address and just OPEN the file,
+// so the file is fetched and saved from here instead. Saved with its own name and in whatever format it is stored in.
+async function rsrDownload(url, name, ev){
+  if(ev && ev.preventDefault) ev.preventDefault();
+  if(!url){ toast('No file to download','error'); return false; }
+  try{
+    toast('Downloading…','ok',1500);
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('storage returned '+res.status);
+    const blob = await res.blob();
+    let fn = String(name||'').trim() || decodeURIComponent((String(url).split('?')[0].split('/').pop())||'file');
+    if(!/\.[A-Za-z0-9]{2,5}$/.test(fn)){                                   // name has no extension → take it from the stored file
+      const ue = (/\.([A-Za-z0-9]{2,5})$/.exec(String(url).split('?')[0])||[])[1];
+      if(ue) fn += '.'+ue;
+    }
+    fn = fn.replace(/[\\/:*?"<>|]+/g,'_');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fn;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 30000);
+    toast('✓ Downloaded '+fn,'ok',2500);
+  }catch(e){
+    console.warn('[download]', e);
+    window.open(url, '_blank', 'noopener');
+    toast('Could not save the file directly, so it was opened in a new tab — the storage needs its one-time CORS setting for direct download.','error',7000);
+  }
+  return false;
+}
+function _dlAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
 // ─── DATE FORMAT — ONE STYLE EVERYWHERE: "05 Nov 2026" ───────────────
 // Every date the app shows goes through fmtDate / fmtDateTime. (datefmt.js also converts any date that slips through.)
 const _DF_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

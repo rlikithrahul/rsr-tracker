@@ -1464,7 +1464,7 @@ async function renderBackupHistory(){
   }
   el.innerHTML = history.map(h=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--surface2);font-size:12px">
     <span><strong>${fmtDate(h.date)}</strong> <span style="color:var(--text3)">— ${h.projectCount} projects, ${h.contractorCount} contractors, ${h.settingsCount} settings records</span></span>
-    <a href="${h.url}" download="RSR_Full_Backup_${h.date}.json" class="btn btn-sm">⬇️ Download</a>
+    <a href="${h.url}" data-fn="RSR_Full_Backup_${_dlAttr(h.date)}.json" onclick="return rsrDownload(this.href,this.dataset.fn,event)" class="btn btn-sm">⬇️ Download</a>
   </div>`).join('');
 }
 
