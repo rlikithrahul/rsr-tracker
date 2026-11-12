@@ -61,6 +61,7 @@ function openLetterModal(pid, defaultType){
     <div class="fg"><label>JV Amount (₹)</label><input type="number" id="lf-jv" value="${p.jvAmount||''}" oninput="updateLetterPreview('${pid}')"></div>
 
     <div id="lf-lh-wrap"></div>
+    <div id="lf-st-wrap"></div>
 
     <!-- Preview -->
     <div style="background:#fffef0;border:1px solid #e5e0c0;border-radius:var(--rs);padding:16px;margin-top:14px;font-family:'Times New Roman',serif;font-size:13px;line-height:1.9;max-height:320px;overflow-y:auto" id="ltr-preview"></div>
@@ -72,13 +73,14 @@ function openLetterModal(pid, defaultType){
     </div>
   </div>`;
 
-  _ltrLH = {key:null, mode:null};
+  _ltrLH = {key:null, mode:null}; _ltrST = '';
   modal.classList.add('open');
   setTimeout(()=>updateLetterPreview(pid), 100);
 }
 
 // ─── LIVE PREVIEW ─────────────────────────────────────
 let _ltrLH = {key:null, mode:null};   // what the letterhead picker currently shows
+let _ltrST = '';                      // what the Super-Admin stamp picker currently shows
 let _ltrLastHTML = '';                // the letter as HTML (used for Print / PDF)
 function updateLetterPreview(pid){
   const p = GP(pid); if(!p) return;
@@ -116,6 +118,22 @@ function updateLetterPreview(pid){
     _ltrLH = {key:lhKey, mode:lhM};
     wrap.innerHTML = lhPickerHTML('lf', "updateLetterPreview('"+pid+"')", lhKey, lhM);
   }
+  // Stamp & sign (Super Admin only)
+  let stPrev = '';
+  if(stAllowed()){
+    const ch = stChoice('lf'), stw = document.getElementById('lf-st-wrap');
+    const sig = lhKey+'|'+ch.variant+'|'+ch.address+'|'+(_stAvail?_stAvail.size:-1);
+    if(stw && _ltrST!==sig){
+      _ltrST = sig; stw.innerHTML = stPickerHTML('lf', lhKey, "updateLetterPreview('"+pid+"')", ch);
+      if(!_stAvail) stAvailable().then(()=>{ _ltrST=''; updateLetterPreview(pid); });
+    }
+    if(ch.variant!=='none'){
+      const ids = [_stImageId(lhKey,ch), (ch.address&&ST_FIRMS[lhKey]&&ST_FIRMS[lhKey].address)||null].filter(Boolean);
+      const miss = ids.filter(i=>!_stCache[i]);
+      if(miss.length) Promise.all(miss.map(stGet)).then(()=>updateLetterPreview(pid)).catch(()=>{});
+      else stPrev = stHtmlBlock({main:_stCache[ids[0]]||null, addr:(ch.address&&_stCache[ids[1]])||null});
+    }
+  }
   const topNote = lhM==='space'
     ? '<div style="border:1px dashed #aaa;text-align:center;color:#aaa;font-size:11px;padding:34px 0;margin-bottom:12px;font-family:sans-serif">[ Space for your printed letterhead — ~5cm ]</div>'
     : lhM==='digital'
@@ -131,12 +149,14 @@ function updateLetterPreview(pid){
      <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>JV AMOUNT: ${fmtINR(jv)}</b>
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${body}
      <br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thanking you,
-     <br><br><div style="text-align:right">Yours faithfully,<br><br><br><b>${firm}</b></div>`;
+     <br><br><div style="text-align:right">Yours faithfully,<br>${stPrev?'':'<br><br><b>'+firm+'</b>'}</div>${stPrev}`;
   document.getElementById('ltr-preview').innerHTML = topNote + _ltrLastHTML;
 }
 
 // Print / Save as PDF — same letter, letterhead repeated by lhPrintHTML
 async function printLetter(pid){
+  try{ await stResolve(lhKeyFor(document.getElementById('lf-firm')?.value||''), stChoice('lf')); }
+  catch(e){ toast(e.message,'error',6000); return; }
   updateLetterPreview(pid);
   const firm = document.getElementById('lf-firm')?.value||'';
   const mode = lhMode('lf'), key = lhKeyFor(firm);
@@ -185,8 +205,14 @@ async function downloadLetter(pid){
   const mode = lhMode('lf'), lhKey = lhKeyFor(firm);
   const margins = lhMargins(lhKey, mode);
 
-  const xml = buildLetterXML({ firm, date, refs, work, jv, subject, body, extraLines });
+  let stRes = null, stBlk = null;
+  try{
+    stRes = await stResolve(lhKey, stChoice('lf'));
+    stBlk = stDocxBlock(stRes, 11906 - margins.left - margins.right);
+  }catch(e){ console.error(e); toast('Stamp could not be added — nothing was downloaded. '+e.message,'error',7000); return; }
+  const xml = buildLetterXML({ firm, date, refs, work, jv, subject, body, extraLines, stampXml: stBlk && stBlk.xml });
   const docx = buildDOCX(xml, margins);
+  if(stBlk) docx.stamps = stBlk.media;
   if(mode==='digital'){
     try{ docx.letterhead = await lhDocxPackage(lhKey); }
     catch(e){ console.error(e); toast('Letterhead could not be loaded — nothing was downloaded. '+e.message,'error',7000); return; }
@@ -276,7 +302,7 @@ function wParaRight(text, bold, spacing){
 
 function wBlank(){ return `<w:p><w:pPr><w:spacing w:before="0" w:after="80"/></w:pPr></w:p>`; }
 
-function buildLetterXML({firm, date, refs, work, jv, subject, body, extraLines}){
+function buildLetterXML({firm, date, refs, work, jv, subject, body, extraLines, stampXml}){
   const paras = [];
 
   // Date — right aligned
@@ -327,7 +353,8 @@ function buildLetterXML({firm, date, refs, work, jv, subject, body, extraLines})
 
   // Sign off
   paras.push(wParaRight('Yours faithfully,',false,{before:0,after:320}));
-  paras.push(wParaRight(firm,true,{before:0,after:0}));
+  if(stampXml){ paras.push(stampXml); paras.push('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>'); }   // stamp replaces the typed firm name
+  else paras.push(wParaRight(firm,true,{before:0,after:0}));
 
   return paras.join('\n');
 }
@@ -388,6 +415,13 @@ function triggerDownload(parts, fileName){
     const zip = new JSZip();
     let ct = parts.contentTypes, doc = parts.docXml, rels = parts.relsXml;
     const lh = parts.letterhead;
+    if(parts.stamps && parts.stamps.length){
+      if(!(lh && lh.ext==='png')) ct = ct.replace('<Default Extension="xml"', '<Default Extension="png" ContentType="image/png"/>\n  <Default Extension="xml"');
+      parts.stamps.forEach(m=>{
+        rels = rels.replace('</Relationships>', '  <Relationship Id="'+m.rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="'+m.name.replace('word/','')+'"/>\n</Relationships>');
+        zip.file(m.name, m.bytes);
+      });
+    }
     if(lh){
       ct = ct.replace('<Default Extension="xml"', `<Default Extension="${lh.ext}" ContentType="${lh.mime}"/>\n  <Default Extension="xml"`)
              .replace('</Types>', '  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>\n</Types>');

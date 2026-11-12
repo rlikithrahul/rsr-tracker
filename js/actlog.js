@@ -144,7 +144,7 @@ function actRecordSetting(key, before, after){
   if(typeof saveSetting==='function'){
     const o = saveSetting;
     saveSetting = async function(key, value){
-      let before, track = !ACT_SKIP_SETTINGS.has(key) && !/^rsr_tally_/.test(String(key));
+      let before, track = !ACT_SKIP_SETTINGS.has(key) && !/^rsr_tally_/.test(String(key)) && !/^rsr_stamp_/.test(String(key));
       if(track){ try{ before = ACT_SECRET_SETTINGS.has(key) ? null : await getSetting(key, null); }catch(e){ before = undefined; } }
       const r = await o.apply(this, arguments);
       if(track){ try{ actRecordSetting(key, before, value); }catch(e){ console.warn('[actlog]',e); } }

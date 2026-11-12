@@ -89,6 +89,7 @@ async function renderSettings(){
     <div class="set-wrap">
     ${_setContractorFinSection()}
     ${_setMyPasswordsSection()}
+    ${_setStampsSection()}
     
 
     <!-- STAFF MANAGEMENT -->

@@ -45,17 +45,28 @@ function wxsName(x){
 }
 function wxsFyNum(a){ const m = String(a||'').match(/^(\d{4})/); return m ? +m[1] : 0; }
 
+let _wxsSt = {variant:'none', address:false};   // stamp choice (Super Admin only)
 async function _wxsChoose(firm){
   const key = lhKeyFor(firm), lhName = (LH_SETS[key] && LH_SETS[key].name) || firm;
-  return tlModal('Download the statement',
-    `<div>Put it on the <strong>${xmlEsc(lhName)}</strong> letterhead, or a plain A4 page?</div><div style="font-size:12px;color:var(--text3);margin-top:6px">It downloads as a Word file either way — you can still edit it. The letterhead is the firm this experience belongs to.</div>`,
+  _wxsSt = {variant:'none', address:false};
+  let stHtml = '';
+  if(stAllowed()){ try{ await stAvailable(); }catch(e){} stHtml = stPickerHTML('wxs', key, '', _wxsSt); }
+  const pr = tlModal('Download the statement',
+    `<div>Put it on the <strong>${xmlEsc(lhName)}</strong> letterhead, or a plain A4 page?</div><div style="font-size:12px;color:var(--text3);margin-top:6px">It downloads as a Word file either way — you can still edit it. The letterhead is the firm this experience belongs to.</div>${stHtml}`,
     [{label:'Cancel', value:null}, {label:'Plain A4 page', value:'plain'}, {label:'On the letterhead', value:'digital', primary:true}]);
+  const d = document.getElementById('tl-modal');
+  if(d) d.addEventListener('click', e=>{ if(e.target.closest && e.target.closest('button[data-i]')) _wxsSt = stChoice('wxs'); }, true);
+  return pr;
 }
 async function _wxsBuild(firm, makeBody, fileBase){
   const mode = await _wxsChoose(firm); if(!mode) return false;
   const key = lhKeyFor(firm), margins = lhMargins(key, mode);
   const avail = 11906 - margins.left - margins.right;
-  const docx = buildDOCX(makeBody(avail), margins);
+  let stBlk = null;
+  try{ stBlk = stDocxBlock(await stResolve(key, _wxsSt), avail); }
+  catch(e){ console.error(e); toast('Stamp could not be added — nothing was downloaded. '+e.message,'error',7000); return false; }
+  const docx = buildDOCX(makeBody(avail, stBlk ? stBlk.xml + '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>' : ''), margins);
+  if(stBlk) docx.stamps = stBlk.media;
   if(mode==='digital'){
     try{ docx.letterhead = await lhDocxPackage(key); }
     catch(e){ console.error(e); toast('Letterhead could not be loaded — nothing was downloaded. '+e.message,'error',7000); return false; }
@@ -70,12 +81,12 @@ async function wxsValueStatement(m, fy, kind){
   const total = rows.reduce((s,x)=>s+x.total,0);
   const heading = `Details of ${kind==='civil'?'civil':'similar'} works completed in the name of the Tenderer during the last Ten financial years. ${fy||''}`;
   const rs = n => 'Rs '+wxfN(n)+'/-';
-  const ok = await _wxsBuild(m.firm, avail=>{
+  const ok = await _wxsBuild(m.firm, (avail, stampXml)=>{
     const w = wxsScale([450,2250,1150,1150,1050,1150,1150,1350], avail);
     const head = ['Sl.\nNo.','Name of the work','Address of agreement concluding authority','Agreement number and date','Value of contract','Stipulated period of completion','Actual date of completion','Total Value Of Work Done ('+(fy||'')+')'].map(t=>({t,b:true}));
     const body = rows.map((x,i)=>[{t:String(i+1)},{t:wxsName(x),jc:'left'},{t:''},{t:''},{t:''},{t:''},{t:''},{t:rs(x.total),b:true}]);
     const tot = [{t:'Total Value Of Work Done ('+(fy||'')+')',span:7,b:true,jc:'right'},{t:rs(total),b:true}];
-    return wxsP(heading,{b:true,after:160}) + wxsTable(w,[head,...body,tot],1) + wxsP('',{after:200}) + wxsP('Signature of the Tenderer',{b:true,jc:'right',before:480,after:0});
+    return wxsP(heading,{b:true,after:160}) + wxsTable(w,[head,...body,tot],1) + wxsP('',{after:200}) + (stampXml||'') + wxsP('Signature of the Tenderer',{b:true,jc:'right',before:stampXml?40:480,after:0});
   }, m.firm+' - Statement of similar works - FY '+(fy||''));
   if(ok){
     toast('✓ Statement downloaded — fill the empty columns in Word','ok');
@@ -93,7 +104,7 @@ async function wxsQtyStatement(ms){
   const rows = [...rowMap.values()].sort((a,b)=> wxsFyNum(a.fy)-wxsFyNum(b.fy) || String(a.rec.genCode||'').localeCompare(String(b.rec.genCode||'')));
   const cell = (c,x)=>{ const h=c.byId.get(x.id); return h ? wxsNum(h.total)+' '+c.unit : ''; };
   const totals = cols.map(c=>c.m.selRows.reduce((s,x)=>s+x.total,0));
-  const ok = await _wxsBuild(firm, avail=>{
+  const ok = await _wxsBuild(firm, (avail, stampXml)=>{
     const base = [540,1095,3765,1590, ...cols.map(()=>1500)];
     const w = wxsScale(base, avail);
     const head = [{t:'Sl.\nNo',b:true},{t:'Financial year',b:true},{t:'Name of work',b:true},{t:'Agt.\nNo',b:true}, ...cols.map(c=>({t:c.label,b:true}))];
@@ -103,7 +114,7 @@ async function wxsQtyStatement(ms){
     return wxsP('Physical quantities executed by the Tenderer in the last ten financial years. [work wise/year wise].',{b:true,after:160})
       + wxsTable(w,[head,nums,...body,tot],2)
       + wxsP('Attach certificates in support of the above quantities issued by the Executive Engineer concerned and countersigned by the Superintending Engineer duly showing the quantities executed year wise.',{before:200,after:200})
-      + wxsP('Signature of the Tenderer',{b:true,jc:'right',before:480,after:0});
+      + (stampXml||'') + wxsP('Signature of the Tenderer',{b:true,jc:'right',before:stampXml?40:480,after:0});
   }, firm+' - Statement of physical quantities - '+cols.map(c=>c.label).join(' + '));
   if(ok){
     toast('✓ Statement downloaded — fill the empty columns in Word','ok');
