@@ -10,6 +10,7 @@ async function openDetail(id){
   if(p){
     logProjectView(p);
     if(typeof pushDetailHistory === 'function') pushDetailHistory(id, p.name);
+    window.scrollTo(0,0);
     if(typeof saveSessionState === 'function') saveSessionState();
   }
   document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
@@ -245,7 +246,7 @@ function renderDetail(id){
           ${p.tender?`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--text2)">#${p.tender}</span>`:''}
           <span style="background:#1a2744;color:var(--gold);border-radius:8px;padding:2px 8px;font-weight:700">${p.firm||'RSR'}</span>
           ${typeDisplay?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--text2)">${typeDisplay}</span>`:''}
-          ${c?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--navy);font-weight:600;cursor:pointer" onclick="ownerTab(2);openContractorProfile('${c.id}')">👷 ${c.name}</span>`:''}
+          ${c?`<span style="background:var(--surface2);border-radius:8px;padding:2px 8px;color:var(--navy);font-weight:600;cursor:pointer" onclick="goToContractor('${c.id}')">👷 ${c.name}</span>`:''}
           ${p.location?`<span style="color:var(--text3)">📍 ${p.location}</span>`:''}
           ${statusBadge(p)}
         </div>

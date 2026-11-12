@@ -1049,8 +1049,9 @@ function showSidebar(){
   if(sb) sb.style.display='flex';
 }
 
-function ownerTab(i){
+function ownerTab(i, _noPush){
   if(i===3||i===4) i=18; // Excel Tally import + old Interest tracker are retired (hidden, data kept) — Tally Live replaces them
+  const _wasOther = (atab!==i) || !!dpid;       // a different page (not a refresh of this one)
   atab=i; dpid=null;
   document.querySelectorAll('.nav-link').forEach((e,j)=>e.classList.toggle('active',j===i));
   document.querySelectorAll('[id^="obn-"]').forEach((e,j)=>e.classList.toggle('active',j===i));
@@ -1061,7 +1062,7 @@ function ownerTab(i){
   if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
   if(i===0) renderDash();
   if(i===1) renderProjects();
-  if(i===2){ renderConts(); }
+  if(i===2){ document.getElementById('cont-profile')?.classList.add('hidden'); document.getElementById('cont-list')?.classList.remove('hidden'); renderConts(); }
   if(i===3){
     if(typeof loadUnmatchedFromCloud==='function'){
       loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
@@ -1085,7 +1086,8 @@ function ownerTab(i){
   if(i===18 && typeof renderTallyLive==='function') renderTallyLive();
   if(i===19 && typeof renderChequePrint==='function') renderChequePrint();
   // Push to browser history + save session
-  if(typeof pushTabHistory === 'function') pushTabHistory(i);
+  if(!_noPush && typeof pushTabHistory === 'function') pushTabHistory(i);
+  if(!_noPush && _wasOther) window.scrollTo(0,0);          // a new page opens at the top, not part-way down
   if(typeof saveSessionState === 'function') saveSessionState();
   // Update sidebar active state
   updateSidebarActive(i);
@@ -1178,8 +1180,9 @@ function positionSearchResults(){
   if(!wrap || wrap.style.display === 'none') return;
   const rect = inputEl.getBoundingClientRect();
   if(!rect.width) return; // element not rendered yet
-  const top = rect.bottom + window.scrollY + 6;
-  const left = Math.max(8, rect.left + window.scrollX);
+  // the dropdown is position:fixed, so it is measured from the screen, not the page — scroll must NOT be added
+  const top = rect.bottom + 6;
+  const left = Math.max(8, rect.left);
   const width = Math.min(480, Math.max(280, rect.width + 40));
   resultsEl.style.top = top + 'px';
   resultsEl.style.left = left + 'px';
@@ -1274,14 +1277,24 @@ function searchGoTo(type, id){
   if(type==='project'){
     openDetail(id);
   } else {
-    // Go to contractors tab and highlight
-    ownerTab(2);
-    setTimeout(()=>{
-      const el = document.querySelector(`[data-cid="${id}"]`);
-      if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
-    }, 300);
+    goToContractor(id);
   }
 }
+
+// Open one contractor's own page from anywhere (search, a project, a report…). One history step, so Back returns to where you were.
+function goToContractor(cid){
+  if(!cid) return;
+  if(typeof ownerTab === 'function') ownerTab(2, true);
+  if(typeof openContractorProfile === 'function') openContractorProfile(cid);
+  window.scrollTo(0,0);
+}
+// clicking anywhere else closes the search results
+document.addEventListener('click', e=>{
+  const r = document.getElementById('gsearch-results');
+  if(r && r.style.display!=='none' && !r.contains(e.target) && !e.target.closest('#gsearch-wrap')) r.style.display='none';
+});
+// and the results follow the search box if the page or window moves
+window.addEventListener('scroll', ()=>{ const r=document.getElementById('gsearch-results'); if(r && r.style.display!=='none') positionSearchResults(); }, {passive:true});
 
 function closeGlobalSearch(){
   const resultsEl = document.getElementById('gsearch-results');
@@ -1522,3 +1535,6 @@ function renderContractorPerformance(){
   }).join('');
   el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">No contractors yet.</div>';
 }
+
+// A link whose address is just "#" must never touch the page address/history (it would add a blank step to the Back trail).
+document.addEventListener('click', e=>{ const a = e.target.closest && e.target.closest('a[href="#"]'); if(a) e.preventDefault(); }, true);

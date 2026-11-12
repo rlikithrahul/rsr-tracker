@@ -35,72 +35,74 @@ function handleDeepLinkHash(){
   return false;
 }
 
+// ── BACK BUTTON TRAIL ──────────────────────────────────
+// Every page you open (a tab, a project, a contractor) is one step in the browser's history, so Back always returns to the
+// step before it — however many pages deep — and the screen is put back where you were scrolled to.
+// Steps are never stacked twice for the same page, and the first step is guarded so Back can never fall off the app onto a blank page.
+function _histSaveScroll(){ try{ history.replaceState(Object.assign({}, history.state||{}, {scrollY:window.scrollY}), ''); }catch(e){} }
+function _histShow(state){
+  if(!CU || CU.role!=='owner') return;
+  const back = ()=>{ setTimeout(()=>window.scrollTo(0, state && state.scrollY || 0), 150); };
+  if(state && state.view==='detail' && state.pid && GP(state.pid)){
+    dpid = state.pid;
+    document.querySelectorAll('.osec').forEach(el=>el.classList.add('hidden'));
+    document.querySelectorAll('.nav-link').forEach(el=>el.classList.remove('active'));
+    document.getElementById('sec-detail')?.classList.remove('hidden');
+    renderDetail(state.pid); back();
+  } else if(state && state.view==='contractor' && state.cid && GC(state.cid)){
+    ownerTab(2, true);
+    if(typeof openContractorProfile === 'function') openContractorProfile(state.cid, false);
+    back();
+  } else if(state && state.view==='tab' && state.tab!=null){
+    ownerTab(state.tab, true); back();
+  } else {
+    ownerTab(0, true);                                   // anything unknown → the dashboard, never a blank page
+  }
+}
 function initHistory(){
   if(_historyEnabled) return;
   _historyEnabled = true;
-
-  // Handle browser back/forward
+  try{
+    // first step = a guard; the dashboard sits on top of it, so Back at the very start stays inside the app
+    if(!history.state || history.state.view!=='guard'){
+      history.replaceState({view:'guard'}, '', location.pathname+location.search);
+      history.pushState({view:'tab', tab:0}, '', '#dashboard');
+    }
+  }catch(e){}
   window.addEventListener('popstate', e=>{
     const state = e.state;
-    if(!state) return;
-
-    if(state.view === 'detail' && state.pid){
-      // Going back to project detail
-      dpid = state.pid;
-      const p = GP(state.pid);
-      if(p){
-        document.querySelectorAll('.osec').forEach(el=>el.classList.add('hidden'));
-        document.getElementById('sec-detail')?.classList.remove('hidden');
-        renderDetail(state.pid);
-      }
-    } else if(state.view === 'contractor' && state.cid){
-      // Going back to a contractor profile
-      ownerTabSilent(2);
-      if(typeof openContractorProfile === 'function') openContractorProfile(state.cid, false);
-    } else if(state.view === 'tab'){
-      // Going back to a tab
-      ownerTabSilent(state.tab);
-    }
+    if(state && state.view==='guard'){ try{ history.pushState({view:'tab', tab:0}, '', '#dashboard'); }catch(x){} _histShow({view:'tab',tab:0}); return; }
+    try{ _histShow(state); }catch(err){ console.error('Back navigation failed', err); try{ ownerTab(0,true); }catch(x){} }
   });
 }
 
 // Push a tab navigation to browser history
 function pushTabHistory(tabIndex){
-  const state = { view:'tab', tab:tabIndex };
-  const tabNames = ['dashboard','projects','contractors','tally','interest','emi','settings','gst','material-credit'];
-  const name = tabNames[tabIndex] || 'tab-'+tabIndex;
-  history.pushState(state, '', '#'+name);
+  const cur = history.state;
+  if(cur && cur.view==='tab' && cur.tab===tabIndex) return;       // already on this page — don't stack a duplicate step
+  _histSaveScroll();
+  const tabNames = ['dashboard','projects','contractors','tally','interest','emi','settings','gst','material-credit','action-centre','gst-split','work-experience','board-meeting','deposit-refunds','team-tasks','cash-register','growth-pool','tender-documents','tally-live','cheque-printing'];
+  history.pushState({view:'tab', tab:tabIndex}, '', '#'+(tabNames[tabIndex] || 'tab-'+tabIndex));
 }
 
 // Push a project detail to browser history
 function pushDetailHistory(pid, pname){
-  const state = { view:'detail', pid };
-  history.pushState(state, '', '#project-'+pid);
+  const cur = history.state;
+  if(cur && cur.view==='detail' && cur.pid===pid) return;
+  _histSaveScroll();
+  history.pushState({view:'detail', pid}, '', '#project-'+pid);
 }
 
 // Push a contractor profile view to browser history
 function pushContractorHistory(cid){
-  const state = { view:'contractor', cid };
-  history.pushState(state, '', '#contractor-'+cid);
+  const cur = history.state;
+  if(cur && cur.view==='contractor' && cur.cid===cid) return;
+  _histSaveScroll();
+  history.pushState({view:'contractor', cid}, '', '#contractor-'+cid);
 }
 
-// Silent tab switch (no history push — used by popstate handler)
-function ownerTabSilent(i){
-  atab=i; dpid=null;
-  const mainSecs = ['sec-dash','sec-proj','sec-cont','sec-funds','sec-interest','sec-emi','sec-settings','sec-gst','sec-matcredit'];
-  document.querySelectorAll('.osec').forEach(e=>e.classList.add('hidden'));
-  const targetId = mainSecs[i];
-  if(targetId) document.getElementById(targetId)?.classList.remove('hidden');
-  updateSidebarActive(i);
-  if(i===0) renderDash();
-  else if(i===1) renderProjects();
-  else if(i===2){ renderConts(); }
-  else if(i===3) loadUnmatchedFromCloud().then(()=>renderFunds()).catch(()=>renderFunds());
-  else if(i===5) renderEMI();
-  else if(i===6) renderSettings();
-  else if(i===7) renderGST();
-  else if(i===8) renderMatCredit();
-}
+// Silent tab switch (no history push — used by the Back handler and deep links)
+function ownerTabSilent(i){ ownerTab(i, true); }
 
 // ─── 2. SESSION RESTORE ON REFRESH ───────────────────
 const SESSION_KEY = 'rsr_session_state_v2';

@@ -507,7 +507,7 @@ function _gsLedgerHTML(bills, qs, qe){
           else if(r.gap > 0.5) gapHtml = `<span style="color:var(--amber);font-weight:700">Contractor ${fmt(r.gap)} below</span>`;
           else if(r.gap < -0.5) gapHtml = `<span style="color:var(--navy);font-weight:700">Contractor ${fmt(-r.gap)} above</span>`;
           else gapHtml = '<span style="color:var(--green);font-weight:700">✓ On target</span>';
-          const nameHtml = r.k==='_none' ? gsEsc(r.name) : `<a href="#" onclick="ownerTab(2);openContractorProfile('${r.k}');return false" style="color:var(--navy);font-weight:700">${gsEsc(r.name)}</a>`;
+          const nameHtml = r.k==='_none' ? gsEsc(r.name) : `<a href="#" onclick="goToContractor('${r.k}');return false" style="color:var(--navy);font-weight:700">${gsEsc(r.name)}</a>`;
           return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:6px 8px">${nameHtml}</td>
             <td style="padding:6px 8px;text-align:right">${fmt(r.thisQ)}</td>
