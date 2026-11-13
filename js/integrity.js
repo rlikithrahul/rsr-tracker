@@ -108,7 +108,8 @@ async function checkDB(){
 }
 
 async function checkOwnerLogin(){
-  if(!D.ownerPw || D.ownerPw.length < 4) return { pass:false, detail:'Owner password too short or not set' };
+  if(!D.ownerPw) return { pass:false, detail:'No owner password saved yet' };
+  if(!pwIsHashed(D.ownerPw) && D.ownerPw.length < 4) return { pass:false, detail:'Owner password too short' };
   return { pass:true, detail:'Password set and valid length' };
 }
 

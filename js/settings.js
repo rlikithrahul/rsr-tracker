@@ -270,7 +270,7 @@ function renderStaffList(){
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:var(--rs);margin-bottom:6px;gap:8px;flex-wrap:wrap">
       <div>
         <div style="font-weight:700;font-size:13px">${s.name}</div>
-        <div style="font-size:11px;color:var(--text3)">Staff login • Password: ${'•'.repeat(s.password.length)}</div>
+        <div style="font-size:11px;color:var(--text3)">Staff login • Password: ••••••••</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" onclick="editStaffPassword(${i})">🔑 Change PW</button>
@@ -286,11 +286,11 @@ async function addStaffMember(){
   if(!pw || pw.length<4){ toast('Password must be at least 4 characters','error'); return; }
 
   // Check no duplicate password (passwords must be unique to identify who logged in)
-  if(typeof ownerPwList==='function' && ownerPwList().includes(pw)){ toast('Cannot use a Super Admin password as a staff password','error'); return; }
-  if((D.staffMembers||[]).some(s=>s.password===pw)){ toast('Password already in use by another staff member','error'); return; }
+  if(typeof ownerPwList==='function' && await pwAnyMatch(pw, ownerPwList())){ toast('Cannot use a Super Admin password as a staff password','error'); return; }
+  for(const s of (D.staffMembers||[])){ if(await pwCheck(pw,s.password) || await pwCheck(pw,s.tallyPw)){ toast('Password already in use by another staff member','error'); return; } }
 
   if(!D.staffMembers) D.staffMembers=[];
-  D.staffMembers.push({id:uid(), name, password:pw, addedAt:new Date().toISOString()});
+  D.staffMembers.push({id:uid(), name, password:await pwHash(pw), addedAt:new Date().toISOString()});
 
   try{
     await saveStaff();
@@ -314,14 +314,14 @@ async function removeStaffMember(i){
   }catch(e){ toast('Save failed','error'); }
 }
 
-function editStaffPassword(i){
+async function editStaffPassword(i){
   const s = D.staffMembers[i];
   const newPw = prompt(`New password for ${s.name}:`);
   if(!newPw) return;
   if(newPw.length<4){ toast('Password must be at least 4 characters','error'); return; }
-  if(typeof ownerPwList==='function' && ownerPwList().includes(newPw)){ toast('Cannot use a Super Admin password','error'); return; }
-  if(D.staffMembers.some((x,j)=>j!==i&&x.password===newPw)){ toast('Password already in use','error'); return; }
-  s.password = newPw;
+  if(typeof ownerPwList==='function' && await pwAnyMatch(newPw, ownerPwList())){ toast('Cannot use a Super Admin password','error'); return; }
+  for(let j=0;j<D.staffMembers.length;j++){ const x=D.staffMembers[j]; if(j!==i && (await pwCheck(newPw,x.password) || await pwCheck(newPw,x.tallyPw))){ toast('Password already in use','error'); return; } }
+  s.password = await pwHash(newPw);
   saveStaff().then(()=>{
     document.getElementById('staff-list').innerHTML=renderStaffList();
     toast(`✓ Password updated for ${s.name}`,'ok');
@@ -593,20 +593,21 @@ async function myPwSave(kind){
   err.style.display='none';
   if(!(CU&&CU.isSuperAdmin)){ bad('Only the Super Admin can change these.'); return; }
   const cur=document.getElementById('mp-cur').value, a=document.getElementById('mp-'+kind).value, b=document.getElementById('mp-'+kind+'2').value;
-  if(cur!==D.ownerPw){ bad('Your current main password is not correct.'); return; }
+  if(!(await pwOwnerOk(cur))){ bad('Your current main password is not correct.'); return; }
   if(a!==b){ bad('The two boxes do not match.'); return; }
   const clear=!a;
   if(clear && kind==='main'){ bad('The main password cannot be empty.'); return; }
   if(!clear){
     if(a.length<6){ bad('Minimum 6 characters.'); return; }
     const others={main:[D.ownerTallyPw,D.ownerRecoveryPw],tally:[D.ownerPw,D.ownerRecoveryPw],recovery:[D.ownerPw,D.ownerTallyPw]}[kind].filter(Boolean);
-    if(others.includes(a)){ bad('That is already one of your other passwords — use a different one.'); return; }
-    if((D.staffMembers||[]).some(s=>s.password===a||s.tallyPw===a)){ bad('A staff member already uses that password — use a different one.'); return; }
+    if(await pwAnyMatch(a, others)){ bad('That is already one of your other passwords — use a different one.'); return; }
+    for(const s of (D.staffMembers||[])){ if(await pwCheck(a,s.password) || await pwCheck(a,s.tallyPw)){ bad('A staff member already uses that password — use a different one.'); return; } }
   }
   const key={main:OPW_KEY,tally:OPW_TALLY_KEY,recovery:OPW_RECOVERY_KEY}[kind];
   try{
-    await saveOwnerPwKey(key,a);
-    if(kind==='main') D.ownerPw=a; else if(kind==='tally') D.ownerTallyPw=a; else D.ownerRecoveryPw=a;
+    const stored = clear ? '' : await pwStore(a, true);
+    await saveOwnerPwKey(key,stored);
+    if(kind==='main') D.ownerPw=stored; else if(kind==='tally') D.ownerTallyPw=stored; else D.ownerRecoveryPw=stored;
     try{ await writeActivityLog('password_change','Super Admin changed the '+({main:'main login',tally:'Tally Live',recovery:'recovery'}[kind])+' password'); }catch(e){}
     ['mp-cur','mp-'+kind,'mp-'+kind+'2'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
     toast(clear?'✓ Removed':'✓ Password saved','ok');

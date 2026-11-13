@@ -812,7 +812,7 @@ async function addSupervisor(){
   // Check username unique
   if(c.supervisors.find(s=>s.username===username)){ toast('Username already exists','error'); return; }
 
-  c.supervisors.push({ id:uid(), name, username, password:pw, createdAt:new Date().toISOString() });
+  c.supervisors.push({ id:uid(), name, username, password:await pwHash(pw), createdAt:new Date().toISOString() });
   try{
     await saveContractorDB(c);
     toast('✓ Supervisor '+name+' added','ok');
@@ -836,11 +836,11 @@ async function deleteSupervisor(svId){
 }
 
 // Supervisor login — called from contLogin in auth.js
-function checkSupervisorLogin(name, pw){
+async function checkSupervisorLogin(name, pw){
   for(const c of D.contractors){
-    const sups = c.supervisors||[];
-    const sv = sups.find(s=>s.username===name && s.password===pw);
-    if(sv) return { supervisor:sv, contractor:c };
+    for(const sv of (c.supervisors||[])){
+      if(sv.username===name && await pwCheck(pw, sv.password)) return { supervisor:sv, contractor:c };
+    }
   }
   return null;
 }

@@ -108,6 +108,7 @@ function ownerTabSilent(i){ ownerTab(i, true); }
 const SESSION_KEY = 'rsr_session_state_v2';
 
 function saveSessionState(){
+  if(window.__EMBED) return;      // internal tabs do not overwrite the main tab's saved position
   try{
     const state = {
       tab: atab,
@@ -122,6 +123,7 @@ function saveSessionState(){
 }
 
 function restoreSessionState(){
+  if(window.__EMBED) return false; // a new internal tab always opens on the Dashboard
   try{
     const raw = sessionStorage.getItem(SESSION_KEY);
     if(!raw) return false;

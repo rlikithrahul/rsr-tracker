@@ -287,12 +287,13 @@ async function changePw(){
   const nw=document.getElementById('pw-new').value;
   const conf=document.getElementById('pw-conf').value;
   const err=document.getElementById('pw-err');
-  if(cur!==D.ownerPw){err.textContent='Current password incorrect.';err.style.display='block';return;}
+  if(!(await pwOwnerOk(cur))){err.textContent='Current password incorrect.';err.style.display='block';return;}
   if(nw.length<6){err.textContent='Min 6 characters.';err.style.display='block';return;}
   if(nw!==conf){err.textContent='Passwords do not match.';err.style.display='block';return;}
-  D.ownerPw=nw;
+  const stored = await pwStore(nw, true);
+  D.ownerPw=stored;
   try {
-    await savePwDB(nw);
+    await savePwDB(stored);
     CM('modal-pw');
     ['pw-cur','pw-new','pw-conf'].forEach(id=>document.getElementById(id).value='');
     err.style.display='none';

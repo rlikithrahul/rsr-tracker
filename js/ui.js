@@ -70,6 +70,8 @@ const AR_EVERY_MS = 90000, AR_IDLE_MS = 5*60*1000;
 let _arLastActive = Date.now(), _arSkipped = false, _arTicks = 0, _arBusy = false, _arWired = false;
 async function autoRefreshTick(force){
   if (!CU || !dbOK || !navigator.onLine || _arBusy) return;
+  // internal tabs: only the tab you are looking at refreshes; the others catch up when you open them
+  try{ const act = window.__EMBED ? window.parent.__tabsActive : window.__tabsActive; const me = window.__EMBED || 'main'; if(act && act!==me){ _arSkipped = true; return; } }catch(e){}
   if (!force && (document.visibilityState !== 'visible' || Date.now()-_arLastActive > AR_IDLE_MS)) { _arSkipped = true; return; }
   _arSkipped = false; _arBusy = true; _arTicks++;
   try {

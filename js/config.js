@@ -8,7 +8,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const OPW_KEY = 'rsr_owner_pw_v1';
 const OPW_TALLY_KEY = 'rsr_owner_tally_pw_v1';       // Super Admin's own Tally Live password (optional)
 const OPW_RECOVERY_KEY = 'rsr_owner_recovery_pw_v1';  // Super Admin's backup / recovery password (optional)
-const APP_VERSION = 'v28m';
+const APP_VERSION = 'v28o';
 
 // ─── CLOUDFLARE R2 — PUBLIC READ URLS ONLY ───────────
 // Secret keys are now in the Cloudflare Worker (server-side)
@@ -42,7 +42,7 @@ const PHOTO_RETENTION_DAYS = 365;
 // overwrite whatever was already correctly saved in the database. Leave
 // cached properties like this unset (undefined) so their loaders can
 // correctly tell "never loaded yet" apart from "loaded, genuinely empty".
-let D = { contractors: [], projects: [], ownerPw: 'RSR@2024' };
+let D = { contractors: [], projects: [], ownerPw: '' };   // no built-in password any more (see pwhash.js first-run rule)
 let CU = null;
 let bqc = 0, atab = 0, dpid = null, rfpid = null, vpid = null;
 let notesPid = null, changePwContractorId = null;

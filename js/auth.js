@@ -82,17 +82,24 @@ async function ownerLogin(){
   try { await loadDB(); } catch(e){}
 
   // Check master password first (Super Admin)
-  if(pw === D.ownerPw || (D.ownerRecoveryPw && pw === D.ownerRecoveryPw)){
+  let firstRun = false;
+  let isMaster = false;
+  if(!D.ownerPw){ isMaster = (pw === PW_FIRST_RUN_DEFAULT); firstRun = isMaster; }   // no password has ever been saved
+  else isMaster = (await pwCheck(pw, D.ownerPw)) || (D.ownerRecoveryPw ? await pwCheck(pw, D.ownerRecoveryPw) : false);
+  if(isMaster){
     CU={role:'owner', name:'Likith', isSuperAdmin:true};
     saveSession(CU);
     logLogin('Likith', 'super_admin', null);
     await writeActivityLog('login', 'Likith logged in (Super Admin)');
     enterOwner();
+    setTimeout(()=>{ try{ pwMigrateAll(); }catch(e){} }, 4000);   // hash any plain-text passwords, quietly
+    if(firstRun){ toast('Set your own Super Admin password now — the starting password is only for first use.','info',9000); setTimeout(()=>{ try{ OM('modal-pw'); }catch(e){} },600); }
     return;
   }
 
   // Check staff passwords
-  const staff = (D.staffMembers||[]).find(s=>s.password===pw);
+  let staff = null;
+  for(const s of (D.staffMembers||[])){ if(await pwCheck(pw, s.password)){ staff = s; break; } }
   if(staff){
     CU={role:'owner', name:staff.name, isSuperAdmin:false, staffId:staff.id};
     saveSession(CU);
@@ -114,7 +121,7 @@ async function contLogin(){
 
   // Check supervisor login first
   if(typeof checkSupervisorLogin === 'function'){
-    const svMatch = checkSupervisorLogin(name, pw);
+    const svMatch = await checkSupervisorLogin(name, pw);
     if(svMatch){
       CU={role:'contractor', id:svMatch.contractor.id, name:svMatch.supervisor.name, isSupervisor:true, supervisorId:svMatch.supervisor.id};
       saveSession(CU);
@@ -165,6 +172,7 @@ async function contLogin(){
 }
 
 function logout(){
+  if(window.__EMBED){ try{ window.parent.logout(); return; }catch(e){} }   // an internal tab logs the whole app out through the main window
   try{ localStorage.removeItem('rsr_tv_cache_v1'); }catch(e){}
   if(CU) writeActivityLog('logout', `${CU.name} logged out`).catch(()=>{});
   if(typeof clearToggleStates === 'function') clearToggleStates();
@@ -198,15 +206,16 @@ function enterOwner(){
   const bnav=document.getElementById('bnav'); if(bnav) bnav.style.display='none';
   showSidebar();
   buildSidebar(CU&&CU.isSuperAdmin);
-  setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
+  if(!window.__EMBED) setTimeout(()=>{ requestNotificationPermission().catch(()=>{}); },2000);
   SP('page-owner');
+  if(typeof tabsInit==='function') tabsInit();
   Promise.all([
     loadEMIData().catch(e=>console.error('loadEMIData failed:',e)),
     loadGSTData().catch(e=>console.error('loadGSTData failed:',e)),
     loadCustomWorkTypes().catch(e=>console.error('loadCustomWorkTypes failed:',e)),
     loadCustomLabourTypes().catch(e=>console.error('loadCustomLabourTypes failed:',e))
   ]).then(()=>{
-    if(typeof runAutoBackupIfNeeded === 'function') runAutoBackupIfNeeded();
+    if(typeof runAutoBackupIfNeeded === 'function' && !window.__EMBED) runAutoBackupIfNeeded();
     // A deep link in the URL (opened in a new tab, say) takes priority
     // over resuming wherever this tab last was — opening a specific link
     // is a clearer, more deliberate intent than "pick up where I left off".

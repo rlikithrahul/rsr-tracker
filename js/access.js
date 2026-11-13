@@ -83,8 +83,10 @@ async function accessSave(si){
   const tp=(document.getElementById('acc-tp-'+si)||{}).value.trim();
   if(tabs.includes(18) && !tp){ toast('Tally Live is on — give '+s.name+' a Tally Live password too','error'); return; }
   if(tp){ if(tp.length<4){ toast('Tally Live password must be at least 4 characters','error'); return; }
-    if(ownerPwList().includes(tp) || (D.staffMembers||[]).some((x,j)=>j!==si&&(x.tallyPw===tp))){ toast('That Tally Live password is already used by someone else','error'); return; } }
-  s.access={tabs}; if(tp) s.tallyPw=tp; else delete s.tallyPw;
+    let used = await pwAnyMatch(tp, ownerPwList());
+    for(let j=0;j<D.staffMembers.length && !used;j++){ const x=D.staffMembers[j]; if(await pwCheck(tp,x.tallyPw) || (j!==si && await pwCheck(tp,x.password))) used = true; }
+    if(used){ toast('That Tally Live password is already used by someone else','error'); return; } }
+  s.access={tabs}; if(tp){ if(!(s.tallyPw && await pwCheck(tp,s.tallyPw))) s.tallyPw = await pwStore(tp,true); } else delete s.tallyPw;
   try{ await saveStaff(); await writeActivityLog('staff_access',`Access for ${s.name}: ${tabs.length} dashboards${tabs.includes(18)?', Tally Live on':''}`); toast('✓ Saved — '+s.name+' sees the change next time the page refreshes (within a couple of minutes)','ok'); const c=document.getElementById('acc-card'); if(c){ c.outerHTML=accessCardHtml(); } }
   catch(e){ toast('Save failed','error'); }
 }
@@ -102,7 +104,7 @@ function accessBadge(){
   let dot=b.querySelector('.acc-dot'); if(!n){ if(dot) dot.remove(); return; } if(!dot){ dot=document.createElement('span'); dot.className='acc-dot'; dot.style.cssText='margin-left:auto;background:#d32f2f;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700'; b.appendChild(dot); } dot.textContent=n;
 }
 async function accessPoll(first){
-  if(!CU||CU.role!=='owner') return;
+  if(!CU||CU.role!=='owner'||window.__EMBED) return;   // internal tabs leave this to the main tab
   try{
     const reqs=await getSetting(ACCESS_REQ_KEY,[])||[]; const before=(ACC.reqs||[]).filter(r=>r.status==='pending').length; ACC.reqs=reqs;
     if(CU.isSuperAdmin){ accessBadge(); const n=reqs.filter(r=>r.status==='pending').length; if(n&&(first||n>before)) toast('🔔 '+n+' access request'+(n>1?'s':'')+' waiting — see Settings','ok',5000); }

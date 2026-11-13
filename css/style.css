@@ -1050,3 +1050,26 @@ input:focus, select:focus, textarea:focus {
 .set-sw input:checked + .set-sw-t{background:var(--green)}
 .set-sw input:checked + .set-sw-t:before{transform:translateX(20px)}
 @media (prefers-reduced-motion:reduce){.set-bd,.set-chev,.set-pad,.set-sec{transition:none}}
+
+/* ─── INTERNAL TABS (tabs.js) ───────────────────────── */
+:root{ --tb:0px; }
+body.has-tabs{ --tb:38px; padding-top:var(--tb); }
+body.has-tabs .sidebar{ top:var(--tb); }
+body.has-tabs .nav{ top:var(--tb); }
+body.has-tabs #dash-sidebar-col{ top:calc(72px + var(--tb)); max-height:calc(100vh - 90px - var(--tb)); }
+#tabbar{ position:fixed; top:0; left:0; right:0; height:38px; z-index:9500; display:none; align-items:flex-end; gap:3px;
+  padding:5px 8px 0 8px; background:#0b1530; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+#tabbar::-webkit-scrollbar{ display:none; }
+body.has-tabs #tabbar{ display:flex; }
+.tb-tab{ flex:0 0 auto; display:flex; align-items:center; gap:6px; height:32px; max-width:200px; min-width:90px; padding:0 8px 0 12px; box-sizing:border-box;
+  background:rgba(255,255,255,.08); color:rgba(255,255,255,.72); border-radius:9px 9px 0 0; font-size:12.5px; font-weight:600; cursor:pointer; user-select:none; }
+.tb-tab:hover{ background:rgba(255,255,255,.14); color:#fff; }
+.tb-tab.on{ background:#f4f6fb; color:#1a2744; }
+.tb-ttl{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tb-x{ flex:0 0 auto; width:20px; height:20px; line-height:18px; border:0; border-radius:50%; background:transparent; color:inherit; font-size:16px; cursor:pointer; padding:0; }
+.tb-x:hover{ background:rgba(128,128,128,.28); }
+.tb-new{ flex:0 0 auto; width:30px; height:28px; margin:0 0 2px 4px; border:0; border-radius:8px; background:rgba(255,255,255,.1); color:#fff; font-size:19px; line-height:24px; cursor:pointer; }
+.tb-new:hover{ background:rgba(255,255,255,.22); }
+#tab-frames{ display:none; }
+body.tab-frame-open #tab-frames{ display:block; }
+.tab-frame{ position:fixed; top:var(--tb); left:0; right:0; bottom:0; width:100%; height:calc(100% - var(--tb)); border:0; z-index:9000; background:#f4f6fb; display:none; }
