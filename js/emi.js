@@ -18,6 +18,9 @@ async function loadEMIData(){
   }
 }
 
+// Deleted EMIs/cards are only marked removed (kept in the data, hidden everywhere): the save merges
+// by id with the server copy, so a truly dropped item would simply come back.
+function _emiLive(a){ return (a||[]).filter(x=>!x.removed); }
 async function saveEMIData(){
   D.emiData = await mergeAndSaveSetting(EMI_KEY, D.emiData, false);
 }
@@ -70,7 +73,7 @@ async function renderEMI(){
 
 // ─── RENDER EMI LIST ──────────────────────────────────
 function renderEMIList(){
-  const emis = D.emiData.emis||[];
+  const emis = _emiLive(D.emiData.emis);
   if(!emis.length) return '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No EMIs added yet.</div>';
 
   return `<div class="tbl-wrap"><table>
@@ -179,7 +182,7 @@ async function saveEMI(id){
 
 async function deleteEMI(id){
   if(!confirm('Delete this EMI?')) return;
-  D.emiData.emis = (D.emiData.emis||[]).filter(e=>e.id!==id);
+  const e = (D.emiData.emis||[]).find(x=>x.id===id); if(e){ e.removed=true; e.removedAt=new Date().toISOString(); }
   try{ await saveEMIData(); renderEMI(); toast('✓ EMI deleted','ok'); }
   catch(e){ toast('Delete failed','error'); }
 }
@@ -241,7 +244,7 @@ async function saveCard(id){
 
 async function deleteCard(id){
   if(!confirm('Delete this card?')) return;
-  D.emiData.cards = (D.emiData.cards||[]).filter(c=>c.id!==id);
+  const c = (D.emiData.cards||[]).find(x=>x.id===id); if(c){ c.removed=true; c.removedAt=new Date().toISOString(); }
   try{ await saveEMIData(); renderEMI(); toast('✓ Card deleted','ok'); }
   catch(e){ toast('Delete failed','error'); }
 }
@@ -296,10 +299,10 @@ function _emiPaidKey(kind,id,ymd){ return kind+'|'+id+'|'+ymd; }
 function emiDueItems(){
   const out=[]; if(!D.emiData) return out; const paid=D.emiData.paid||{}; const t=new Date();
   const push=(o)=>{ if(paid[_emiPaidKey(o.kind,o.id,o.ymd)]) return; if(o.ymd < o.from) return; if(o.days>3||o.days<-60) return; out.push(o); };
-  (D.emiData.emis||[]).filter(e=>e.active!==false).forEach(e=>{
+  _emiLive(D.emiData.emis).filter(e=>e.active!==false).forEach(e=>{
     for(let k=-2;k<=1;k++){ const dd=_emiDate(t.getFullYear(),t.getMonth()+k,e.dueDay); push({kind:'emi',id:e.id,name:e.name,icon:'📅',amount:e.amount,dueDay:e.dueDay,date:dd,ymd:emiYmd(dd),days:_emiDays(dd),from:_emiTrackFrom(e)}); }
   });
-  (D.emiData.cards||[]).forEach(c=>{
+  _emiLive(D.emiData.cards).forEach(c=>{
     for(let k=-2;k<=0;k++){
       const bill=_emiDate(t.getFullYear(),t.getMonth()+k,c.billDay);
       const dd = c.dueDay>c.billDay ? _emiDate(bill.getFullYear(),bill.getMonth(),c.dueDay) : _emiDate(bill.getFullYear(),bill.getMonth()+1,c.dueDay);
@@ -343,7 +346,7 @@ function getEMIDashboardAlerts(){
   const todayDay = new Date().getDate();
   const items = emiDueItems();
   const prompts = [];
-  (D.emiData.cards||[]).forEach(card=>{ if(getCardPhase(card)==='enter-bill') prompts.push(card); });
+  _emiLive(D.emiData.cards).forEach(card=>{ if(getCardPhase(card)==='enter-bill') prompts.push(card); });
   if(!items.length && !prompts.length) return '';
   const overdue = items.filter(u=>u.days<0), soon = items.filter(u=>u.days>=0);
   const borderColor = overdue.length||soon.some(u=>u.days<=1)?'var(--red)':'var(--amber)';
@@ -363,7 +366,7 @@ function _emiPaidLogHtml(){
 
 // ─── CREDIT CARD PHASE-AWARE RENDER ──────────────────
 function renderCardListNew(){
-  const cards = D.emiData.cards||[];
+  const cards = _emiLive(D.emiData.cards);
   if(!cards.length) return '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No credit cards added yet.</div>';
   return cards.map(card=>{
     const cycleKey = getCardCycleKey(card);
@@ -441,7 +444,7 @@ async function saveBillAmountNew(cardId, cycleKey){
 function checkBillPromptsNew(){
   if(!D.emiData) return;
   const todayDay = new Date().getDate();
-  (D.emiData.cards||[]).forEach(card=>{
+  _emiLive(D.emiData.cards).forEach(card=>{
     if(todayDay===card.billDay || todayDay===card.billDay+1){
       const cycleKey = getCardCycleKey(card);
       if(D.emiData.billAmounts[card.id+'_'+cycleKey]===undefined){

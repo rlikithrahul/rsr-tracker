@@ -48,11 +48,11 @@ function wxvCollect(records, linkFn, firm, types, allowedFYs){
     if(!(val>0)) return;
     if(allowedFYs && !allowedFYs.includes(r.fy)) return;
     const project = linkFn ? (linkFn(r)||null) : null;
-    const ptypes = wxvTypesOf(project);
+    const ptypes = (typeof wlTypes==='function') ? wlTypes(r, project) : wxvTypesOf(project);
     if(!ptypes.length){ noType++; return; }
     const matched = ptypes.filter(t=>types.includes(t));
     if(!matched.length) return;
-    const w = project.documents && project.documents.wec;
+    const w = (typeof wlCert==='function') ? wlCert(r, project) : (project && project.documents && project.documents.wec);
     rows.push({id:wxfRowId(r), rec:r, project, fy:r.fy, total:val, ptypes, matched, others:ptypes.filter(t=>!types.includes(t)), cert:(w&&w.url)?w:null});
   });
   return {rows, noType};
@@ -119,7 +119,7 @@ function _wxvModel(){
   const {rows, noType} = active ? wxvCollect(records, linker, firm, _wxv.types, fyList) : {rows:[], noType:0};
   // how many records each type has (for chip labels)
   const typeCount = {};
-  records.forEach(r=>{ if(!(Number(r.workValue)>0)||!fyList.includes(r.fy)) return; wxvTypesOf(linker(r)).forEach(t=>typeCount[t]=(typeCount[t]||0)+1); });
+  records.forEach(r=>{ if(!(Number(r.workValue)>0)||!fyList.includes(r.fy)) return; ((typeof wlTypes==='function')?wlTypes(r,linker(r)):wxvTypesOf(linker(r))).forEach(t=>typeCount[t]=(typeCount[t]||0)+1); });
   const required = wxvToRupees(_wxv.reqValue, _wxv.reqUnit);
   const fys = wxfFYSummary(rows);
   if(active && (!_wxv.fy || !fys.some(f=>f.fy===_wxv.fy))){ _wxv.fy = fys.length?fys[0].fy:null; _wxv.sel=[]; }

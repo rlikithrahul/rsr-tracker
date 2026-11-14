@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════════════════════
 const APP_BUILD_DATE = '12 Nov 2026';
 const APP_CHANGELOG = [
+  ['v28q','Work Experience: the pre-app years (FY 2023-24 and 2024-25) now take part in every finder. All Records (Excel View) → ✏️ Edit on those rows: work value, work types (several allowed, from the same list as everywhere; new types can be added there), quantities, and the certificate upload. A certificate uploaded for a gen code is shared with the same project in the other year. Find by Value, Find by Quantity, Best FY per Quantity and the Annual Summary use them. Also (v28p): deleting a credit card or EMI now sticks.'],
+  ['v28p','FIX: deleting a credit card or EMI (EMI Calendar) said "deleted" but it came back, because the save merged it back from the server copy. Now it is marked removed (kept in the data, hidden everywhere) so it stays gone.'],
   ['v28o','Internal tabs (like Chrome tabs): a tab bar across the top; + opens a fresh Dashboard tab, each tab keeps its own pages, forms and Back trail while you work in another. Only the tab you are looking at refreshes data. Tabs survive a page refresh. Also adds privacy.html (needed for the Google backup setup).'],
   ['v28n','Password hashing: Super Admin (main, Tally Live, recovery), staff and supervisor passwords are now stored hashed. Old passwords keep working and are converted automatically after a Super Admin login; the built-in RSR@2024 only works if no password was ever saved, and forces a change. Needs the updated tally-api function for the Tally Live passwords.'],
   ['v28m','Stamps & signs printed at a realistic office-stamp size (about 4.2 cm wide; address stamp about 5.2 cm).'],

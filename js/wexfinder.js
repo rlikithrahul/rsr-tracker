@@ -53,7 +53,7 @@ function wxfCollect(records, linkFn, firm, keys){
     const total = parts.reduce((s,x)=>s+x.qty,0);
     if(!(total>0)) return;
     const project = linkFn ? (linkFn(r)||null) : null;
-    const w = project && project.documents && project.documents.wec;
+    const w = (typeof wlCert==='function') ? wlCert(r, project) : (project && project.documents && project.documents.wec);
     rows.push({id:wxfRowId(r), rec:r, project, fy:r.fy, parts, total, cert:(w && w.url) ? w : null});
   });
   return rows;

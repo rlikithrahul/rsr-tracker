@@ -906,16 +906,18 @@ function _renderWEXTab(el){
     // in the original Excel). If a record can't be matched to a live
     // project at all, it goes to 'Other' rather than creating a new group.
     let workTypes=[];
-    if(p&&p.types&&p.types.length) workTypes=[...p.types];
+    if(typeof wlTypes==='function' && Array.isArray(r.types) && r.types.length) workTypes=[...r.types.filter(Boolean)];   // a record's own types (pre-app years) come first
+    else if(p&&p.types&&p.types.length) workTypes=[...p.types];
     else if(p&&p.type) workTypes=p.type.split(',').map(t=>t.trim()).filter(Boolean);
     if(!workTypes.length) workTypes=['Other'];
 
     if(!byFYWorkType[fy]) byFYWorkType[fy]={};
+    const _wc=(typeof wlCert==='function')?wlCert(r,p):(p&&p.documents&&p.documents.wec);
     workTypes.forEach(wt=>{
       if(!byFYWorkType[fy][wt]) byFYWorkType[fy][wt]={value:0,count:0,items:[]};
       byFYWorkType[fy][wt].value+=r.workValue||0;
       byFYWorkType[fy][wt].count++;
-      byFYWorkType[fy][wt].items.push({projectId:p?p.id:null, name:projectName, contractor:contractorName, genCode:r.genCode||'—', value:r.workValue||0, hasCert:!!(p&&p.documents&&p.documents.wec&&p.documents.wec.url), alsoTypes:workTypes.filter(x=>x!==wt)});
+      byFYWorkType[fy][wt].items.push({projectId:p?p.id:null, name:projectName, contractor:contractorName, genCode:r.genCode||'—', value:r.workValue||0, hasCert:!!(_wc&&_wc.url), alsoTypes:workTypes.filter(x=>x!==wt)});
     });
   });
 
@@ -1070,6 +1072,8 @@ function _renderWEXTab(el){
         <th style="padding:6px 10px;text-align:left">Work Type</th>
         <th style="padding:6px 10px;text-align:right">Value (₹)</th>
         <th style="padding:6px 10px;text-align:left">Quantities</th>
+        <th style="padding:6px 10px;text-align:left">Certificate</th>
+        <th style="padding:6px 10px"></th>
       </tr></thead>
       <tbody>
         ${flatRecords.map((r,i)=>{
@@ -1080,9 +1084,11 @@ function _renderWEXTab(el){
             <td style="padding:6px 10px;font-weight:700">${r.fy}</td>
             <td style="padding:6px 10px;font-family:monospace;font-size:11px">${r.genCode}</td>
             <td style="padding:6px 10px;${p?'cursor:pointer;color:var(--navy);font-weight:600':''}" ${p?`onclick="openDetail('${p.id}')"`:''}>${p?p.name.substring(0,45):r.genCode}</td>
-            <td style="padding:6px 10px">${r.workType||'—'}</td>
-            <td style="padding:6px 10px;text-align:right;font-weight:700">${fmt(r.workValue||0)}</td>
+            <td style="padding:6px 10px">${(r.types&&r.types.length)?r.types.join(', ')+(r.workType?'<div style="font-size:10px;color:var(--text3)">was: '+r.workType+'</div>':''):(r.workType||'—')}</td>
+            <td style="padding:6px 10px;text-align:right;font-weight:700">${r.workValue?fmt(r.workValue):'<span style="color:var(--red)">—</span>'}</td>
             <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${qtyStr||'—'}</td>
+            <td style="padding:6px 10px;font-size:11px">${(()=>{ const c=(typeof wlCert==='function')?wlCert(r,p):(p&&p.documents&&p.documents.wec); return (c&&c.url)?`<a href="${c.url}" target="_blank" rel="noopener" style="color:var(--navy)">📕 View</a>`:'<span style="color:var(--text3)">—</span>'; })()}</td>
+            <td style="padding:6px 10px">${(typeof wlIsLegacy==='function'&&wlIsLegacy(r))?`<button class="btn btn-sm" onclick="wlOpen('${r.id}')" title="Edit value, work types, quantities; upload the certificate">✏️ Edit</button>`:''}</td>
           </tr>`;
         }).join('')}
       </tbody>
