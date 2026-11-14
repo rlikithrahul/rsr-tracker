@@ -1089,7 +1089,7 @@ function _renderWEXTab(el){
             <td style="padding:6px 10px">${(r.types&&r.types.length)?r.types.join(', ')+(r.workType?'<div style="font-size:10px;color:var(--text3)">was: '+r.workType+'</div>':''):(r.workType||'—')}</td>
             <td style="padding:6px 10px;text-align:right;font-weight:700">${r.workValue?fmt(r.workValue):'<span style="color:var(--red)">—</span>'}</td>
             <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${qtyStr||'—'}</td>
-            <td style="padding:6px 10px;font-size:11px">${(()=>{ const c=(typeof wlCert==='function')?wlCert(r,p):(p&&p.documents&&p.documents.wec); return (c&&c.url)?`<a href="${c.url}" target="_blank" rel="noopener" style="color:var(--navy)">📕 View</a>`:'<span style="color:var(--text3)">—</span>'; })()}</td>
+            <td style="padding:6px 10px;font-size:11px">${(()=>{ const c=(typeof wlCert==='function')?wlCert(r,p):(p&&p.documents&&p.documents.wec); return (c&&c.url)?`<a href="${c.url}" target="_blank" rel="noopener" style="color:var(--navy)">📕 View</a>${(typeof stAllowed==='function'&&stAllowed())?` <button class="btn btn-sm" style="margin-left:4px" onclick="csSingle('${r.id}')" title="Download a copy with your stamp and sign (the uploaded certificate is not changed)">✍ Signed copy</button>`:''}`:'<span style="color:var(--text3)">—</span>'; })()}</td>
             <td style="padding:6px 10px">${(typeof wlIsLegacy==='function'&&wlIsLegacy(r))?`<button class="btn btn-sm" onclick="wlOpen('${r.id}')" title="Edit value, work types, quantities; upload the certificate">✏️ Edit</button> <button class="btn btn-sm" onclick="wlHide('${r.id}')" title="Remove from every list and finder (kept, can be restored)">🙈 Remove</button>`:''}</td>
           </tr>`;
         }).join('')}

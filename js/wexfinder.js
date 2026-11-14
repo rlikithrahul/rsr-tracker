@@ -165,12 +165,17 @@ async function wxfDownload(){
     if(seen.has(x.cert.url)) return; seen.add(x.cert.url);
     // the file type is read from the file name; fall back to the link if the name has no extension
     const fileName = tdExt(x.cert.name) ? x.cert.name : String(x.cert.url).split('?')[0];
-    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
+    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url, firm:x.rec.firm||m.firm});
   });
   const label = ms.map(x=>x.active.length===1 ? x.active[0].label : (x.bk.group+' ('+x.active.length+' types)')).join(' + ');
-  _wxf.busy = true; toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
+  _wxf.busy = true;
+  if(typeof csWanted==='function' && csWanted()){
+    try{ if(!(await csPrepare(docs))){ _wxf.busy = false; return; } }
+    catch(e){ console.error(e); toast('Nothing was downloaded. '+tdExplainFailure(e),'error',8000); _wxf.busy = false; return; }
+  }
+  toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
   try{
-    const bytes = await tdBuildPdf(PDFLib, docs, {getBytes:tdFetchBytes, imageToJpeg:tdImageToJpeg});
+    const bytes = await tdBuildPdf(PDFLib, docs, {getBytes:d=>d._bytes||tdFetchBytes(d), imageToJpeg:tdImageToJpeg});
     tdSaveBlob(bytes, tdSafeName(m.firm+' - Work experience - '+label+' FY '+ms.map(x=>x.bk.fy).join('/')+' ('+docs.length+' certificates)')+'.pdf', 'application/pdf');
     toast('✓ PDF downloaded — '+docs.length+' certificate'+(docs.length!==1?'s':''),'ok');
     logActivity({category:'system', action:'wex_bundle_downloaded', description:(CU?CU.name:'')+' downloaded a work-experience bundle: '+label+', FY '+ms.map(x=>x.bk.fy).join('/')+', '+docs.length+' certificates ('+m.firm+')'});
@@ -306,7 +311,7 @@ function _wxfBody(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-sm" onclick="wxfAddBlock()" title="For a tender that asks for more than one quantity (for example steel and concrete)">➕ Add another quantity</button>
       <span style="flex:1"></span>
-      <button class="btn btn-sm btn-navy" onclick="wxfDownload()" ${nSel?'':'disabled style="opacity:.5"'}>📎 Download certificates as one PDF</button>
+      ${typeof csToggleHTML==='function'?csToggleHTML():''}<button class="btn btn-sm btn-navy" onclick="wxfDownload()" ${nSel?'':'disabled style="opacity:.5"'}>📎 Download certificates as one PDF</button>
       <button class="btn btn-sm btn-navy" onclick="wxfStatementDownload()" ${nSel?'':'disabled style="opacity:.5"'}>📝 Statement as Word</button>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-top:6px">${nSel?nSel+' project selection'+(nSel!==1?'s':'')+' across '+ms.length+' quantit'+(ms.length!==1?'ies':'y')+'. ':''}The statement lists every ticked project once; a project ticked under two quantities gets both columns filled.</div>

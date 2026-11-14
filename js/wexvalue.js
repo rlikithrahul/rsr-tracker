@@ -146,12 +146,17 @@ async function wxvDownload(){
   m.selRows.forEach(x=>{
     if(seen.has(x.cert.url)) return; seen.add(x.cert.url);
     const fileName = tdExt(x.cert.name) ? x.cert.name : String(x.cert.url).split('?')[0];
-    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
+    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url, firm:x.rec.firm||m.firm});
   });
   const label = _wxv.types.length===m.allTypes.length ? 'Civil works (all types)' : _wxv.types.join(' + ');
-  _wxv.busy=true; toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
+  _wxv.busy=true;
+  if(typeof csWanted==='function' && csWanted()){
+    try{ if(!(await csPrepare(docs))){ _wxv.busy=false; return; } }
+    catch(e){ console.error(e); toast('Nothing was downloaded. '+tdExplainFailure(e),'error',8000); _wxv.busy=false; return; }
+  }
+  toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
   try{
-    const bytes = await tdBuildPdf(PDFLib, docs, {getBytes:tdFetchBytes, imageToJpeg:tdImageToJpeg});
+    const bytes = await tdBuildPdf(PDFLib, docs, {getBytes:d=>d._bytes||tdFetchBytes(d), imageToJpeg:tdImageToJpeg});
     tdSaveBlob(bytes, tdSafeName(m.firm+' - Similar works - '+label+' FY '+_wxv.fy+' ('+docs.length+' certificates)')+'.pdf','application/pdf');
     toast('✓ PDF downloaded — '+docs.length+' certificate'+(docs.length!==1?'s':''),'ok');
     logActivity({category:'system', action:'wex_bundle_downloaded', description:(CU?CU.name:'')+' downloaded a similar-works bundle: '+label+', FY '+_wxv.fy+', '+docs.length+' certificates ('+m.firm+')'});
@@ -229,7 +234,7 @@ function _wxvBody(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-sm" onclick="wxvAutoPickClick()">⚡ Pick largest first until met</button>
         ${m.selRows.length?'<button class="btn btn-sm" onclick="wxvClearSel()">Clear ticks</button>':''}
-        <button class="btn btn-sm btn-navy" onclick="wxvDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📎 Download ${m.selRows.length||''} certificate${m.selRows.length!==1?'s':''} as one PDF</button>
+        ${typeof csToggleHTML==='function'?csToggleHTML():''}<button class="btn btn-sm btn-navy" onclick="wxvDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📎 Download ${m.selRows.length||''} certificate${m.selRows.length!==1?'s':''} as one PDF</button>
         <button class="btn btn-sm btn-navy" onclick="wxvStatementDownload()" ${m.selRows.length?'':'disabled style="opacity:.5"'}>📝 Statement as Word</button>
         <select onchange="_wxv.kind=this.value" title="Wording used in the statement heading" style="padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"><option value="" ${!_wxv.kind?'selected':''}>Heading: automatic (${allOn?'civil':'similar'} works)</option><option value="similar" ${_wxv.kind==='similar'?'selected':''}>Heading: similar works</option><option value="civil" ${_wxv.kind==='civil'?'selected':''}>Heading: civil works</option></select></div>
       ${m.certRows.length?`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px">
