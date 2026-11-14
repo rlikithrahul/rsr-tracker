@@ -884,7 +884,7 @@ function _renderWEXTab(el){
     byFY[fy].count++; byFY[fy].value+=r.workValue||0;
 
     const p=D.projects.find(pr=>(getGenCode(pr)||'').toUpperCase()===r.genCode||(r.projectId&&pr.id===r.projectId));
-    const projectName = p ? p.name : (r.genCode||'—');
+    const projectName = p ? p.name : (r.projectName||r.genCode||'—');
     const contractorName = p ? (GC(p.contractorId)||{}).name||'—' : '—';
 
     Object.entries(r.quantities||{}).forEach(([k,v])=>{
@@ -1063,6 +1063,8 @@ function _renderWEXTab(el){
         ${fys.slice().sort().reverse().map(fy=>`<option value="${fy}" ${flatFilterFY===fy?'selected':''}>FY ${fy}</option>`).join('')}
       </select>
       <span style="font-size:12px;color:var(--text3);align-self:center">${flatRecords.length} record${flatRecords.length!==1?'s':''}</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-sm btn-navy" onclick="wlOpen('new')" title="For FY 2023-24 / 2024-25 only — projects that were not in the old Excel">+ Add experience record</button>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
       <thead><tr style="background:var(--navy);color:#fff">
@@ -1083,16 +1085,17 @@ function _renderWEXTab(el){
           return `<tr style="border-bottom:1px solid var(--surface2);background:${i%2?'var(--surface2)':'#fff'}">
             <td style="padding:6px 10px;font-weight:700">${r.fy}</td>
             <td style="padding:6px 10px;font-family:monospace;font-size:11px">${r.genCode}</td>
-            <td style="padding:6px 10px;${p?'cursor:pointer;color:var(--navy);font-weight:600':''}" ${p?`onclick="openDetail('${p.id}')"`:''}>${p?p.name.substring(0,45):r.genCode}</td>
+            <td style="padding:6px 10px;${p?'cursor:pointer;color:var(--navy);font-weight:600':''}" ${p?`onclick="openDetail('${p.id}')"`:''}>${p?p.name.substring(0,45):(r.projectName||r.genCode)}</td>
             <td style="padding:6px 10px">${(r.types&&r.types.length)?r.types.join(', ')+(r.workType?'<div style="font-size:10px;color:var(--text3)">was: '+r.workType+'</div>':''):(r.workType||'—')}</td>
             <td style="padding:6px 10px;text-align:right;font-weight:700">${r.workValue?fmt(r.workValue):'<span style="color:var(--red)">—</span>'}</td>
             <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${qtyStr||'—'}</td>
             <td style="padding:6px 10px;font-size:11px">${(()=>{ const c=(typeof wlCert==='function')?wlCert(r,p):(p&&p.documents&&p.documents.wec); return (c&&c.url)?`<a href="${c.url}" target="_blank" rel="noopener" style="color:var(--navy)">📕 View</a>`:'<span style="color:var(--text3)">—</span>'; })()}</td>
-            <td style="padding:6px 10px">${(typeof wlIsLegacy==='function'&&wlIsLegacy(r))?`<button class="btn btn-sm" onclick="wlOpen('${r.id}')" title="Edit value, work types, quantities; upload the certificate">✏️ Edit</button>`:''}</td>
+            <td style="padding:6px 10px">${(typeof wlIsLegacy==='function'&&wlIsLegacy(r))?`<button class="btn btn-sm" onclick="wlOpen('${r.id}')" title="Edit value, work types, quantities; upload the certificate">✏️ Edit</button> <button class="btn btn-sm" onclick="wlHide('${r.id}')" title="Remove from every list and finder (kept, can be restored)">🙈 Remove</button>`:''}</td>
           </tr>`;
         }).join('')}
       </tbody>
     </table></div>
+    ${typeof wlHiddenHTML==='function'?wlHiddenHTML(_wexFirm):''}
   </div>`;
 
   const tabs=[

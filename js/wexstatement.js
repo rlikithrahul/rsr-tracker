@@ -39,7 +39,7 @@ function wxsTable(widths, rows, headerRows){
 function wxsScale(base, avail){ const t = base.reduce((a,b)=>a+b,0); const w = base.map(x=>Math.floor(x*avail/t)); w[w.length-1] += avail - w.reduce((a,b)=>a+b,0); return w; }
 function wxsNum(n){ return String(Number(Number(n||0).toFixed(2))); }       // 10573.81 · 57348 (no thousands commas, like the tender format)
 function wxsName(x){
-  const gc = String((x.rec&&x.rec.genCode)||'').trim(), nm = String((x.project&&x.project.name)||'').trim();
+  const gc = String((x.rec&&x.rec.genCode)||'').trim(), nm = String((x.project&&x.project.name)||(x.rec&&x.rec.projectName)||'').trim();
   if(gc && nm) return nm.toLowerCase().startsWith(gc.toLowerCase()) ? nm : gc+'\n'+nm;
   return gc || nm || '—';
 }

@@ -165,7 +165,7 @@ async function wxfDownload(){
     if(seen.has(x.cert.url)) return; seen.add(x.cert.url);
     // the file type is read from the file name; fall back to the link if the name has no extension
     const fileName = tdExt(x.cert.name) ? x.cert.name : String(x.cert.url).split('?')[0];
-    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
+    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
   });
   const label = ms.map(x=>x.active.length===1 ? x.active[0].label : (x.bk.group+' ('+x.active.length+' types)')).join(' + ');
   _wxf.busy = true; toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
@@ -278,7 +278,7 @@ function _wxfBlockBody(bi){
         <thead><tr><th style="width:34px"></th><th style="text-align:left">Project</th>${showParts?'<th style="text-align:left">By type</th>':''}<th style="text-align:right">Quantity</th><th style="text-align:right">Work value</th><th style="text-align:left">Certificate</th></tr></thead>
         <tbody>${m.certRows.map(x=>{
           const on = bk.sel.includes(x.id);
-          const nm = (x.project && x.project.name) || x.rec.genCode || '—';
+          const nm = (x.project && x.project.name) || x.rec.projectName || x.rec.genCode || '—';
           return `<tr style="border-bottom:1px solid var(--border);${on?'background:#eef2fb':''}">
             <td style="padding:6px 8px"><input type="checkbox" ${on?'checked':''} onchange="wxfToggleRow(${bi},'${x.id.replace(/'/g,"\\'")}')" style="width:16px;height:16px;cursor:pointer"></td>
             <td style="padding:6px 8px"><div style="font-weight:700;color:var(--navy)">${wxfEsc(nm)}</div><div style="font-size:10px;color:var(--text3)">${wxfEsc(x.rec.genCode||'')}${x.rec.workType?' · '+wxfEsc(x.rec.workType):''}</div></td>

@@ -146,7 +146,7 @@ async function wxvDownload(){
   m.selRows.forEach(x=>{
     if(seen.has(x.cert.url)) return; seen.add(x.cert.url);
     const fileName = tdExt(x.cert.name) ? x.cert.name : String(x.cert.url).split('?')[0];
-    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
+    docs.push({id:x.id, name:((x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'Project')+' — work experience certificate', fileName, mime:'', url:x.cert.url});
   });
   const label = _wxv.types.length===m.allTypes.length ? 'Civil works (all types)' : _wxv.types.join(' + ');
   _wxv.busy=true; toast('Building one PDF from '+docs.length+' certificate'+(docs.length!==1?'s':'')+'…','ok',2500);
@@ -234,7 +234,7 @@ function _wxvBody(){
         <select onchange="_wxv.kind=this.value" title="Wording used in the statement heading" style="padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"><option value="" ${!_wxv.kind?'selected':''}>Heading: automatic (${allOn?'civil':'similar'} works)</option><option value="similar" ${_wxv.kind==='similar'?'selected':''}>Heading: similar works</option><option value="civil" ${_wxv.kind==='civil'?'selected':''}>Heading: civil works</option></select></div>
       ${m.certRows.length?`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px">
         <thead><tr><th style="width:34px"></th><th style="text-align:left">Project</th><th style="text-align:left">Work type</th><th style="text-align:right">Work value</th><th style="text-align:left">Certificate</th></tr></thead>
-        <tbody>${m.certRows.map(x=>{ const on=_wxv.sel.includes(x.id), nm=(x.project&&x.project.name)||x.rec.genCode||'—';
+        <tbody>${m.certRows.map(x=>{ const on=_wxv.sel.includes(x.id), nm=(x.project&&x.project.name)||x.rec.projectName||x.rec.genCode||'—';
           return `<tr style="border-bottom:1px solid var(--border);${on?'background:#eef2fb':''}">
             <td style="padding:6px 8px"><input type="checkbox" ${on?'checked':''} onchange="wxvToggleRow('${q(x.id)}')" style="width:16px;height:16px;cursor:pointer"></td>
             <td style="padding:6px 8px"><div style="font-weight:700;color:var(--navy)">${wxfEsc(nm)}</div><div style="font-size:10px;color:var(--text3)">${wxfEsc(x.rec.genCode||'')}</div></td>

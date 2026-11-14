@@ -27,7 +27,7 @@ function wlCert(r, project){
 }
 function wlCertSource(r){
   if(r.cert && r.cert.url) return 'own';
-  const n = wlNorm(r.genCode);
+  const n = wlNorm(r.genCode); if(!n) return null;
   const recs = (D.wexData && D.wexData.records) || [];
   const sib = recs.find(x=>x!==r && !x._archived && (x.firm||'RSR Constructions')===(r.firm||'RSR Constructions') && wlNorm(x.genCode)===n && x.cert && x.cert.url);
   return sib ? sib : null;
@@ -49,7 +49,9 @@ function _wlTypeChips(selected){
 function _wlPickedTypes(){ return [...document.querySelectorAll('#wl-modal .wl-t:checked')].map(i=>i.value); }
 async function wlOpen(id){
   try{ if(typeof loadWEXData==='function') await loadWEXData(); if(typeof loadCustomWorkTypes==='function') await loadCustomWorkTypes(); if(typeof loadWEXCustomTypes==='function') await loadWEXCustomTypes(); }catch(e){}
-  const r = ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===id);
+  const isNew = id==='new';
+  const firmNow = (typeof _wexFirm!=='undefined' && _wexFirm) ? _wexFirm : 'RSR Constructions';
+  const r = isNew ? {id:null, firm:firmNow, fy:'2024-25', genCode:'', quantities:{}} : ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===id);
   if(!r){ toast('Record not found — refresh the page','error'); return; }
   _wlRec = id;
   const items = getAllWEXItems(), q = r.quantities||{};
@@ -62,8 +64,12 @@ async function wlOpen(id){
   let m = document.getElementById('wl-modal');
   if(!m){ m = document.createElement('div'); m.className='mov'; m.id='wl-modal'; document.body.appendChild(m); }
   m.innerHTML = `<div class="mbox" style="max-width:720px">
-    <div class="mhdr"><h2>✏️ Experience record — FY ${_wlE(r.fy)}</h2><button class="mx" onclick="CM('wl-modal')">✕</button></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Gen code <strong style="font-family:monospace">${_wlE(r.genCode)}</strong> · ${_wlE(r.firm||'RSR Constructions')}</div>
+    <div class="mhdr"><h2>${isNew?'+ New experience record':'✏️ Experience record — FY '+_wlE(r.fy)}</h2><button class="mx" onclick="CM('wl-modal')">✕</button></div>
+    ${isNew?`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">For <strong>${_wlE(r.firm)}</strong> — a project that was not in the old Excel. Only the years before the app can be added here.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><div class="fg" style="flex:1;min-width:140px"><label>Financial year</label><select id="wl-fy"><option>2024-25</option><option>2023-24</option></select></div>
+    <div class="fg" style="flex:2;min-width:200px"><label>Gen code</label><input id="wl-gen" placeholder="e.g. 2023-ENG05-46-170"></div></div>`
+    :`<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Gen code <strong style="font-family:monospace">${_wlE(r.genCode)}</strong> · ${_wlE(r.firm||'RSR Constructions')}</div>`}
+    <div class="fg"><label>Project name <span style="font-weight:400;color:var(--text3)">(optional — shown instead of the gen code)</span></label><input id="wl-name" value="${_wlE(r.projectName||'')}" placeholder="e.g. Construction of SW drain at …"></div>
     <div class="fg"><label>Work value (₹)</label><input type="number" step="any" min="0" id="wl-value" value="${r.workValue?_wlE(r.workValue):''}" placeholder="e.g. 1590228"></div>
     <div class="fg"><label>Work types <span style="font-weight:400;color:var(--text3)">(tick every one that applies)</span></label>
       ${r.workType?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Recorded earlier as: <strong>${_wlE(r.workType)}</strong></div>`:''}
@@ -112,7 +118,18 @@ async function wlAddType(){
 }
 async function wlSave(){
   const err = document.getElementById('wl-err'); err.style.display = 'none';
-  const r = ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===_wlRec); if(!r) return;
+  const isNew = _wlRec==='new';
+  let r;
+  if(isNew){
+    const gen = document.getElementById('wl-gen').value.trim(), fy = document.getElementById('wl-fy').value;
+    const nm0 = document.getElementById('wl-name').value.trim();
+    const firm = (typeof _wexFirm!=='undefined' && _wexFirm) ? _wexFirm : 'RSR Constructions';
+    if(!gen){ err.textContent = 'Enter the gen code.'; err.style.display = 'block'; return; }
+    if(((D.wexData&&D.wexData.records)||[]).some(x=>!x._archived && x.fy===fy && (x.firm||'RSR Constructions')===firm && wlNorm(x.genCode)===wlNorm(gen))){ err.textContent = 'This gen code already has a record for FY '+fy+' — edit that row instead.'; err.style.display = 'block'; return; }
+    r = {id:'wex_'+uid(), firm, fy, genCode:gen, quantities:{}, workValue:0, source:'manual', addedAt:new Date().toISOString(), addedBy:(CU&&CU.name)||''};
+  } else {
+    r = ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===_wlRec); if(!r) return;
+  }
   const vRaw = document.getElementById('wl-value').value.trim();
   const value = vRaw==='' ? 0 : Number(vRaw);
   if(!(value>=0) || isNaN(value)){ err.textContent = 'Enter the work value as a number.'; err.style.display = 'block'; return; }
@@ -122,7 +139,7 @@ async function wlSave(){
   document.querySelectorAll('#wl-modal .wl-q').forEach(i=>{ const s = i.value.trim(); if(s==='') return; const n = Number(s); if(isNaN(n) || n<0){ bad = true; return; } if(n>0) qty[i.dataset.key] = n; });
   if(bad){ err.textContent = 'A quantity is not a valid number.'; err.style.display = 'block'; return; }
   const file = document.getElementById('wl-file').files[0] || null;
-  const before = JSON.parse(JSON.stringify({workValue:r.workValue, types:r.types, quantities:r.quantities, cert:r.cert}));
+  const before = JSON.parse(JSON.stringify({workValue:r.workValue, types:r.types, quantities:r.quantities, cert:r.cert, projectName:r.projectName}));
   const btn = document.getElementById('wl-save'); btn.disabled = true;
   setBusy(true, file ? 'Uploading certificate…' : 'Saving…');
   try{
@@ -132,19 +149,48 @@ async function wlSave(){
       cert = {url, name:file.name, size:file.size, uploadedAt:new Date().toISOString(), uploadedBy:(CU&&CU.name)||''};
     }
     r.workValue = value; r.quantities = qty;
+    const pn = document.getElementById('wl-name').value.trim(); if(pn) r.projectName = pn; else delete r.projectName;
+    if(isNew) D.wexData.records.push(r);
     if(types.length) r.types = types; else delete r.types;
     if(cert) r.cert = cert;
     await saveWEXData();
     // the other year of the same project shares this certificate by gen code — nothing to copy
-    try{ logActivity({category:'system', action:'wex_legacy_edited', description:(CU?CU.name:'')+' edited experience record '+r.genCode+' FY '+r.fy+(file?' (certificate uploaded)':'')}); }catch(e){}
+    try{ logActivity({category:'system', action:'wex_legacy_edited', description:(CU?CU.name:'')+(isNew?' added':' edited')+' experience record '+r.genCode+' FY '+r.fy+(file?' (certificate uploaded)':'')}); }catch(e){}
     CM('wl-modal');
     toast('✓ Saved'+(file?' — certificate uploaded':''),'ok');
     if(typeof _renderWEXTab==='function') _renderWEXTab(document.getElementById('sec-wex'));
   }catch(e){
     console.error(e);
+    if(isNew) D.wexData.records = D.wexData.records.filter(x=>x!==r);
     r.workValue = before.workValue; r.quantities = before.quantities;
+    if(before.projectName) r.projectName = before.projectName; else delete r.projectName;
     if(before.types) r.types = before.types; else delete r.types;
     if(before.cert) r.cert = before.cert; else delete r.cert;
     err.textContent = 'NOT saved — '+(e.message||'unknown error')+'. Nothing was changed; please try again.'; err.style.display = 'block';
   }finally{ setBusy(false); btn.disabled = false; }
+}
+
+// ─── REMOVE (hidden, never deleted) / RESTORE ──────────
+async function wlHide(id){
+  const r = ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===id); if(!r) return;
+  const ok = await showConfirm({title:'Remove this experience record?', message:'<strong>'+_wlE(r.projectName||r.genCode)+'</strong> (FY '+_wlE(r.fy)+') leaves every list, finder and total. It is not deleted — it stays under “Removed records” at the bottom of this page and can be restored.', confirmLabel:'Remove', danger:false});
+  if(!ok) return;
+  r._archived = true; r.archivedAt = new Date().toISOString(); r.archivedBy = (CU&&CU.name)||'';
+  try{ await saveWEXData(); try{ logActivity({category:'system', action:'wex_legacy_removed', description:(CU?CU.name:'')+' removed experience record '+r.genCode+' FY '+r.fy}); }catch(e){} toast('✓ Removed — it can be restored from the bottom of the page','ok'); }
+  catch(e){ delete r._archived; delete r.archivedAt; delete r.archivedBy; toast('NOT removed — '+(e.message||'save failed'),'error',7000); }
+  if(typeof _renderWEXTab==='function') _renderWEXTab(document.getElementById('sec-wex'));
+}
+async function wlRestore(id){
+  const r = ((D.wexData&&D.wexData.records)||[]).find(x=>x.id===id); if(!r) return;
+  const was = {a:r.archivedAt, b:r.archivedBy};
+  delete r._archived;
+  try{ await saveWEXData(); toast('✓ Restored','ok'); try{ logActivity({category:'system', action:'wex_legacy_restored', description:(CU?CU.name:'')+' restored experience record '+r.genCode+' FY '+r.fy}); }catch(e){} }
+  catch(e){ r._archived = true; toast('NOT restored — '+(e.message||'save failed'),'error',7000); }
+  if(typeof _renderWEXTab==='function') _renderWEXTab(document.getElementById('sec-wex'));
+}
+function wlHiddenHTML(firm){
+  const hid = ((D.wexData&&D.wexData.records)||[]).filter(r=>r._archived && wlIsLegacy(r) && (r.firm||'RSR Constructions')===firm);
+  if(!hid.length) return '';
+  return `<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px">🙈 Removed records (${hid.length}) — not counted anywhere</div>
+    ${hid.map(r=>`<div style="display:flex;gap:10px;align-items:center;font-size:12px;padding:3px 0"><span style="flex:1;opacity:.7">FY ${_wlE(r.fy)} · ${_wlE(r.projectName||r.genCode)}${r.workValue?' · ₹'+Number(r.workValue).toLocaleString('en-IN'):''}</span><button class="btn btn-sm" onclick="wlRestore('${r.id}')">↩ Restore</button></div>`).join('')}</div>`;
 }
