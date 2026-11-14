@@ -116,7 +116,7 @@ function csPlace(info){
         <div style="flex:0 0 250px;min-width:230px">
           <div id="cs-pick">${stPickerHTML('cs', key, 'csChoose()', {variant:pos.variant, address:pos.address}).replace('Goes at the signing place at the end of the letter. Upload','Upload')}</div>
           <div class="fg"><label>Size</label><input type="range" id="cs-size" min="8" max="45" value="${Math.round(pos.fw*100)}" style="width:100%"></div>
-          <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:8px 0;text-transform:none;letter-spacing:0;font-weight:600"><input type="checkbox" id="cs-rem" checked> Remember this place for this certificate</label>
+          ${info.noRemember?'':`<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:8px 0;text-transform:none;letter-spacing:0;font-weight:600"><input type="checkbox" id="cs-rem" checked> Remember this place for this certificate</label>`}
           <div id="cs-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
             ${info.canSkip?'<button class="btn" id="cs-skip" title="Include this certificate without a stamp">Skip — no stamp</button>':'<button class="btn" id="cs-cancel">Cancel</button>'}
@@ -178,7 +178,7 @@ function csPlace(info){
     $('cs-ok').onclick = async ()=>{
       const c = stChoice('cs'); pos.variant = c.variant; pos.address = c.address;
       if(!csUsable(pos) || !res || !(res.main||res.addr)){ err('Choose a stamp first (and make sure its picture is uploaded in Settings → Stamps & Signs).'); return; }
-      done({pos:{page:pos.page, fx:+pos.fx.toFixed(4), fy:+pos.fy.toFixed(4), fw:+pos.fw.toFixed(4), variant:pos.variant, address:!!pos.address}, remember:$('cs-rem').checked});
+      done({pos:{page:pos.page, fx:+pos.fx.toFixed(4), fy:+pos.fy.toFixed(4), fw:+pos.fw.toFixed(4), variant:pos.variant, address:!!pos.address}, remember:!!($('cs-rem')&&$('cs-rem').checked)});
     };
     // open the certificate
     try{

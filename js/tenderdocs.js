@@ -25,7 +25,7 @@
 
 const TD_KEY = 'rsr_tender_docs_v1';
 const TD_FIRMS = ['RSR Constructions','R Sadhu Rao','R Likith Rahul'];
-const TD_CATEGORIES = ['Registration & statutory','Key personnel','Key equipment','Statements','Certificates','Experience & work orders','Financial','Other'];
+const TD_CATEGORIES = ['Registration & statutory','Key personnel','Key equipment','Statements','Certificates','Experience & work orders','Financial','Signed documents','Other'];
 const TD_DEPT_SUGGEST = ['All departments','GVMC','APIIC','R&B','PWD','Irrigation'];
 const TD_MAX_BYTES = 25*1024*1024;
 const TD_CORS_JSON = '[\n  {\n    "AllowedOrigins": ["https://rsr-tracker.pages.dev", "http://127.0.0.1:5500"],\n    "AllowedMethods": ["GET", "HEAD"],\n    "AllowedHeaders": ["*"],\n    "MaxAgeSeconds": 3600\n  }\n]';
@@ -197,6 +197,8 @@ function tdDoc(id){ return (D.tenderDocs||[]).find(d=>d.id===id && !d._archived)
 // ─── PAGE ──────────────────────────────────────────────
 async function renderTenderDocs(){
   const el = document.getElementById('sec-tenderdocs'); if(!el) return;
+  if(typeof _tdTab!=='undefined' && _tdTab==='stmt' && typeof tsDraw==='function') return tsDraw();
+  if(typeof _tdTab!=='undefined' && _tdTab==='desk' && typeof sdDraw==='function'){ try{ await loadTenderDocs(); }catch(e){} return sdDraw(); }
   el.innerHTML = '<div class="wrap"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</div></div>';
   try{ await loadTenderDocs(); }
   catch(e){
@@ -211,7 +213,7 @@ async function renderTenderDocs(){
 function _tdDraw(){
   const el = document.getElementById('sec-tenderdocs'); if(!el) return;
   const firm = TD_FIRMS[_tdFirmIdx];
-  el.innerHTML = `<div class="wrap">
+  el.innerHTML = `<div class="wrap">${typeof tdTabsHTML==='function'?tdTabsHTML():''}
     <div class="pg-hdr">
       <div>
         <div class="pg-title">📁 Tender Documents</div>
