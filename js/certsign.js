@@ -68,24 +68,40 @@ async function csPdfBytes(doc){
 async function csStampBytes(pdfBytes, pos, res){
   const L = PDFLib, doc = await L.PDFDocument.load(pdfBytes);
   const pages = doc.getPages(); if(!pages.length) throw new Error('this PDF has no pages');
-  const pi = pos.page==='last' ? pages.length-1 : Math.min(Math.max(1,parseInt(pos.page,10)||1), pages.length)-1;
-  const page = pages[pi];
-  const box = page.getCropBox ? page.getCropBox() : {x:0,y:0,width:page.getWidth(),height:page.getHeight()};
-  const W = box.width, H = box.height, r = ((page.getRotation().angle%360)+360)%360;
-  const Wd = (r===90||r===270) ? H : W, Hd = (r===90||r===270) ? W : H;     // the page as seen
-  const items = [];
-  if(res.main) items.push(await doc.embedPng(res.main.bytes).then(img=>({img, w:res.main.w, h:res.main.h, k:1})));
-  if(res.addr) items.push(await doc.embedPng(res.addr.bytes).then(img=>({img, w:res.addr.w, h:res.addr.h, k:ST_WIDTH_CM.address/ST_WIDTH_CM.stamp})));
-  const mainW = pos.fw*Wd;
-  const widths = items.map(it=>mainW*it.k), groupW = Math.max(...widths);
-  let v = pos.fy*Hd; const u0 = pos.fx*Wd;
-  items.forEach((it,i)=>{
-    const wd = widths[i], ht = wd*it.h/it.w, u = u0 + (groupW-wd)/2, vb = v+ht;   // vb = bottom edge as seen
-    let X, Y;
-    if(r===0){ X=u; Y=Hd-vb; } else if(r===90){ X=vb; Y=u; } else if(r===180){ X=Wd-u; Y=vb; } else { X=Hd-vb; Y=Wd-u; }
-    page.drawImage(it.img, {x:box.x+X, y:box.y+Y, width:wd, height:ht, rotate:L.degrees(r)});
-    v += ht + 0.012*Hd;
-  });
+  // which pages: pos.pages = 'all' | [numbers] ; otherwise the single page in pos.page
+  let idx;
+  if(pos.pages==='all') idx = pages.map((_,i)=>i);
+  else if(Array.isArray(pos.pages) && pos.pages.length) idx = [...new Set(pos.pages.map(n=>parseInt(n,10)).filter(n=>n>=1 && n<=pages.length).map(n=>n-1))].sort((x,y)=>x-y);
+  else idx = [pos.page==='last' ? pages.length-1 : Math.min(Math.max(1,parseInt(pos.page,10)||1), pages.length)-1];
+  if(!idx.length) throw new Error('none of the chosen pages exist in this PDF');
+  const k = ST_WIDTH_CM.address/ST_WIDTH_CM.stamp;
+  const imgMain = res.main ? await doc.embedPng(res.main.bytes) : null;
+  const imgAddr = res.addr ? await doc.embedPng(res.addr.bytes) : null;
+  const sep = pos.ax!=null && isFinite(pos.ax) && pos.ay!=null && isFinite(pos.ay);      // stamp and address placed on their own
+  for(const pi of idx){
+    const page = pages[pi];
+    const box = page.getCropBox ? page.getCropBox() : {x:0,y:0,width:page.getWidth(),height:page.getHeight()};
+    const W = box.width, H = box.height, r = ((page.getRotation().angle%360)+360)%360;
+    const Wd = (r===90||r===270) ? H : W, Hd = (r===90||r===270) ? W : H;     // the page as seen
+    const put = (img, u, v, wd, iw, ih)=>{                                    // u,v = top-left as seen; wd = width as seen
+      const ht = wd*ih/iw, vb = v+ht; let X, Y;
+      if(r===0){ X=u; Y=Hd-vb; } else if(r===90){ X=vb; Y=u; } else if(r===180){ X=Wd-u; Y=vb; } else { X=Hd-vb; Y=Wd-u; }
+      page.drawImage(img, {x:box.x+X, y:box.y+Y, width:wd, height:ht, rotate:L.degrees(r)});
+      return ht;
+    };
+    if(sep){
+      if(imgMain) put(imgMain, pos.fx*Wd, pos.fy*Hd, pos.fw*Wd, res.main.w, res.main.h);
+      if(imgAddr) put(imgAddr, pos.ax*Wd, pos.ay*Hd, (pos.aw>0?pos.aw:pos.fw*k)*Wd, res.addr.w, res.addr.h);
+    } else {
+      // older remembered places: the address stamp sits right below the stamp
+      const items = [];
+      if(imgMain) items.push({img:imgMain, w:res.main.w, h:res.main.h, k:1});
+      if(imgAddr) items.push({img:imgAddr, w:res.addr.w, h:res.addr.h, k});
+      const mainW = pos.fw*Wd, widths = items.map(it=>mainW*it.k), groupW = Math.max(...widths);
+      let v = pos.fy*Hd; const u0 = pos.fx*Wd;
+      items.forEach((it,i)=>{ const ht = put(it.img, u0+(groupW-widths[i])/2, v, widths[i], it.w, it.h); v += ht + 0.012*Hd; });
+    }
+  }
   return await doc.save();
 }
 
@@ -110,12 +126,18 @@ function csPlace(info){
             <button class="btn btn-sm" id="cs-prev">◀</button> <span>Page <strong id="cs-pg">1</strong> of <span id="cs-np">1</span></span> <button class="btn btn-sm" id="cs-next">▶</button>
             <button class="btn btn-sm" id="cs-last">Last page</button>
           </div>
-          <div id="cs-wrap" style="position:relative;display:inline-block;max-width:100%;border:1px solid var(--border);background:#fff;touch-action:none;user-select:none"><canvas id="cs-cv" style="display:block;max-width:100%"></canvas><div id="cs-st" style="position:absolute;cursor:move;outline:2px dashed #3b6fd4;outline-offset:1px;display:none"></div></div>
+          <div id="cs-wrap" style="position:relative;display:inline-block;max-width:100%;border:1px solid var(--border);background:#fff;touch-action:none;user-select:none"><canvas id="cs-cv" style="display:block;max-width:100%"></canvas><div id="cs-st" style="position:absolute;cursor:move;outline:2px dashed #3b6fd4;outline-offset:1px;display:none"></div><div id="cs-ad" style="position:absolute;cursor:move;outline:2px dashed #d4803b;outline-offset:1px;display:none"></div></div>
           <div id="cs-msg" style="font-size:12px;color:var(--text3);margin-top:6px">Loading the certificate…</div>
         </div>
         <div style="flex:0 0 250px;min-width:230px">
           <div id="cs-pick">${stPickerHTML('cs', key, 'csChoose()', {variant:pos.variant, address:pos.address}).replace('Goes at the signing place at the end of the letter. Upload','Upload')}</div>
-          <div class="fg"><label>Size</label><input type="range" id="cs-size" min="8" max="45" value="${Math.round(pos.fw*100)}" style="width:100%"></div>
+          <div class="fg"><label>Stamp &amp; sign size</label><input type="range" id="cs-size" min="8" max="45" value="${Math.round(pos.fw*100)}" style="width:100%"></div>
+          <div class="fg" id="cs-asz" style="display:none"><label>Address stamp size</label><input type="range" id="cs-asize" min="8" max="60" value="30" style="width:100%"><div style="font-size:11px;color:var(--text3)">The address stamp (orange frame) moves on its own — drag it anywhere.</div></div>
+          <div class="fg"><label>Put it on</label>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;text-transform:none;letter-spacing:0;font-weight:600">
+              <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:600"><input type="radio" name="cs-pm" value="one" checked> Only this page</label>
+              <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:600"><input type="radio" name="cs-pm" value="all"> All pages (<span id="cs-npa">1</span>)</label>
+              <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-weight:600"><input type="radio" name="cs-pm" value="list"> These pages: <input id="cs-pl" placeholder="e.g. 1,3-4" style="width:90px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"></label></div></div>
           ${info.noRemember?'':`<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:8px 0;text-transform:none;letter-spacing:0;font-weight:600"><input type="checkbox" id="cs-rem" checked> Remember this place for this certificate</label>`}
           <div id="cs-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
@@ -131,16 +153,42 @@ function csPlace(info){
     $('cs-x').onclick = ()=>done(null); $('cs-cancel').onclick = ()=>done(null);
     if($('cs-skip')) $('cs-skip').onclick = ()=>done('skip');
     const err = t=>{ $('cs-err').textContent = t||''; $('cs-err').style.display = t?'block':'none'; };
-    // the stamp block on the page
-    const stEl = $('cs-st');
+    // the stamp and the address stamp on the page — each its own draggable piece
+    const stEl = $('cs-st'), adEl = $('cs-ad'), K = ST_WIDTH_CM.address/ST_WIDTH_CM.stamp;
+    const getPages = ()=>{
+      const mode = (document.querySelector('input[name="cs-pm"]:checked')||{}).value;
+      if(mode==='all') return 'all';
+      if(mode==='list'){
+        const out = new Set(); const txt = ($('cs-pl').value||'').trim(); if(!txt) return null;
+        for(const part of txt.split(/[,\s]+/).filter(Boolean)){
+          const m = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(part); if(!m) return null;
+          let a = Number(m[1]), b = m[2]?Number(m[2]):a; if(a>b){ const t=a; a=b; b=t; }
+          if(a<1 || b>nPages) return null; for(let i=a;i<=b;i++) out.add(i);
+        }
+        return [...out].sort((x,y)=>x-y);
+      }
+      return undefined;
+    };
+    const onThisPage = ()=>{ const g = getPages(); return g==='all' || (Array.isArray(g) ? g.includes(cur) : true); };
+    // first time the address stamp is placed on its own, start where it used to sit (below the stamp)
+    const ensureSep = ()=>{
+      if(!pos.address || !res || !res.addr || (pos.ax!=null && isFinite(pos.ax))) return;
+      const cv = $('cs-cv'); if(!cv.clientHeight) return;
+      const asp = cv.clientWidth/cv.clientHeight, groupW = Math.max(res.main?pos.fw:0, pos.fw*K);
+      const htMain = res.main ? pos.fw*asp*res.main.h/res.main.w : 0;
+      pos.aw = pos.fw*K;
+      pos.ax = pos.fx + (groupW-pos.aw)/2; pos.ay = pos.fy + (res.main ? htMain + 0.012 : 0);
+      if(res.main) pos.fx = pos.fx + (groupW-pos.fw)/2;
+      clampAll();
+    };
     const drawStamp = ()=>{
-      if(!res || (!res.main && !res.addr)){ stEl.style.display='none'; return; }
-      const k = ST_WIDTH_CM.address/ST_WIDTH_CM.stamp, both = res.main && res.addr;
-      const gw = pos.fw * (res.addr ? k : 1);
-      stEl.style.display = 'block';
-      stEl.style.width = (gw*100)+'%';
-      stEl.style.left = (pos.fx*100)+'%'; stEl.style.top = (pos.fy*100)+'%';
-      stEl.innerHTML = [res.main&&{i:res.main,w:1/(res.addr?k:1)}, res.addr&&{i:res.addr,w:1}].filter(Boolean).map(o=>`<img src="${o.i.dataUrl}" draggable="false" style="display:block;width:${o.w*100}%;margin:0 auto 1.2%;pointer-events:none">`).join('');
+      const show = res && onThisPage();
+      ensureSep();
+      stEl.style.display = (show && res.main) ? 'block' : 'none';
+      adEl.style.display = (show && res.addr && pos.address) ? 'block' : 'none';
+      $('cs-asz').style.display = (res && res.addr && pos.address) ? 'block' : 'none';
+      if(res && res.main){ stEl.style.width = (pos.fw*100)+'%'; stEl.style.left = (pos.fx*100)+'%'; stEl.style.top = (pos.fy*100)+'%'; stEl.innerHTML = `<img src="${res.main.dataUrl}" draggable="false" style="display:block;width:100%;pointer-events:none">`; }
+      if(res && res.addr && pos.ax!=null){ adEl.style.width = (pos.aw*100)+'%'; adEl.style.left = (pos.ax*100)+'%'; adEl.style.top = (pos.ay*100)+'%'; adEl.innerHTML = `<img src="${res.addr.dataUrl}" draggable="false" style="display:block;width:100%;pointer-events:none">`; $('cs-asize').value = Math.round(pos.aw*100); }
     };
     const loadRes = async ()=>{
       err('');
@@ -157,34 +205,47 @@ function csPlace(info){
       const cv = $('cs-cv'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height); cv.style.width = cssW+'px'; cv.style.height = Math.round(cssW*vp.height/vp.width)+'px';
       await pg.render({canvasContext:cv.getContext('2d'), canvas:cv, viewport:vp}).promise;
       if(tok!==rendered) return;
-      $('cs-pg').textContent = n; $('cs-np').textContent = nPages; cur = n;
+      $('cs-pg').textContent = n; $('cs-np').textContent = nPages; $('cs-npa').textContent = nPages; cur = n;
       pos.page = (n===nPages) ? 'last' : n;
       drawStamp();
     };
     let cur = 1;
     $('cs-prev').onclick = ()=>showPage(cur-1); $('cs-next').onclick = ()=>showPage(cur+1); $('cs-last').onclick = ()=>showPage(nPages);
-    $('cs-size').oninput = e=>{ pos.fw = Number(e.target.value)/100; clampPos(); drawStamp(); };
-    // dragging
-    const clampPos = ()=>{
-      const k = ST_WIDTH_CM.address/ST_WIDTH_CM.stamp, gw = pos.fw*((res&&res.addr)?k:1);
-      const cv = $('cs-cv'), gh = (stEl.offsetHeight||0)/(cv.clientHeight||1);
-      pos.fx = Math.min(Math.max(0,pos.fx), Math.max(0,1-gw)); pos.fy = Math.min(Math.max(0,pos.fy), Math.max(0,1-gh));
+    document.querySelectorAll('input[name="cs-pm"]').forEach(r=>r.onchange = drawStamp);
+    $('cs-pl').oninput = ()=>{ document.querySelector('input[name="cs-pm"][value="list"]').checked = true; drawStamp(); };
+    const clampOne = (el, fxk, fyk, wk)=>{
+      const cv = $('cs-cv'), gh = (el.offsetHeight||0)/(cv.clientHeight||1);
+      pos[fxk] = Math.min(Math.max(0,pos[fxk]), Math.max(0,1-pos[wk])); pos[fyk] = Math.min(Math.max(0,pos[fyk]), Math.max(0,1-gh));
     };
-    let drag = null;
-    stEl.addEventListener('pointerdown', e=>{ const cv=$('cs-cv').getBoundingClientRect(); drag = {x:e.clientX, y:e.clientY, fx:pos.fx, fy:pos.fy, w:cv.width, h:cv.height}; stEl.setPointerCapture(e.pointerId); e.preventDefault(); });
-    stEl.addEventListener('pointermove', e=>{ if(!drag) return; pos.fx = drag.fx + (e.clientX-drag.x)/drag.w; pos.fy = drag.fy + (e.clientY-drag.y)/drag.h; clampPos(); drawStamp(); });
-    const end = ()=>{ drag = null; }; stEl.addEventListener('pointerup', end); stEl.addEventListener('pointercancel', end);
+    const clampAll = ()=>{ if(res&&res.main) clampOne(stEl,'fx','fy','fw'); if(res&&res.addr&&pos.ax!=null) clampOne(adEl,'ax','ay','aw'); };
+    $('cs-size').oninput = e=>{ pos.fw = Number(e.target.value)/100; clampAll(); drawStamp(); };
+    $('cs-asize').oninput = e=>{ pos.aw = Number(e.target.value)/100; clampAll(); drawStamp(); };
+    // dragging (each piece on its own)
+    const dragger = (el, fxk, fyk, wk)=>{
+      let drag = null;
+      el.addEventListener('pointerdown', e=>{ const cv=$('cs-cv').getBoundingClientRect(); drag = {x:e.clientX, y:e.clientY, fx:pos[fxk], fy:pos[fyk], w:cv.width, h:cv.height}; el.setPointerCapture(e.pointerId); e.preventDefault(); });
+      el.addEventListener('pointermove', e=>{ if(!drag) return; pos[fxk] = drag.fx + (e.clientX-drag.x)/drag.w; pos[fyk] = drag.fy + (e.clientY-drag.y)/drag.h; clampOne(el,fxk,fyk,wk); drawStamp(); });
+      const end = ()=>{ drag = null; }; el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    };
+    dragger(stEl,'fx','fy','fw'); dragger(adEl,'ax','ay','aw');
     // go
     $('cs-ok').onclick = async ()=>{
       const c = stChoice('cs'); pos.variant = c.variant; pos.address = c.address;
       if(!csUsable(pos) || !res || !(res.main||res.addr)){ err('Choose a stamp first (and make sure its picture is uploaded in Settings → Stamps & Signs).'); return; }
-      done({pos:{page:pos.page, fx:+pos.fx.toFixed(4), fy:+pos.fy.toFixed(4), fw:+pos.fw.toFixed(4), variant:pos.variant, address:!!pos.address}, remember:!!($('cs-rem')&&$('cs-rem').checked)});
+      const pg = getPages();
+      if(pg===null){ err('Write the pages like 1,3-4 (this PDF has '+nPages+' page'+(nPages!==1?'s':'')+').'); return; }
+      const out = {page:pos.page, fx:+pos.fx.toFixed(4), fy:+pos.fy.toFixed(4), fw:+pos.fw.toFixed(4), variant:pos.variant, address:!!pos.address};
+      if(pg!==undefined) out.pages = pg;
+      if(pos.address && pos.ax!=null){ out.ax = +pos.ax.toFixed(4); out.ay = +pos.ay.toFixed(4); out.aw = +pos.aw.toFixed(4); }
+      done({pos:out, remember:!!($('cs-rem')&&$('cs-rem').checked)});
     };
     // open the certificate
     try{
       const lib = await csLoadPdfjs();
       pdf = await lib.getDocument({data: info.bytes.slice()}).promise;
       nPages = pdf.numPages;
+      if(pos.pages==='all') document.querySelector('input[name="cs-pm"][value="all"]').checked = true;
+      else if(Array.isArray(pos.pages)){ document.querySelector('input[name="cs-pm"][value="list"]').checked = true; $('cs-pl').value = pos.pages.join(','); }
       await loadRes();
       const start = (pos.page==='last' || !pos.page) ? nPages : Math.min(nPages, parseInt(pos.page,10)||nPages);
       await showPage(start);
