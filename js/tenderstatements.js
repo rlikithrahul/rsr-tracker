@@ -17,6 +17,8 @@
 
 const TS_TURN_KEY = 'rsr_turnover_v1';
 const TS_PEOPLE_KEY = 'rsr_key_people_v1';
+const TS_EQUIP_KEY = 'rsr_key_equipment_v1';
+let _tsEq = {};                         // per-download values for each item {sel, qty, own}
 // from the CA turnover certificate dated 05/10/2026 (N. Chandra Mouli Prasad, Chartered Accountant)
 const TS_TURN_SEED = {'RSR Constructions': {_note:'Turnover certificate of the Chartered Accountant dated 05/10/2026', '2015-16':3265050,'2016-17':8894479,'2017-18':6831165,'2018-19':8730635,'2019-20':3782819,'2020-21':491332,'2021-22':2168270,'2022-23':736750,'2023-24':0,'2024-25':11991350}};
 
@@ -41,7 +43,19 @@ async function tsLoad(){
     let v = await getSetting(TS_PEOPLE_KEY, []);
     D.keyPeople = Array.isArray(v) ? v : [];
   }
+  if(!D.keyEquip){
+    let v = await getSetting(TS_EQUIP_KEY, []);
+    D.keyEquip = Array.isArray(v) ? v : [];
+  }
   await loadTenderDocs();
+}
+function tsEquip(){ return (D.keyEquip||[]).filter(q=>!q._archived); }
+function tsSaveEquip(){
+  const run = async ()=>{
+    const merged = await mergeAndSaveSetting(TS_EQUIP_KEY, D.keyEquip||[], true);
+    (merged||[]).forEach(m=>{ if(!D.keyEquip.some(x=>x.id===m.id)) D.keyEquip.push(m); });
+  };
+  const p = _tsSaveChain.catch(()=>{}).then(run); _tsSaveChain = p; return p;
 }
 function tsPeople(){ return (D.keyPeople||[]).filter(p=>!p._archived); }
 function tsSavePeople(){
@@ -65,7 +79,8 @@ async function tsDraw(){
   try{ await tsLoad(); }
   catch(e){ console.error(e); el.innerHTML = '<div class="wrap">'+tdTabsHTML()+'<div class="card" style="text-align:center;padding:30px;color:var(--red)">Could not load the statements data. Check your connection and reload.</div></div>'; return; }
   const yrs = tsTurnYears(_tsFirm, _tsYears), want = _tsYears;
-  const ppl = tsPeople();
+  const ppl = tsPeople(), eq = tsEquip();
+  eq.forEach(q=>{ if(!_tsEq[q.id]) _tsEq[q.id] = {sel:false, qty:'1', own:'owned'}; });
   ppl.forEach(p=>{ if(!_tsPpl[p.id]) _tsPpl[p.id] = {sel:false, designation:p.designation||'', experience:p.experience||'', since:p.since||''}; });
   const projName = id=>{ const p = (D.projects||[]).find(x=>x.id===id); return p ? p.name : '(project removed)'; };
   const sec = (title, sub, inner)=>`<div class="card" style="margin-bottom:14px"><div style="font-size:15px;font-weight:800;color:var(--navy)">${title}</div><div style="font-size:12px;color:var(--text3);margin:2px 0 10px">${sub}</div>${inner}</div>`;
@@ -109,14 +124,17 @@ async function tsDraw(){
         <button class="btn btn-sm btn-navy" onclick="tsDlCerts()" ${ppl.length?'':'disabled'}>📎 Certificates of the ticked people (one PDF)</button>
       </div>`)}
 
-    ${sec('🛠 Key critical equipment','Coming next — you add items once, tick the ones to include, and download with stamp and sign.','')}
+    ${sec('🛠 Key critical equipment','One list for all three firms. Add an item once; tick the ones for this tender, say how many are needed and whether owned or leased.',`
+      ${eq.length ? `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f9;text-align:left"><th style="padding:6px"></th><th style="padding:6px">Equipment</th><th style="padding:6px">Number</th><th style="padding:6px">Owned / Leased</th><th style="padding:6px">Year</th><th style="padding:6px">Regn. no.</th><th style="padding:6px">Capacity</th><th></th></tr>
+        ${eq.map(q=>{ const s = _tsEq[q.id]; return `<tr style="border-top:1px solid var(--border)"><td style="padding:6px"><input type="checkbox" ${s.sel?'checked':''} onchange="_tsEq['${q.id}'].sel=this.checked"></td><td style="padding:6px;font-weight:700">${_tsE(q.name)}</td><td style="padding:6px"><input value="${_tsE(s.qty)}" oninput="_tsEq['${q.id}'].qty=this.value" style="width:50px;padding:4px 6px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"></td><td style="padding:6px"><select onchange="_tsEq['${q.id}'].own=this.value" style="padding:4px 6px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px"><option value="owned" ${s.own==='owned'?'selected':''}>Owned</option><option value="leased" ${s.own==='leased'?'selected':''}>Leased</option></select></td><td style="padding:6px">${_tsE(q.year||'')}</td><td style="padding:6px">${_tsE(q.regn||'')}</td><td style="padding:6px">${_tsE(q.capacity||'')}</td><td style="padding:6px;white-space:nowrap"><button class="btn btn-sm" onclick="tsEqEdit('${q.id}')">✏️</button> <button class="btn btn-sm" title="Hide this item (kept, not deleted)" onclick="tsEqHide('${q.id}')">🙈</button></td></tr>`; }).join('')}</table></div>` : '<div style="color:var(--text3);font-size:12px;margin-bottom:6px">No equipment added yet.</div>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-sm" onclick="tsEqEdit('')">+ Add equipment</button><button class="btn btn-sm btn-navy" onclick="tsDlEquip()" ${eq.length?'':'disabled'}>⬇ Statement (Word)</button></div>`)}
   </div>`;
 }
 // tabs on the Tender Documents page
 let _tdTab = 'lib';
 function tdTabsHTML(){
   const t=(k,l)=>`<span onclick="tdSetTab('${k}')" style="cursor:pointer;padding:8px 16px;border-radius:var(--rs) var(--rs) 0 0;font-weight:800;font-size:13px;border:1px solid var(--border);border-bottom:${_tdTab===k?'2px solid var(--navy)':'1px solid var(--border)'};background:${_tdTab===k?'#fff':'#f3f5f9'};color:var(--navy)">${l}</span>`;
-  return `<div style="display:flex;gap:4px;margin-bottom:14px">${t('lib','📁 Library')}${t('stmt','📝 Statements')}${t('desk','🖊 Stamp & Letterhead')}</div>`;
+  return `<div style="display:flex;gap:4px;margin-bottom:14px">${t('lib','📁 Library')}${t('stmt','📝 Statements')}${t('desk','🖊 Stamp & Letterhead')}${t('prep','📋 Tender Prep')}</div>`;
 }
 function tdSetTab(k){ _tdTab = k; renderTenderDocs(); }
 function tsFirm(f){ _tsFirm = f; tsDraw(); }
@@ -357,4 +375,55 @@ async function tsDlCerts(){
     toast('✓ Certificates downloaded — '+docs.length+' file'+(docs.length!==1?'s':''),'ok');
   }catch(e){ console.error(e); toast('Nothing was downloaded. '+tdExplainFailure(e),'error',8000); }
   finally{ setBusy(false); }
+}
+
+// ─── 5 · key critical equipment ────────────────────────
+function tsEqEdit(id){
+  const q = id ? (D.keyEquip||[]).find(x=>x.id===id) : null;
+  let m = document.getElementById('ts-modal');
+  if(!m){ m = document.createElement('div'); m.className='mov'; m.id='ts-modal'; document.body.appendChild(m); }
+  const f = (lbl,idn,val,ph)=>`<div class="fg"><label>${lbl}</label><input id="${idn}" value="${_tsE(val||'')}" placeholder="${_tsE(ph||'')}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs)"></div>`;
+  m.innerHTML = `<div class="mbox" style="max-width:560px"><div class="mhdr"><h2>${q?'✏️ Edit':'+ Add'} equipment</h2><button class="mx" onclick="CM('ts-modal')">✕</button></div>
+    ${f('Details of equipment','eq-name',q&&q.name,'e.g. Concrete mixer 10/7 cft')}
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:150px">${f('Year of purchase','eq-year',q&&q.year,'')}</div><div style="flex:1;min-width:150px">${f('Registration number','eq-regn',q&&q.regn,'')}</div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:150px">${f('Capacity','eq-cap',q&&q.capacity,'')}</div><div style="flex:1;min-width:150px">${f('Any other data','eq-oth',q&&q.other,'')}</div></div>
+    ${f('In working condition','eq-cond',q?q.condition:'Yes','Yes')}
+    <div id="eq-err" style="color:var(--red);font-size:12px;margin-bottom:6px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="CM('ts-modal')">Cancel</button><button class="btn btn-navy" id="eq-save" onclick="tsEqSave('${id||''}')">Save</button></div></div>`;
+  OM('ts-modal');
+}
+async function tsEqSave(id){
+  const v = i=>(document.getElementById(i).value||'').trim(), err = document.getElementById('eq-err');
+  const name = v('eq-name'); if(!name){ err.textContent = 'Enter the equipment details.'; err.style.display = 'block'; return; }
+  const rec = {name, year:v('eq-year'), regn:v('eq-regn'), capacity:v('eq-cap'), other:v('eq-oth'), condition:v('eq-cond')};
+  const btn = document.getElementById('eq-save'); btn.disabled = true;
+  let q = id ? D.keyEquip.find(x=>x.id===id) : null, backup = q ? JSON.parse(JSON.stringify(q)) : null;
+  if(q) Object.assign(q, rec); else { q = Object.assign({id:'eq_'+uid(), addedAt:new Date().toISOString()}, rec); D.keyEquip.push(q); }
+  try{ await tsSaveEquip(); CM('ts-modal'); toast('✓ Saved','ok'); tsDraw(); }
+  catch(e){ console.error(e); if(backup){ Object.keys(q).forEach(k=>delete q[k]); Object.assign(q, backup); } else D.keyEquip = D.keyEquip.filter(x=>x!==q);
+    err.textContent = 'NOT saved — '+(e.message||'unknown error')+'. Nothing was changed.'; err.style.display = 'block'; }
+  finally{ btn.disabled = false; }
+}
+async function tsEqHide(id){
+  const q = D.keyEquip.find(x=>x.id===id); if(!q) return;
+  if(!confirm('Hide '+q.name+' from this list? Nothing is deleted.')) return;
+  q._archived = true;
+  try{ await tsSaveEquip(); toast('✓ Hidden','ok'); }catch(e){ delete q._archived; toast('NOT hidden — '+(e.message||'save failed'),'error',7000); }
+  tsDraw();
+}
+async function tsDlEquip(){
+  const sel = tsEquip().filter(q=>_tsEq[q.id] && _tsEq[q.id].sel); if(!sel.length){ toast('Tick at least one equipment','error'); return; }
+  await tsBuild(_tsFirm, 'Key critical equipment', (avail, sx, sx2, head)=>{
+    const w1 = wxsScale([600,3600,1500,1500,1500], avail), w2 = wxsScale([600,2600,1200,1400,1200,1400,1300], avail);
+    const h1 = ['Sl. No','Details of equipment','Number required','Owned','Leased'].map(t=>({t,b:true,sz:20}));
+    const h2 = ['Sl. No','Details of equipment','Year of purchase','Regn. Number','Capacity','Any other data','In working condition'].map(t=>({t,b:true,sz:20}));
+    const r1 = sel.map((q,i)=>{ const s=_tsEq[q.id], n=String(s.qty||'1'); return [{t:String(i+1),sz:20},{t:q.name,jc:'left',sz:20},{t:n,sz:20},{t:s.own==='owned'?n:'—',sz:20},{t:s.own==='leased'?n:'—',sz:20}]; });
+    const r2 = sel.map((q,i)=>[{t:String(i+1),sz:20},{t:q.name,jc:'left',sz:20},{t:q.year||'',sz:20},{t:q.regn||'',sz:20},{t:q.capacity||'',sz:20},{t:q.other||'',sz:20},{t:q.condition||'',sz:20}]);
+    return head + wxsP('Key Critical Equipment',{b:true,u:true,jc:'center',after:100,sz:24})
+      + wxsP('Details of key and critical equipment proposed to be deployed for the work.',{after:160})
+      + wxsTable(w1, [h1, ...r1], 1)
+      + wxsP('Declaration of the equipment owned / leased',{b:true,before:240,after:100,keep:true})
+      + wxsTable(w2, [h2, ...r2], 1)
+      + wxsP('',{after:200}) + _tsSign(sx);
+  });
 }

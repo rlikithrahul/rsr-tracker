@@ -198,6 +198,7 @@ function tdDoc(id){ return (D.tenderDocs||[]).find(d=>d.id===id && !d._archived)
 async function renderTenderDocs(){
   const el = document.getElementById('sec-tenderdocs'); if(!el) return;
   if(typeof _tdTab!=='undefined' && _tdTab==='stmt' && typeof tsDraw==='function') return tsDraw();
+  if(typeof _tdTab!=='undefined' && _tdTab==='prep' && typeof tpDraw==='function') return tpDraw();
   if(typeof _tdTab!=='undefined' && _tdTab==='desk' && typeof sdDraw==='function'){ try{ await loadTenderDocs(); }catch(e){} return sdDraw(); }
   el.innerHTML = '<div class="wrap"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</div></div>';
   try{ await loadTenderDocs(); }
