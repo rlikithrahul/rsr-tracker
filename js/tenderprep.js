@@ -9,8 +9,11 @@
 //    storage (only files under techprep/ — nothing else in the app). Headings, order and ticks stay, with empty slots.
 //    A file shared by two tenders is deleted only when no live tender still uses it.
 //    The deletion runs when the app is opened on this tab after that time (the browser cannot run while closed).
-//  • Everything else is hide-only: items, files and checklists are hidden, never deleted from the data.
-//  • Saved headings: item names are remembered; a new tender starts from them and you keep only what it needs.
+//  • Headings, files and whole tenders can be DELETED for real here (asked first). Deleting removes the stored copy too,
+//    unless another tender still uses it. Documents that came from the Library are only un-linked — never deleted.
+//  • Default headings: one master list (add / rename / reorder / delete). Every new tender starts with all of them; changes
+//    inside a tender never touch the master. A master heading can be linked to Library documents per firm.
+//  • View any file in the page without downloading it (PDF / image).
 //  • Word files stay in the row but cannot be merged; “Replace with PDF” puts the PDF in the same place.
 // ═══════════════════════════════════════════════════════
 
@@ -42,11 +45,22 @@ function tpSave(){
   };
   const p = _tpSaveChain.catch(()=>{}).then(run); _tpSaveChain = p; return p;
 }
-function tpSaveHeadings(){
-  const run = async ()=>{
-    const merged = await mergeAndSaveSetting(TP_HEAD_KEY, D.tpHeadings||[], true);
-    (merged||[]).forEach(m=>{ if(!D.tpHeadings.some(x=>x.id===m.id)) D.tpHeadings.push(m); });
-  };
+// exact save: the list is stored in exactly the order and content held here (deleting and reordering need this — a merge
+// would bring deleted things back). Whatever another session added meanwhile is kept, except ids removed on purpose.
+async function tpSaveExact(key, arr, removedIds){
+  const gone = new Set(removedIds||[]); let remote = [];
+  try{ const r = await getSetting(key, []); if(Array.isArray(r)) remote = r; }catch(e){ throw new Error('could not read the saved list first — nothing was changed'); }
+  const mine = new Set(arr.map(x=>x.id));
+  const extra = remote.filter(r=>!mine.has(r.id) && !gone.has(r.id));
+  await saveSetting(key, arr.concat(extra));
+  extra.forEach(x=>arr.push(x));
+}
+function tpSaveHeadings(removedIds){
+  const run = ()=>tpSaveExact(TP_HEAD_KEY, D.tpHeadings||[], removedIds);
+  const p = _tpSaveChain.catch(()=>{}).then(run); _tpSaveChain = p; return p;
+}
+function tpSavePrepsExact(removedIds){
+  const run = ()=>tpSaveExact(TP_KEY, D.tenderPreps||[], removedIds);
   const p = _tpSaveChain.catch(()=>{}).then(run); _tpSaveChain = p; return p;
 }
 // change one checklist and save; on failure the checklist goes back exactly as it was
@@ -60,6 +74,22 @@ const tpLive = ()=>(D.tenderPreps||[]).filter(p=>!p._archived);
 const tpItems = p=>(p.items||[]).filter(i=>!i._archived);
 const tpFiles = i=>(i.files||[]).filter(f=>!f._archived);          // shown in the row
 const tpAvail = f=>!f._purged;                                      // still in storage
+const tpOwn = f=>!!(f && f.key && !f.lib && /^techprep\//.test(f.key));   // a copy this checklist stored itself (the only kind ever deleted)
+// keys still used by files other than `skip` (a Set of file ids) in any checklist — those copies must stay
+function tpKeysInUse(skip){
+  const k = new Set();
+  (D.tenderPreps||[]).forEach(p=>(p.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(f.key && !f._purged && !(skip && skip.has(f.id))) k.add(f.key); })));
+  return k;
+}
+// delete the stored copies of these file records (only techprep/ copies nobody else uses). Returns {done:Set(file ids), failed:[text]}
+async function tpPurgeFiles(files){
+  const skip = new Set(files.map(f=>f.id)), inUse = tpKeysInUse(skip), done = new Set(), failed = [], gone = new Set();
+  for(const f of files){
+    if(f._purged || !tpOwn(f) || inUse.has(f.key) || gone.has(f.key)){ done.add(f.id); continue; }
+    try{ await tpDeleteKey(f.key); gone.add(f.key); done.add(f.id); }catch(e){ failed.push((f.name||f.fileName)+': '+(e.message||e)); }
+  }
+  return {done, failed};
+}
 function tpKindLabel(f){ const k = tdKind(f); return k==='pdf' ? '📕 PDF' : k==='image' ? '🖼 Image' : /^docx?$/.test(tdExt(f.fileName)) ? '📘 Word' : '📄 '+(tdExt(f.fileName)||'file').toUpperCase(); }
 function tpFmtWhen(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}); }
 
@@ -79,10 +109,10 @@ async function tpSweep(){
   (D.tenderPreps||[]).filter(p=>!due.includes(p)).forEach(p=>(p.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(f.key && !f._purged) keep.add(f.key); })));
   const failed = []; const done = new Set();
   for(const p of due){
-    const keys = new Set(); (p.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(f.key && !f._purged && !keep.has(f.key)) keys.add(f.key); }));
+    const keys = new Set(); (p.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(tpOwn(f) && !f._purged && !keep.has(f.key)) keys.add(f.key); }));
     for(const k of keys){ if(done.has(k)) continue; try{ await tpDeleteKey(k); done.add(k); }catch(e){ failed.push(e.message||String(e)); } }
     // a file is marked removed only when its storage copy is really gone (or another tender, still alive, owns it)
-    await tpChange(p.id, q=>{ (q.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(f.key && !f._purged && (keep.has(f.key) || done.has(f.key) || !keys.has(f.key))){ f._purged = true; f._purgedAt = new Date().toISOString(); } })); });
+    await tpChange(p.id, q=>{ (q.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(tpOwn(f) && !f._purged && (keep.has(f.key) || done.has(f.key) || !keys.has(f.key))){ f._purged = true; f._purgedAt = new Date().toISOString(); } })); });
   }
   if(failed.length) toast('Some expired files could not be removed from storage ('+failed[0]+'). They will be tried again next time.','error',9000);
   else if(done.size) toast('✓ Expired tender-prep files removed from storage ('+done.size+')','ok',6000);
@@ -105,7 +135,7 @@ async function tpDraw(){
 function tpExpiryHTML(p){
   if(!p.deleteAt) return `<div style="font-size:12px;color:var(--text3)">⏳ No deletion time set — these files stay in storage until you set one. <button class="btn btn-sm" onclick="tpSetExpiry('${_tpJs(p.id)}')">Set delete date &amp; time</button></div>`;
   const ms = Date.parse(p.deleteAt)-Date.now(), days = ms/86400000, past = ms<=0;
-  const anyLeft = (p.items||[]).some(i=>(i.files||[]).some(f=>f.key && !f._purged));
+  const anyLeft = (p.items||[]).some(i=>(i.files||[]).some(f=>tpOwn(f) && !f._purged));
   const col = past ? 'var(--red)' : days<3 ? '#92400e' : 'var(--text2,#334155)';
   return `<div style="font-size:12px;color:${col}">⏳ ${past ? (anyLeft ? 'Deletion was due on <b>'+tpFmtWhen(p.deleteAt)+'</b> — it has not run yet (it runs when this tab is opened; if it keeps failing, storage delete is not enabled).' : 'Files were removed from storage on <b>'+tpFmtWhen(p.deleteAt)+'</b>. Headings are kept; add files again if needed.') : 'Files will be deleted from storage on <b>'+tpFmtWhen(p.deleteAt)+'</b> ('+(days<1?'in under a day':'in '+Math.ceil(days)+' day'+(Math.ceil(days)!==1?'s':''))+')'}.
     <button class="btn btn-sm" onclick="tpSetExpiry('${_tpJs(p.id)}')">Change</button></div>`;
@@ -120,7 +150,7 @@ function tpOpenHTML(p){
       <div style="width:24px"><input type="checkbox" ${av.length&&on===av.length?'checked':''} ${av.length?'':'disabled'} onchange="tpTickRow('${_tpJs(p.id)}','${_tpJs(i.id)}',this.checked)" title="Tick / untick every file of this item"></div>
       <div style="flex:0 0 230px;min-width:160px"><div style="font-weight:800;font-size:13px;color:var(--navy)">${n}. ${_tpE(i.title)}</div>
         <div style="font-size:11px;color:${av.length?'var(--green,#15803d)':'#92400e'}">${av.length?'✓ '+av.length+' file'+(av.length!==1?'s':''):'No file yet'}</div>
-        <div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap">${arrows(i.id,null)}<button class="btn btn-sm" onclick="tpRenameItem('${_tpJs(p.id)}','${_tpJs(i.id)}')">✏️</button><button class="btn btn-sm" title="Hide this item for this tender (kept, not deleted)" onclick="tpHideItem('${_tpJs(p.id)}','${_tpJs(i.id)}')">🙈</button></div></div>
+        <div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap">${arrows(i.id,null)}<button class="btn btn-sm" onclick="tpRenameItem('${_tpJs(p.id)}','${_tpJs(i.id)}')">✏️</button><button class="btn btn-sm" title="Delete this heading from this tender" onclick="tpDeleteItem('${_tpJs(p.id)}','${_tpJs(i.id)}')">🗑</button></div></div>
       <div style="flex:1;min-width:260px">
         ${fs.map(f=>{ const gone = f._purged, other = tdKind(f)==='other';
           return `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;font-size:12px;flex-wrap:wrap"><input type="checkbox" ${gone?'disabled':''} ${_tpOff.has(f.id)?'':'checked'} onchange="tpTickFile('${_tpJs(f.id)}',this.checked)">
@@ -129,20 +159,22 @@ function tpOpenHTML(p){
           ${gone?'<span style="color:var(--text3)">· removed from storage</span>':''}
           ${other&&!gone?'<span style="color:#92400e">· can’t be merged</span>':''}
           ${arrows(i.id,f.id)}
+          ${f.lib?'<span style="color:#1d4ed8">· from Library</span>':''}
+          ${gone||other?'':`<button class="btn btn-sm" title="View this file here" onclick="tpViewFile('${_tpJs(p.id)}','${_tpJs(i.id)}','${_tpJs(f.id)}')">👁 View</button>`}
           ${gone?'':`<button class="btn btn-sm" title="Download this file" onclick="tpDlFile('${_tpJs(p.id)}','${_tpJs(i.id)}','${_tpJs(f.id)}')">⬇</button>`}
           ${other&&!gone?`<label class="btn btn-sm" style="cursor:pointer" title="Upload this file's PDF — it takes this file's place and this one is hidden">⇄ Replace with PDF<input type="file" accept=".pdf,image/*" style="display:none" onchange="tpReplace('${_tpJs(p.id)}','${_tpJs(i.id)}','${_tpJs(f.id)}',this)"></label>`:''}
-          <button class="btn btn-sm" title="Hide this file (kept, not deleted)" onclick="tpHideFile('${_tpJs(p.id)}','${_tpJs(i.id)}','${_tpJs(f.id)}')">🙈</button></div>`; }).join('')}
+          <button class="btn btn-sm" title="${f.lib?'Remove from this tender (the Library copy is not touched)':'Delete this file'}" onclick="tpDeleteFile('${_tpJs(p.id)}','${_tpJs(i.id)}','${_tpJs(f.id)}')">🗑</button></div>`; }).join('')}
         <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><label class="btn btn-sm" style="cursor:pointer">+ Add files<input type="file" multiple style="display:none" onchange="tpAddFiles('${_tpJs(p.id)}','${_tpJs(i.id)}',this)"></label>
           <button class="btn btn-sm" title="Reuse a file already added in another tender (no second upload)" onclick="tpReuse('${_tpJs(p.id)}','${_tpJs(i.id)}')">↪ From another tender</button></div></div>
       <div style="flex:0 0 auto">${av.length?`<button class="btn btn-sm btn-navy" ${mergeable?'':'disabled'} title="Download this item's ticked files merged into one PDF" onclick="tpMerge('${_tpJs(p.id)}','${_tpJs(i.id)}')">⬇ Merged PDF</button>`:''}</div></div>`; };
   return `<div class="pg-hdr"><div><div class="pg-title">📋 ${_tpE(p.name)}</div>
       <div style="font-size:12px;color:var(--text3)">${withFiles.length} of ${items.length} items have files${missing.length?' — still missing: <b>'+missing.map(i=>_tpE(i.title)).join(', ')+'</b>':' — nothing missing ✓'}</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="tpRenamePrep('${_tpJs(p.id)}')">✏️ Rename</button><button class="btn" title="Hide this whole checklist (kept, not deleted)" onclick="tpHidePrep('${_tpJs(p.id)}')">🙈 Hide tender</button></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="tpRenamePrep('${_tpJs(p.id)}')">✏️ Rename</button><button class="btn" title="Delete this tender and its uploaded files" onclick="tpDeletePrep('${_tpJs(p.id)}')">🗑 Delete tender</button></div></div>
     <div class="card" style="margin-bottom:12px;padding:10px 14px">${tpExpiryHTML(p)}</div>
     <div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">${items.length ? items.map((i,k)=>row(i,k+1)).join('') : '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No items yet — add what the tender asks for below.</div>'}</div>
     <div class="card" style="margin-bottom:12px"><div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">+ Add items to this tender</div>
       <textarea id="tp-new" rows="3" placeholder="One item per line, e.g.&#10;Registration&#10;Statement 1 — value of works&#10;Statement 2 — similar works" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--rs);font-family:inherit;font-size:13px"></textarea>
-      <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-navy" onclick="tpAddItems('${_tpJs(p.id)}')">Add</button><button class="btn btn-sm" onclick="tpManageHeadings()">📑 Saved headings…</button></div></div>
+      <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-navy" onclick="tpAddItems('${_tpJs(p.id)}')">Add</button><label style="font-size:12px;display:flex;gap:5px;align-items:center;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="tp-tomaster" checked> also add to my default headings</label><button class="btn btn-sm" onclick="tpManageHeadings()">📑 Default headings…</button></div></div>
     <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px;font-size:12px;color:var(--text3)">The technical document merges every <b>ticked</b> file, item by item, in the order shown. Word files can’t go into a PDF — use “⇄ Replace with PDF” on them.</div>
       <button class="btn btn-navy" onclick="tpMerge('${_tpJs(p.id)}',null)" ${withFiles.length?'':'disabled'}>⬇ Download the whole technical document (one PDF)</button></div>`;
 }
@@ -165,15 +197,15 @@ async function tpMove(pid, iid, fid, dir){
 
 // ─── checklists ────────────────────────────────────────
 function tpNew(){
-  const old = tpLive(), heads = (D.tpHeadings||[]).filter(h=>!h._archived);
+  const heads = (D.tpHeadings||[]).filter(h=>!h._archived), linked = heads.filter(h=>h.link && Object.values(h.link).some(a=>a&&a.length));
   let m = document.getElementById('tp-modal');
   if(!m){ m = document.createElement('div'); m.className='mov'; m.id='tp-modal'; document.body.appendChild(m); }
   m.innerHTML = `<div class="mbox" style="max-width:520px"><div class="mhdr"><h2>＋ Prepare a tender</h2><button class="mx" onclick="CM('tp-modal')">✕</button></div>
     <div class="fg"><label>Tender name</label><input id="tp-name" placeholder="e.g. GVMC Tender 924815 — Road works" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs)"></div>
-    ${old.length?`<div class="fg"><label>Start from the items of an earlier tender <span style="font-weight:400;color:var(--text3)">(files are not copied)</span></label><select id="tp-copy" onchange="document.getElementById('tp-headbox').style.display=this.value?'none':'block'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs)"><option value="">No — use my saved headings</option>${old.map(p=>`<option value="${_tpE(p.id)}">${_tpE(p.name)}</option>`).join('')}</select></div>`:''}
-    <div id="tp-headbox" class="fg"><label>Saved headings — untick what this tender doesn't need</label>
-      <div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:var(--rs)">${heads.length?heads.map(h=>`<label style="display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);font-size:12px;text-transform:none;letter-spacing:0;font-weight:500;cursor:pointer"><input type="checkbox" class="tp-h" value="${_tpE(h.id)}" checked> ${_tpE(h.title)}</label>`).join(''):'<div style="padding:10px;color:var(--text3);font-size:12px">No saved headings yet — they are saved automatically as you add items.</div>'}</div></div>
-    <div class="fg"><label>Delete this tender's files from storage on <span style="font-weight:400;color:var(--text3)">(optional — you can set it later)</span></label><input type="datetime-local" id="tp-exp" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs)"></div>
+    <div class="fg"><label>Firm bidding</label><select id="tp-firm" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs)">${TD_FIRMS.map(f=>`<option>${_tpE(f)}</option>`).join('')}</select></div>
+    <div class="fg" style="font-size:12px;color:var(--text3)">The tender starts with your <b>${heads.length}</b> default heading${heads.length!==1?'s':''}${heads.length?'':' — add them first under “📑 Default headings” on the Tender Prep page, or add items inside the tender'}. You can delete or rename any of them inside this tender without changing the defaults.</div>
+    ${linked.length?`<div class="fg"><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:600;cursor:pointer"><input type="checkbox" id="tp-fetch" checked> Fill the ${linked.length} linked heading${linked.length!==1?'s':''} (${linked.map(h=>_tpE(h.title)).join(', ')}) with this firm's documents from the Library</label><div style="font-size:11px;color:var(--text3);margin-top:3px">Same stored copy — no extra storage used. Untick to leave them empty.</div></div>`:''}
+    <div class="fg"><label>Delete this tender's uploaded files from storage on <span style="font-weight:400;color:var(--text3)">(optional — you can set it later)</span></label><input type="datetime-local" id="tp-exp" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--rs)"></div>
     <div id="tp-err" style="color:var(--red);font-size:12px;margin-bottom:6px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="CM('tp-modal')">Cancel</button><button class="btn btn-navy" id="tp-ok" onclick="tpCreate()">Create</button></div></div>`;
   OM('tp-modal');
@@ -181,13 +213,17 @@ function tpNew(){
 async function tpCreate(){
   const name = (document.getElementById('tp-name').value||'').trim(), err = document.getElementById('tp-err');
   if(!name){ err.textContent = 'Enter the tender name.'; err.style.display = 'block'; return; }
-  const src = (document.getElementById('tp-copy')||{}).value;
-  const from = src ? tpLive().find(x=>x.id===src) : null;
-  let titles;
-  if(from) titles = tpItems(from).map(i=>i.title);
-  else { const pick = new Set([...document.querySelectorAll('#tp-modal .tp-h:checked')].map(c=>c.value)); titles = (D.tpHeadings||[]).filter(h=>!h._archived && pick.has(h.id)).map(h=>h.title); }
+  const firm = (document.getElementById('tp-firm')||{}).value || '';
+  const fetchLinked = !!(document.getElementById('tp-fetch')||{}).checked;
+  let libDocs = [];
+  if(fetchLinked){ try{ libDocs = await loadTenderDocs(); }catch(e){ err.textContent = 'Could not read the Library ('+(e.message||'failed')+'). Untick the Library option, or try again.'; err.style.display = 'block'; return; } }
+  const items = (D.tpHeadings||[]).filter(h=>!h._archived).map(h=>{
+    const files = [];
+    if(fetchLinked && h.link && Array.isArray(h.link[firm])) h.link[firm].forEach(id=>{ const d = libDocs.find(x=>x.id===id && !x._archived && x.firm===firm && x.url); if(d) files.push(tpLibRef(d)); });
+    return {id:'ti_'+uid(), title:h.title, files};
+  });
   const ex = (document.getElementById('tp-exp')||{}).value;
-  const p = {id:'tp_'+uid(), name, createdAt:new Date().toISOString(), createdBy:CU?CU.name:'', items:titles.map(t=>({id:'ti_'+uid(), title:t, files:[]}))};
+  const p = {id:'tp_'+uid(), name, firm, createdAt:new Date().toISOString(), createdBy:CU?CU.name:'', items};
   if(ex){ const d = new Date(ex); if(!isNaN(d)) p.deleteAt = d.toISOString(); }
   const btn = document.getElementById('tp-ok'); btn.disabled = true;
   D.tenderPreps.push(p);
@@ -195,15 +231,33 @@ async function tpCreate(){
   catch(e){ console.error(e); D.tenderPreps = D.tenderPreps.filter(x=>x!==p); err.textContent = 'NOT saved — '+(e.message||'save failed')+'. Nothing was changed.'; err.style.display = 'block'; }
   finally{ btn.disabled = false; }
 }
+// a Library document used inside a tender: the same stored copy, marked so it is never deleted from here
+function tpLibRef(d){ return {id:'tf_'+uid(), name:d.name||d.fileName, fileName:d.fileName, mime:d.mime||'', size:d.size||0, url:d.url, key:d.key||'', lib:true, libDocId:d.id, shared:true, uploadedBy:d.uploadedBy||'', uploadedAt:d.uploadedAt||''}; }
 async function tpRenamePrep(pid){
   const p = tpLive().find(x=>x.id===pid); if(!p) return;
   const n = prompt('Tender name (used in the downloaded file names)', p.name); if(n==null || !n.trim()) return;
   await tpChange(pid, q=>{ q.name = n.trim(); }, '✓ Renamed'); tpDraw();
 }
-async function tpHidePrep(pid){
+async function tpDeletePrep(pid){
   const p = tpLive().find(x=>x.id===pid); if(!p) return;
-  if(!confirm('Hide the tender “'+p.name+'”? Its data is kept. (Its files are still removed from storage on the delete date, if one is set.)')) return;
-  await tpChange(pid, q=>{ q._archived = true; }, '✓ Hidden'); tpDraw();
+  const files = []; (p.items||[]).forEach(i=>(i.files||[]).forEach(f=>files.push(f)));
+  const own = files.filter(f=>tpOwn(f) && !f._purged), lib = files.filter(f=>f.lib).length;
+  const ok = await showConfirm({title:'Delete this tender?', message:'<b>'+_tpE(p.name)+'</b> will be deleted for good, with its headings'+(own.length?' and the <b>'+own.length+' file'+(own.length!==1?'s':'')+'</b> you uploaded to it (removed from storage)':'')+'.'+(lib?' Documents that came from the Library ('+lib+') are not touched.':'')+' This cannot be undone.', confirmLabel:'Yes, delete the tender'});
+  if(!ok) return;
+  setBusy(true,'Deleting…');
+  try{
+    const r = await tpPurgeFiles(files);
+    if(r.failed.length){
+      // keep the tender; mark the ones that really are gone so nothing points at a missing file
+      await tpChange(pid, q=>{ (q.items||[]).forEach(i=>(i.files||[]).forEach(f=>{ if(tpOwn(f) && !f._purged && r.done.has(f.id)){ f._purged = true; f._purgedAt = new Date().toISOString(); } })); });
+      toast('The tender was NOT deleted — '+r.failed.length+' file'+(r.failed.length!==1?'s':'')+' could not be removed from storage ('+r.failed[0]+'). Nothing else changed; try again.','error',10000);
+      return;
+    }
+    D.tenderPreps = D.tenderPreps.filter(x=>x.id!==pid);
+    try{ await tpSavePrepsExact([pid]); }
+    catch(e){ D.tenderPreps.push(p); console.error(e); toast('Files were removed but the tender could not be deleted ('+(e.message||'save failed')+'). Open it and delete again.','error',10000); return; }
+    _tpOpen = null; toast('✓ Tender deleted','ok');
+  } finally { setBusy(false); tpDraw(); }
 }
 function tpSetExpiry(pid){
   const p = tpLive().find(x=>x.id===pid); if(!p) return;
@@ -225,48 +279,122 @@ async function tpApplyExpiry(pid, clear){
   if(await tpChange(pid, q=>{ if(iso) q.deleteAt = iso; else delete q.deleteAt; }, iso?'✓ Deletion time set':'✓ Deletion time cleared')){ CM('tp-modal'); _tpSwept = false; tpDraw(); }
 }
 
-// ─── saved headings ────────────────────────────────────
+// ─── default headings (one master list) ────────────────
 async function tpRememberHeadings(titles){
   D.tpHeadings = D.tpHeadings||[]; let added = false;
-  titles.forEach(t=>{ const k = String(t).trim().toLowerCase(); if(k && !D.tpHeadings.some(h=>String(h.title).trim().toLowerCase()===k)){ D.tpHeadings.push({id:'th_'+uid(), title:String(t).trim()}); added = true; } else { const h = D.tpHeadings.find(h=>String(h.title).trim().toLowerCase()===k); if(h && h._archived){ delete h._archived; added = true; } } });
+  titles.forEach(t=>{ const k = String(t).trim().toLowerCase(); if(!k) return; const h = D.tpHeadings.find(h=>String(h.title).trim().toLowerCase()===k);
+    if(!h){ D.tpHeadings.push({id:'th_'+uid(), title:String(t).trim()}); added = true; } else if(h._archived){ delete h._archived; added = true; } });
   if(added){ try{ await tpSaveHeadings(); }catch(e){ console.error(e); } }   // a failure here never blocks the checklist
+}
+function tpHeadLinkText(h){
+  if(!h.link) return '';
+  const parts = TD_FIRMS.filter(f=>h.link[f] && h.link[f].length).map(f=>f+' ('+h.link[f].length+')');
+  return parts.length ? '🔗 '+parts.join(', ') : '';
 }
 function tpManageHeadings(){
   const heads = (D.tpHeadings||[]).filter(h=>!h._archived);
   let m = document.getElementById('tp-modal');
   if(!m){ m = document.createElement('div'); m.className='mov'; m.id='tp-modal'; document.body.appendChild(m); }
-  m.innerHTML = `<div class="mbox" style="max-width:520px"><div class="mhdr"><h2>📑 Saved headings</h2><button class="mx" onclick="CM('tp-modal')">✕</button></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">A new tender starts from these (you untick what it doesn't need). Items you add to any tender are saved here automatically. Changes here don't alter existing tenders.</div>
-    <div style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px">${heads.length?heads.map(h=>`<div style="display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);font-size:13px"><span style="flex:1">${_tpE(h.title)}</span><button class="btn btn-sm" onclick="tpHeadEdit('${_tpJs(h.id)}')">✏️</button><button class="btn btn-sm" title="Hide (kept)" onclick="tpHeadHide('${_tpJs(h.id)}')">🙈</button></div>`).join(''):'<div style="padding:12px;color:var(--text3);font-size:12px">None yet.</div>'}</div>
-    <div style="display:flex;gap:8px"><input id="tp-hnew" placeholder="Add a heading" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs)"><button class="btn btn-sm btn-navy" onclick="tpHeadAdd()">Add</button></div></div>`;
+  m.innerHTML = `<div class="mbox" style="max-width:560px"><div class="mhdr"><h2>📑 Default headings</h2><button class="mx" onclick="CM('tp-modal')">✕</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Every new tender starts with all of these, in this order. Deleting or renaming a heading inside a tender never changes this list, and changes here never alter existing tenders. Use 🔗 to link a heading to Library documents (registration, PAN, GST…) for each firm.</div>
+    <div style="max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px">${heads.length?heads.map(h=>`<div style="display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap"><span style="flex:1;min-width:140px">${_tpE(h.title)}${tpHeadLinkText(h)?`<div style="font-size:11px;color:#1d4ed8">${_tpE(tpHeadLinkText(h))}</div>`:''}</span><button class="btn btn-sm" style="padding:0 6px" title="Move up" onclick="tpHeadMove('${_tpJs(h.id)}',-1)">▲</button><button class="btn btn-sm" style="padding:0 6px" title="Move down" onclick="tpHeadMove('${_tpJs(h.id)}',1)">▼</button><button class="btn btn-sm" title="Rename" onclick="tpHeadEdit('${_tpJs(h.id)}')">✏️</button><button class="btn btn-sm" title="Link to Library documents" onclick="tpHeadLink('${_tpJs(h.id)}')">🔗</button><button class="btn btn-sm" title="Delete this default heading" onclick="tpHeadDel('${_tpJs(h.id)}')">🗑</button></div>`).join(''):'<div style="padding:12px;color:var(--text3);font-size:12px">None yet — add the headings you use in most tenders.</div>'}</div>
+    <div style="display:flex;gap:8px"><input id="tp-hnew" placeholder="Add a heading" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs)" onkeydown="if(event.key==='Enter')tpHeadAdd()"><button class="btn btn-sm btn-navy" onclick="tpHeadAdd()">Add</button></div></div>`;
   OM('tp-modal');
 }
 async function tpHeadAdd(){ const v = (document.getElementById('tp-hnew').value||'').trim(); if(!v) return; await tpRememberHeadings([v]); tpManageHeadings(); }
 async function tpHeadEdit(id){ const h = D.tpHeadings.find(x=>x.id===id); if(!h) return; const n = prompt('Heading', h.title); if(n==null||!n.trim()) return; const old = h.title; h.title = n.trim(); try{ await tpSaveHeadings(); }catch(e){ h.title = old; toast('NOT saved — '+(e.message||'failed'),'error'); } tpManageHeadings(); }
-async function tpHeadHide(id){ const h = D.tpHeadings.find(x=>x.id===id); if(!h) return; h._archived = true; try{ await tpSaveHeadings(); }catch(e){ delete h._archived; toast('NOT saved — '+(e.message||'failed'),'error'); } tpManageHeadings(); }
+async function tpHeadDel(id){
+  const h = D.tpHeadings.find(x=>x.id===id); if(!h) return;
+  if(!await showConfirm({title:'Delete this default heading?', message:'“'+_tpE(h.title)+'” will no longer appear in new tenders. Existing tenders keep their own copy.', confirmLabel:'Yes, delete'})) return;
+  const before = D.tpHeadings.slice(); D.tpHeadings = D.tpHeadings.filter(x=>x.id!==id);
+  try{ await tpSaveHeadings([id]); }catch(e){ D.tpHeadings = before; toast('NOT deleted — '+(e.message||'failed'),'error'); }
+  tpManageHeadings();
+}
+async function tpHeadMove(id, dir){
+  const live = D.tpHeadings.filter(h=>!h._archived), k = live.findIndex(h=>h.id===id), j = k+dir; if(k<0 || j<0 || j>=live.length) return;
+  const before = D.tpHeadings.slice(), a = D.tpHeadings.indexOf(live[k]), b = D.tpHeadings.indexOf(live[j]);
+  const t = D.tpHeadings[a]; D.tpHeadings[a] = D.tpHeadings[b]; D.tpHeadings[b] = t;
+  try{ await tpSaveHeadings(); }catch(e){ D.tpHeadings = before; toast('NOT saved — '+(e.message||'failed'),'error'); }
+  tpManageHeadings();
+}
+// link a default heading to Library documents, separately for each firm
+async function tpHeadLink(id){
+  const h = D.tpHeadings.find(x=>x.id===id); if(!h) return;
+  let docs; try{ docs = await loadTenderDocs(); }catch(e){ toast('Could not read the Library — '+(e.message||'failed'),'error'); return; }
+  const sel = h.link||{};
+  let m = document.getElementById('tp-modal');
+  m.innerHTML = `<div class="mbox" style="max-width:600px"><div class="mhdr"><h2>🔗 Link “${_tpE(h.title)}”</h2><button class="mx" onclick="tpManageHeadings()">✕</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Tick the Library document(s) that belong under this heading for each firm. A new tender fills the heading with the bidding firm's ticked documents (same stored copy). Leave a firm empty if it has none.</div>
+    <div style="max-height:50vh;overflow:auto">${TD_FIRMS.map(f=>{ const list = (docs||[]).filter(d=>!d._archived && d.firm===f && d.url).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+      return `<div style="font-weight:800;font-size:12px;color:var(--navy);margin:8px 0 4px">${_tpE(f)}</div><div style="border:1px solid var(--border);border-radius:var(--rs)">${list.length?list.map(d=>`<label style="display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" class="tp-lk" data-firm="${_tpE(f)}" value="${_tpE(d.id)}" ${(sel[f]||[]).includes(d.id)?'checked':''}> <span><b>${_tpE(d.name||d.fileName)}</b> <span style="color:var(--text3)">${_tpE(d.category||'')}</span></span></label>`).join(''):'<div style="padding:8px 10px;color:var(--text3);font-size:12px">No documents in this firm\'s Library.</div>'}</div>`; }).join('')}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn" onclick="tpManageHeadings()">Cancel</button><button class="btn btn-navy" onclick="tpHeadLinkSave('${_tpJs(id)}')">Save link</button></div></div>`;
+}
+async function tpHeadLinkSave(id){
+  const h = D.tpHeadings.find(x=>x.id===id); if(!h) return;
+  const link = {}; document.querySelectorAll('#tp-modal .tp-lk:checked').forEach(c=>{ (link[c.dataset.firm] = link[c.dataset.firm]||[]).push(c.value); });
+  const old = h.link; if(Object.keys(link).length) h.link = link; else delete h.link;
+  try{ await tpSaveHeadings(); toast('✓ Link saved','ok'); }catch(e){ if(old) h.link = old; else delete h.link; toast('NOT saved — '+(e.message||'failed'),'error'); }
+  tpManageHeadings();
+}
 
 // ─── items & files ─────────────────────────────────────
 async function tpAddItems(pid){
   const ta = document.getElementById('tp-new'), lines = (ta.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
   if(!lines.length){ toast('Type at least one item','error'); return; }
-  if(await tpChange(pid, p=>{ p.items = p.items||[]; lines.forEach(t=>p.items.push({id:'ti_'+uid(), title:t, files:[]})); }, '✓ Added '+lines.length+' item'+(lines.length!==1?'s':''))){ await tpRememberHeadings(lines); tpDraw(); }
+  if(await tpChange(pid, p=>{ p.items = p.items||[]; lines.forEach(t=>p.items.push({id:'ti_'+uid(), title:t, files:[]})); }, '✓ Added '+lines.length+' item'+(lines.length!==1?'s':''))){ if((document.getElementById('tp-tomaster')||{}).checked) await tpRememberHeadings(lines); tpDraw(); }
 }
 async function tpRenameItem(pid, iid){
   const p = tpLive().find(x=>x.id===pid), it = p && p.items.find(x=>x.id===iid); if(!it) return;
   const n = prompt('Item name', it.title); if(n==null || !n.trim()) return;
-  if(await tpChange(pid, q=>{ q.items.find(x=>x.id===iid).title = n.trim(); })) await tpRememberHeadings([n.trim()]);
+  await tpChange(pid, q=>{ q.items.find(x=>x.id===iid).title = n.trim(); });
   tpDraw();
 }
-async function tpHideItem(pid, iid){
+async function tpDeleteItem(pid, iid){
   const p = tpLive().find(x=>x.id===pid), it = p && p.items.find(x=>x.id===iid); if(!it) return;
-  if(!confirm('Hide “'+it.title+'” from this tender? (Its files are kept until the delete date.)')) return;
-  await tpChange(pid, q=>{ q.items.find(x=>x.id===iid)._archived = true; }, '✓ Hidden'); tpDraw();
+  const fs = (it.files||[]), own = fs.filter(f=>tpOwn(f) && !f._purged).length;
+  if(!await showConfirm({title:'Delete this heading?', message:'“'+_tpE(it.title)+'” will be removed from this tender'+(own?', with its <b>'+own+' uploaded file'+(own!==1?'s':'')+'</b> (removed from storage)':'')+'. The default headings are not changed.', confirmLabel:'Yes, delete'})) return;
+  setBusy(true,'Deleting…');
+  try{
+    const r = await tpPurgeFiles(fs);
+    if(r.failed.length){
+      await tpChange(pid, q=>{ const t = q.items.find(x=>x.id===iid); t.files = (t.files||[]).filter(f=>!r.done.has(f.id)); });
+      toast('Some files could not be removed from storage ('+r.failed[0]+'). The heading stays with those files — try again.','error',9000); return;
+    }
+    await tpChange(pid, q=>{ q.items = q.items.filter(x=>x.id!==iid); }, '✓ Deleted');
+  } finally { setBusy(false); tpDraw(); }
 }
-async function tpHideFile(pid, iid, fid){
+async function tpDeleteFile(pid, iid, fid){
   const p = tpLive().find(x=>x.id===pid), it = p && p.items.find(x=>x.id===iid), f = it && it.files.find(x=>x.id===fid); if(!f) return;
-  if(!confirm('Hide “'+(f.name||f.fileName)+'” from this item? (The file is kept until the delete date.)')) return;
-  await tpChange(pid, q=>{ q.items.find(x=>x.id===iid).files.find(x=>x.id===fid)._archived = true; }, '✓ Hidden'); tpDraw();
+  const nm = f.name||f.fileName;
+  if(!await showConfirm({title:'Delete this file?', message:f.lib ? '“'+_tpE(nm)+'” will be taken off this tender. The copy in the Library is not touched.' : '“'+_tpE(nm)+'” will be deleted for good'+(tpOwn(f)&&!f._purged?' (removed from storage)':'')+'.', confirmLabel:'Yes, delete'})) return;
+  setBusy(true,'Deleting…');
+  try{
+    const r = await tpPurgeFiles([f]);
+    if(r.failed.length){ toast('Not deleted — '+r.failed[0],'error',8000); return; }
+    await tpChange(pid, q=>{ const t = q.items.find(x=>x.id===iid); t.files = t.files.filter(x=>x.id!==fid); }, '✓ Deleted');
+  } finally { setBusy(false); tpDraw(); }
 }
+// view a file inside the page (no download)
+async function tpViewFile(pid, iid, fid){
+  const p = tpLive().find(x=>x.id===pid), it = p && p.items.find(x=>x.id===iid), f = it && it.files.find(x=>x.id===fid); if(!f) return;
+  const kind = tdKind(f); if(kind==='other'){ toast('Word and other files can’t be viewed here — download them','error'); return; }
+  setBusy(true,'Opening…');
+  let url;
+  try{
+    const bytes = await tdFetchBytes(f);
+    url = URL.createObjectURL(new Blob([bytes], {type: kind==='pdf' ? 'application/pdf' : (f.mime||'image/jpeg')}));
+  }catch(e){ console.error(e); setBusy(false); toast('Could not open — '+tdExplainFailure(e),'error',8000); return; }
+  setBusy(false);
+  const old = document.getElementById('tp-view'); if(old) tpCloseView();
+  const v = document.createElement('div'); v.id = 'tp-view'; v._url = url;
+  v.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.78);z-index:9990;display:flex;flex-direction:column;padding:14px';
+  v.innerHTML = `<div style="display:flex;gap:10px;align-items:center;color:#fff;margin-bottom:8px"><div style="flex:1;font-weight:700;font-size:14px;word-break:break-all">${_tpE(f.name||f.fileName)}</div><button class="btn btn-sm" onclick="tpDlFile('${_tpJs(pid)}','${_tpJs(iid)}','${_tpJs(fid)}')">⬇ Download</button><button class="btn btn-sm" onclick="tpCloseView()">✕ Close</button></div>
+    <div style="flex:1;background:#fff;border-radius:8px;overflow:auto;display:flex;align-items:center;justify-content:center">${kind==='pdf' ? `<iframe src="${url}" style="width:100%;height:100%;border:0"></iframe>` : `<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain">`}</div>`;
+  v.addEventListener('click', e=>{ if(e.target===v) tpCloseView(); });
+  document.body.appendChild(v);
+}
+function tpCloseView(){ const v = document.getElementById('tp-view'); if(!v) return; try{ URL.revokeObjectURL(v._url); }catch(e){} v.remove(); }
+
 async function tpUploadOne(p, f){
   const key = 'techprep/'+tdSlug(p.name).slice(0,40)+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,6)+'_'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
   const url = await r2UploadViaWorker(f, R2_DOCS_BUCKET, key);
