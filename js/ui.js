@@ -130,8 +130,8 @@ function renderDash(){
 
   // Stats
   const active = allProjects.filter(p=>(p.status||'active')==='active');
-  const cap = allProjects.reduce((s,p)=>s+totRel(p),0);
-  const settled = allProjects.reduce((s,p)=>s+(p.settlements||[]).filter(x=>!isArchived(x)).reduce((a,x)=>a+x.amount,0),0);
+  const capG = capSummary(allProjects);
+  const cap = capG.total;
   const _attnIds = new Set(getAllAlerts().filter(a=>a.type==='red'||a.type==='amber').map(a=>a.projectId));
   const at = allProjects.filter(p=>_attnIds.has(p.id)).length;
   const onHoldN = allProjects.filter(p=>(p.status||'active')==='onhold').length;
@@ -154,7 +154,7 @@ function renderDash(){
 
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat" style="cursor:pointer" onclick="dashGoStatus('active')"><div class="stat-lbl">Active Projects</div><div class="stat-val">${active.length}</div><div class="stat-sub">${fmt(totalAgreement)} value</div><div class="stat-sub" style="margin-top:3px"><span style="text-decoration:underline" onclick="event.stopPropagation();dashGoStatus('onhold')">${onHoldN} on hold</span> · <span style="text-decoration:underline;color:${at>0?'var(--red)':'inherit'}" onclick="event.stopPropagation();showAllAlerts()">${at} need attention</span></div></div>
-    <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(settled)} settled</div></div>
+    <div class="stat"><div class="stat-lbl">Capital Deployed</div><div class="stat-val" style="font-size:17px">${fmt(cap)}</div><div class="stat-sub">${fmt(capG.done.dep)} awaiting payment</div></div>
     <div class="stat" style="cursor:pointer" onclick="dashGoTo('attn')"><div class="stat-lbl">Pending Reviews</div><div class="stat-val" style="color:${pendingUpd>0?'var(--red)':'var(--green)'}">${pendingUpd}</div><div class="stat-sub">${pendingUpd>0?'tap to view':'all clear'}</div></div>
     <div class="stat" style="cursor:pointer" onclick="showAllAlerts()"><div class="stat-lbl">Alerts</div><div class="stat-val" style="color:${allAlerts.length>0?'var(--red)':'var(--green)'}">${allAlerts.length}</div><div class="stat-sub">${allAlerts.length>0?'tap to view':'all clear'}</div></div>`;
 
@@ -221,27 +221,42 @@ function renderDash(){
   }
 }
 
+// Capital numbers for the dashboard. Per project: deployed = totRel(p) (Tally payments − money back, see utils.js), cap = maxF(p) (70% of agreement, same as the project page).
+// Only Active + On Hold projects can still be funded, so only they have a cap / headroom. Completed = work done, payment awaited. Settled = closed (anything still outstanding there is a loss to look at).
+function capSummary(allProjects){
+  const g={funding:{n:0,dep:0,cap:0,room:0},done:{n:0,dep:0},closed:{n:0,dep:0},over:[],unlinked:[],paid:0,back:0};
+  allProjects.forEach(p=>{
+    const st=projStatus(p), dep=totRel(p);
+    g.paid+=totPayments(p); g.back+=totReceipts(p)+totTallyOtherReceipts(p);
+    if(typeof tvSwitchOn==='function'&&tvSwitchOn()&&typeof tvLinked==='function'&&st!=='settled'&&!tvLinked(p)) g.unlinked.push(p);
+    if(st==='completed'){ g.done.n++; g.done.dep+=dep; }
+    else if(st==='settled'){ g.closed.n++; g.closed.dep+=dep; }
+    else { const cap=maxF(p); g.funding.n++; g.funding.dep+=dep; g.funding.cap+=cap; g.funding.room+=Math.max(0,cap-dep); if(cap>0&&dep>cap+1) g.over.push({p,by:dep-cap}); }
+  });
+  g.total=g.funding.dep+g.done.dep+g.closed.dep;
+  return g;
+}
 function renderCapitalSection(allProjects){
   const el = document.getElementById('dash-capital-section');
   if(!el) return;
-  const totalCap = allProjects.reduce((s,p)=>s+maxF(p),0);
-  const totalDep = allProjects.reduce((s,p)=>s+totRel(p),0);
-  const headroom = Math.max(0,totalCap-totalDep);
-  const pct = totalCap>0?Math.round(totalDep/totalCap*100):0;
+  const g=capSummary(allProjects), f=g.funding;
+  const pct = f.cap>0?Math.round(f.dep/f.cap*100):0;
   const barColor = pct>=85?'var(--red)':pct>=70?'var(--amber)':'var(--green)';
-  el.innerHTML='<div class="card" style="margin-bottom:14px;padding:14px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Capital Deployment Summary</div>'
+  const row=(l,v,sub,col)=>'<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--surface2)"><span style="color:var(--text2)">'+l+(sub?'<span style="display:block;font-size:10px;color:var(--text3)">'+sub+'</span>':'')+'</span><strong style="color:'+(col||'var(--navy)')+';white-space:nowrap">'+v+'</strong></div>';
+  const tallyNote=(typeof tvSwitchOn==='function'&&tvSwitchOn()&&!(TV&&TV.snap))?'<div style="font-size:11px;color:var(--amber);margin-bottom:8px">Tally numbers are still loading…</div>':'';
+  let h='<div class="card" style="margin-bottom:14px;padding:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">💰 Capital Deployment Summary</div>'+tallyNote
     +'<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;flex-wrap:wrap;gap:4px">'
-    +'<span>Deployed: <strong style="color:var(--navy)">'+fmt(totalDep)+'</strong></span>'
-    +'<span>Headroom: <strong style="color:'+barColor+'">'+fmt(headroom)+'</strong></span>'
-    +'</div>'
-    +'<div class="prog-track" style="height:8px;margin-bottom:6px">'
-    +'<div style="height:100%;border-radius:4px;background:'+barColor+';width:'+pct+'%"></div>'
-    +'</div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">'
-    +'<span>'+pct+'% of total cap used</span>'
-    +'<span>Total cap: '+fmt(totalCap)+'</span>'
-    +'</div></div>';
+    +'<span>Deployed (Active + On Hold): <strong style="color:var(--navy)">'+fmt(f.dep)+'</strong></span>'
+    +'<span>Headroom: <strong style="color:'+barColor+'">'+fmt(f.room)+'</strong></span></div>'
+    +'<div class="prog-track" style="height:8px;margin-bottom:6px"><div style="height:100%;border-radius:4px;background:'+barColor+';width:'+Math.min(100,pct)+'%"></div></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:10px"><span>'+pct+'% of cap used · '+f.n+' projects</span><span>Total cap: '+fmt(f.cap)+'</span></div>'
+    +row('Completed, payment awaited',fmt(g.done.dep),g.done.n+' projects — still your money out')
+    +(g.closed.dep>1?row('Settled but not fully recovered',fmt(g.closed.dep),g.closed.n+' settled projects — check these','var(--red)'):'')
+    +row('Total capital out',fmt(g.total),'Paid '+fmt(g.paid)+' − received back '+fmt(g.back));
+  if(g.over.length) h+=row('Over cap',g.over.length+' project'+(g.over.length>1?'s':''),'By '+fmt(g.over.reduce((s,x)=>s+x.by,0))+' in total — not hidden by other projects\' headroom','var(--red)');
+  if(g.unlinked.length) h+='<div style="font-size:11px;color:var(--amber);margin-top:8px">⚠ '+g.unlinked.length+' project'+(g.unlinked.length>1?'s are':' is')+' not linked to Tally, so '+(g.unlinked.length>1?'their':'its')+' payments show as 0 here. Link in 📒 Tally Live.</div>';
+  el.innerHTML=h+'</div>';
 }
 
 function renderExpectedJVSection(allProjects){
