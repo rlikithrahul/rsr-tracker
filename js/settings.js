@@ -186,6 +186,19 @@ async function renderSettings(){
       </div></div></div>
     </div>
 
+    <!-- RESTORE FROM BACKUP -->
+    <div class="set-sec" id="set-restore">
+      <div class="set-hd" onclick="setToggle('restore')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('restore')}">
+        <span class="set-ic" style="background:#fee2e2">♻️</span>
+        <span class="set-tt"><span class="set-t1">Restore from backup</span><span class="set-t2">Bring records back from the nightly Drive backup</span></span>
+        <svg class="set-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </div>
+      <div class="set-bd"><div class="set-bdi"><div class="set-pad">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Every night a full copy of your data (projects, contractors, all settings, activity log) is saved to Google Drive. If records were lost or damaged, restore them here. A restore never deletes anything, saves a safety copy of today's data first, and shows exactly what will change before you confirm.</div>
+        <button class="btn btn-navy" onclick="rsOpen()">♻️ Open restore…</button>
+      </div></div></div>
+    </div>
+
     <!-- SITE LOG ACCESS -->
     <div class="set-sec" id="set-sitelog">
       <div class="set-hd" onclick="setToggle('sitelog')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setToggle('sitelog')}">
