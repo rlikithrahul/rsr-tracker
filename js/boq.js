@@ -105,7 +105,7 @@ async function parseBOQExcel(file){
       if(!desc) desc = `Item ${Math.round(sno)}`;
       items.push({
         id: uid(), sno: Math.round(sno),
-        desc: desc.slice(0, 200),
+        desc: desc,   // full item name — never shortened
         unit: uom || 'Job',
         qty, rate: Math.round(rate*100)/100,
         amount: Math.round(amt*100)/100,
@@ -221,9 +221,9 @@ function renderBOQPreviewTable(){
               <input type="checkbox" ${item._selected?'checked':''} onchange="toggleBOQItem(${idx},this.checked)" style="cursor:pointer">
             </td>
             <td style="padding:4px 8px">
-              <input type="text" value="${item.desc.replace(/"/g,'&quot;')}" 
+              <textarea rows="${Math.min(8,Math.max(2,Math.ceil((item.desc||'').length/38)))}"
                 onchange="updateBOQItem(${idx},'desc',this.value)"
-                style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;font-family:'Inter',sans-serif">
+                style="width:100%;min-width:180px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical;line-height:1.35">${String(item.desc||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
             </td>
             <td style="padding:4px;text-align:center">
               <input type="number" value="${item.qty}" min="0" step="0.01"
@@ -310,6 +310,13 @@ function openEditBOQ(pid){
         <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleBOQReplaceUpload(event,'${pid}')">
       </label>
     </div>
+    <div style="margin-bottom:12px">
+      <label style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface2);border:1.5px dashed var(--border);border-radius:var(--rs);font-size:13px;font-weight:600;color:var(--navy)" title="Keeps every item, quantity, rate and verification as it is — only fills in item names that were cut short">
+        🔤 Fill full item names from the BOQ Excel
+        <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleBOQNamesFix(event)">
+      </label>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Use this for older projects whose item names were cut short. Nothing else changes; you still press Save.</div>
+    </div>
     <div id="boq-preview-table"></div>
     <button type="button" class="btn btn-sm" onclick="addManualBOQRow()" style="margin-top:8px">+ Add Item</button>`;
 
@@ -347,6 +354,30 @@ async function handleBOQReplaceUpload(evt, pid){
     renderBOQPreviewTable();
     toast(`✅ ${items.length} items loaded — review and save`,'ok');
   } catch(e){ setBusy(false); toast('Parse error: '+e.message,'error'); }
+  evt.target.value='';
+}
+
+// Older projects: item names were cut at 200 characters when the BOQ was uploaded. Read the Excel again and fill in only the names
+// (matched by item number); quantities, rates, ids and verifications are not touched. Nothing is saved until the person presses Save.
+async function handleBOQNamesFix(evt){
+  const file = evt.target.files[0]; if(!file) return;
+  try {
+    setBusy(true,'Reading BOQ…');
+    const result = await parseBOQExcel(file);
+    setBusy(false);
+    const items = result.items || result;
+    const bySno = {}; items.forEach(i=>{ bySno[i.sno] = i; });
+    let fixed=0, same=0, nomatch=0;
+    boqPreviewItems.forEach(it=>{
+      const n = bySno[it.sno];
+      if(!n){ nomatch++; return; }
+      const cur = String(it.desc||'').trim(), full = String(n.desc||'').trim();
+      if(full.length > cur.length && full.toLowerCase().startsWith(cur.slice(0,Math.min(60,cur.length)).toLowerCase())){ it.desc = full; fixed++; }
+      else same++;
+    });
+    renderBOQPreviewTable();
+    toast(fixed ? `✅ ${fixed} item names completed — check and press Save` : 'No cut-short names found'+(nomatch?` (${nomatch} items not in this Excel)`:''), fixed?'ok':'info');
+  } catch(e){ setBusy(false); toast('Could not read the Excel: '+e.message,'error'); }
   evt.target.value='';
 }
 
