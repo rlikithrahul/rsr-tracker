@@ -132,6 +132,42 @@ function tlDownloadCCSummary(key, kind){
   }
 }
 
+// ───────── One workbook: first sheet = every cost centre shown, then one sheet per cost centre with all its transactions ─────────
+// Read-only. Uses the same cc_statement call as the on-screen statements, a few cost centres at a time.
+async function tlDownloadCCBook(){
+  const list=(((TL._ccSum||{})['__all__']||{}).rows||[]).filter((r,i,a)=>a.findIndex(q=>q.cc===r.cc)===i); if(!list.length){ toast('No cost centres to download','error'); return; } if(!_xCheckLibs('xlsx')) return;
+  const names=[...new Set(list.map(r=>r.cc))]; const byCC={}; names.forEach(n=>byCC[n]=[]); let stray=0;
+  try{
+    setBusy(true,'Loading cost centres…');
+    for(let i=0;i<names.length;i+=8){
+      const part=names.slice(i,i+8); setBusy(true,'Loading cost centres… '+Math.min(i+8,names.length)+' of '+names.length);
+      const r=await tlApi('cc_statement',{cost_centres:part});
+      (r.rows||[]).forEach(x=>{ const k=x.cc_name||(part.length===1?part[0]:''); if(byCC[k]) byCC[k].push(x); else stray++; });
+    }
+    setBusy(false);
+  }catch(e){ setBusy(false); toast('Could not load the cost centres: '+e.message,'error'); return; }
+  const used=new Set(['cost centres']); const sheetName=n=>{ let b=String(n).replace(/[\\\/\?\*\[\]:]/g,' ').replace(/\s+/g,' ').trim().slice(0,28)||'Cost centre', s=b, k=2; while(used.has(s.toLowerCase())||used.has(s)){ s=b.slice(0,28-String(k).length-1)+'~'+k; k++; } used.add(s); used.add(s.toLowerCase()); return s; };
+  const wb=XLSX.utils.book_new(); const sheets=[]; const idx=[['RSR CONSTRUCTIONS — ALL COST CENTRES'],['Generated',_xD(_xToday())],['Dr = paid out · Cr = received. Click a cost centre name to jump to its sheet.'],[],
+    ['Cost centre','Contractor','Projects','Entries','Paid out (Dr)','Received (Cr)','Net with RSR']];
+  let TD=0,TC=0;
+  list.forEach(r=>{
+    const rows=(byCC[r.cc]||[]).slice().sort((a,b)=>String(a.vch_date).localeCompare(String(b.vch_date)));
+    const st=_xStmtLines({opening:0,rows}); const sn=sheetName(r.cc); sheets.push({r,sn,st});
+    TD+=st.dr; TC+=st.cr;
+    idx.push([{v:r.cc,t:'s',l:{Target:"#'"+sn.replace(/'/g,"''")+"'!A1"}},r.contractor||'',(r.projects||[]).map(p=>'#'+p.tender+' '+p.name).join('; '),rows.length,_xNum(st.dr),_xNum(st.cr),_xNum(st.dr-st.cr)]);
+  });
+  idx.push([],['TOTAL','','','',_xNum(TD),_xNum(TC),_xNum(TD-TC)]);
+  XLSX.utils.book_append_sheet(wb,_xSheet(idx,[34,26,50,9,18,18,18]),'Cost centres');
+  sheets.forEach(({r,sn,st})=>{
+    const aoa=[['RSR CONSTRUCTIONS'],['Cost centre',r.cc],['Contractor',r.contractor||''],['Generated',_xD(_xToday())],[],['Date','Voucher type','Voucher no','Ledger','Narration','Debit','Credit','Balance (Dr -ve / Cr +ve)']];
+    st.lines.forEach(l=>aoa.push([_xD(l.date),l.type,l.no,l.ledger,l.nar,l.dr?_xNum(l.dr):'',l.cr?_xNum(l.cr):'',_xNum(l.bal)]));
+    aoa.push([],['Totals','','','','',_xNum(st.dr),_xNum(st.cr),_xNum(st.bal)]);
+    XLSX.utils.book_append_sheet(wb,_xSheet(aoa,[12,14,12,28,42,14,14,18]),sn);
+  });
+  XLSX.writeFile(wb,'AllCostCentres_'+_xToday()+'.xlsx');
+  toast('✅ '+sheets.length+' cost centres downloaded'+(stray?' ('+stray+' lines could not be placed)':''),'ok');
+}
+
 // ───────── Project report PDF ─────────
 async function downloadProjectReport(pid){
   const p=GP(pid); if(!p) return; if(!_xCheckLibs('pdf')) return;
