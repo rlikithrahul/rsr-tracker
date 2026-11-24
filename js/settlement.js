@@ -39,8 +39,10 @@ function stBlocksOf(cid, cfg){
       const id='b'+p.id, guids=new Set(); let virt=0, last='';
       sets.forEach(s=>{ const g=(typeof rcGuids==='function')?rcGuids(s):[]; g.forEach(x=>guids.add(x)); if(!g.length) virt+=Number(s.amount)||0; const d=s.date||s.tvDate||''; if(d>last) last=d; });
       out.push({id, type:'bill', pid:p.id, label:p.name||'(project)', date:cfg.date[id]||last, ccs:names, guids, virt});
-    } else if((Number(p.jvAmount)||0)>0 && p.jvDate){
-      const id='j'+p.id; out.push({id, type:'jv', pid:p.id, label:'JV · '+(p.name||''), date:cfg.date[id]||'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):Number(p.jvAmount)||0, guids:new Set(), virt:0});
+    }
+    const settled=sets.reduce((s,x)=>s+(Number(x.amount)||0),0), left=(Number(p.jvAmount)||0)-settled;
+    if((Number(p.jvAmount)||0)>0 && p.jvDate && left>1){
+      const id='j'+p.id; out.push({id, type:'jv', pid:p.id, label:'JV · '+(p.name||'')+(sets.length?' (balance)':''), date:cfg.date[id]||'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):left, guids:new Set(), virt:0});
     }
   }
   (cfg.manual||[]).forEach(m=>out.push({id:m.id, type:m.type, pid:null, label:m.label, date:cfg.date[m.id]||m.date||'', ccs:m.ccs||[], amt:cfg.jvAmt[m.id]!=null?Number(cfg.jvAmt[m.id]):Number(m.amt)||0, guids:new Set(), virt:0, manual:true}));
@@ -48,6 +50,14 @@ function stBlocksOf(cid, cfg){
   return out;
 }
 
+// which block a receipt belongs to: its project's settlement link, else your choice ('-' = not counted), else its cost centre if only one bill/JV has it
+function stRecBlock(r, blocks, cfg, guidBlk){
+  const byId=new Map(blocks.map(b=>[b.id,b]));
+  if(guidBlk.has(r.g)) return guidBlk.get(r.g);
+  const v=cfg.recv[r.k]; if(v==='-') return null; if(v&&byId.has(v)) return v;
+  if(r.cc){ const m=blocks.filter(b=>(b.ccs||[]).includes(r.cc)); const bills=m.filter(b=>b.type==='bill'); if(bills.length===1) return bills[0].id; if(!bills.length&&m.length===1) return m[0].id; }
+  return null;
+}
 // the whole calculation. lines: [{k,g,d,t,n,led,nar,cc,a,dir:'dr'|'cr'}]
 function stCompute(lines, blocks, cfg){
   const byId=new Map(blocks.map(b=>[b.id,b])); const guidBlk=new Map(); blocks.forEach(b=>b.guids.forEach(g=>guidBlk.set(g,b.id)));
@@ -55,7 +65,7 @@ function stCompute(lines, blocks, cfg){
   const recs=lines.filter(l=>l.dir==='cr');
   // receipts → blocks
   const rBlk=new Map(); const unRec=[];
-  recs.forEach(r=>{ const b=guidBlk.get(r.g)||(cfg.recv[r.k]&&byId.has(cfg.recv[r.k])?cfg.recv[r.k]:null); if(b) rBlk.set(r.k,b); else unRec.push(r); });
+  recs.forEach(r=>{ const b=stRecBlock(r,blocks,cfg,guidBlk); if(b) rBlk.set(r.k,b); else unRec.push(r); });
   const recTot=new Map(blocks.map(b=>[b.id,b.virt||0])); rBlk.forEach((b,k)=>{ const r=recs.find(x=>x.k===k); recTot.set(b,(recTot.get(b)||0)+r.a); });
   // base pieces from the saved assignment
   const pcs=[]; const openRem=new Map();
@@ -92,7 +102,7 @@ function stAutoAssign(lines, blocks, cfg){
   const pays=lines.filter(l=>l.dir==='dr').sort((a,b)=>a.d.localeCompare(b.d)||a.k.localeCompare(b.k));
   const rem=new Map(); pays.forEach(l=>{ const u=(cfg.alloc[l.k]||[]).filter(e=>byId.has(e.b)).reduce((s,e)=>s+e.a,0); rem.set(l.k,stR2(l.a-u)); });
   const tot=new Map(blocks.map(b=>[b.id,b.type==='bill'?(b.virt||0):(b.amt||0)]));
-  lines.filter(l=>l.dir==='cr').forEach(r=>{ const id=guidBlk.get(r.g)||(cfg.recv[r.k]&&byId.has(cfg.recv[r.k])?cfg.recv[r.k]:null); if(id) tot.set(id,(tot.get(id)||0)+r.a); });
+  lines.filter(l=>l.dir==='cr').forEach(r=>{ const id=stRecBlock(r,blocks,cfg,guidBlk); if(id) tot.set(id,(tot.get(id)||0)+r.a); });
   const left=new Map(); blocks.forEach(b=>{ const c=pays.reduce((s,l)=>s+(cfg.alloc[l.k]||[]).filter(e=>e.b===b.id).reduce((x,e)=>x+e.a,0),0); left.set(b.id,stR2((tot.get(b.id)||0)*cfg.pct-c)); });
   const put=(l,b,a)=>{ const arr=cfg.alloc[l.k]=cfg.alloc[l.k]||[]; const e=arr.find(x=>x.b===b.id); if(e) e.a=stR2(e.a+a); else arr.push({b:b.id,a:stR2(a)}); rem.set(l.k,stR2(rem.get(l.k)-a)); left.set(b.id,stR2(left.get(b.id)-a)); };
   const ccSet=b=>new Set(b.ccs||[]); const jvCC=new Set(); blocks.filter(b=>b.type==='jv').forEach(b=>(b.ccs||[]).forEach(c=>jvCC.add(c)));
@@ -114,7 +124,7 @@ const stE = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 const stN = n => (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const stD = d => d ? (typeof fmtDate==='function'?fmtDate(d):d) : '—';
 
-// ───────── the profile card ─────────
+// ───────── the profile card (just a door) and the separate page ─────────
 function renderSettlementCard(cid){
   if(!stIsAdmin()) return '';
   setTimeout(()=>stFill(cid),0);
@@ -124,13 +134,26 @@ async function stFill(cid){
   const el=document.getElementById('cont-settle-'+cid); if(!el) return;
   try{ await stLoad(); }catch(e){ el.innerHTML='<div class="st">⚖️ Settlement by bills</div><div style="color:var(--red);font-size:12px">Could not load the settings — reload the page.</div>'; return; }
   const cfg=stC(cid);
-  const head=`<div class="st" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">⚖️ Settlement by bills
-    <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" ${cfg.on?'checked':''} onchange="stToggle('${cid}',this.checked)"> Use for this contractor</label></div>`;
-  if(!cfg.on){ el.innerHTML=head+`<div style="font-size:12px;color:var(--text3)">Off. Switch it on for contractors whose old payments have no cost centres. It never changes Tally or cost centres; it is a separate account kept only in this app.</div>`; return; }
-  SETL.cid=cid; el.innerHTML=head+`<div id="st-body-${cid}"></div>`;
-  if(SETL.loaded && SETL.loadedCid===cid) stDraw(); else stReload(cid);
+  el.innerHTML=`<div class="st" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">⚖️ Settlement by bills
+    <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" ${cfg.on?'checked':''} onchange="stToggle('${cid}',this.checked)"> Use for this contractor</label></div>
+    ${cfg.on?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="stOpenPage('${cid}')">Open the settlement page →</button><span style="font-size:12px;color:var(--text3)">His bills closed at ${Math.round(cfg.pct*100)}% with interest, pending JVs, move payments between bills.</span></div>`
+      :`<div style="font-size:12px;color:var(--text3)">Off. Switch it on for contractors whose old payments have no cost centres. It never changes Tally or cost centres; it is a separate account kept only in this app.</div>`}`;
 }
 function stToggle(cid,on){ const cfg=stC(cid); cfg.on=!!on; stSave(); stFill(cid); }
+function stOpenPage(cid){
+  const c=(D.contractors||[]).find(x=>x.id===cid); if(!c) return; SETL.cid=cid;
+  const prof=document.getElementById('cont-profile'); if(prof) prof.classList.add('hidden');
+  let pg=document.getElementById('cont-settle-page');
+  if(!pg){ pg=document.createElement('div'); pg.id='cont-settle-page'; (prof?prof.parentNode:document.getElementById('sec-cont')).appendChild(pg); }
+  pg.classList.remove('hidden');
+  pg.innerHTML=`<div style="margin:6px 0 14px"><button class="btn btn-sm" onclick="stClosePage('${cid}')">← Back to ${stE(c.name)}</button></div>
+    <div style="font-size:22px;font-weight:800;margin-bottom:2px">⚖️ Settlement by bills — ${stE(c.name)}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Part 1: bills already received, each closed at ${Math.round(stC(cid).pct*100)}% with interest. Part 2: pending JVs. Move payments between blocks, fetch from the next bill, add receipts. Read-only on Tally; nothing here changes cost centres.</div>
+    <div id="st-body-${cid}"></div>`;
+  window.scrollTo(0,0);
+  if(SETL.loaded && SETL.loadedCid===cid) stDraw(); else stReload(cid);
+}
+function stClosePage(cid){ const pg=document.getElementById('cont-settle-page'); if(pg) pg.classList.add('hidden'); if(typeof openContractorProfile==='function') openContractorProfile(cid,false); }
 
 async function stReload(cid){
   const body=document.getElementById('st-body-'+cid); if(!body) return; const c=(D.contractors||[]).find(x=>x.id===cid); if(!c) return;
@@ -190,8 +213,8 @@ function stDraw(){
       <button class="btn btn-sm" onclick="stExcel()">⬇ Excel</button></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Each bill = one project (part bills together). Estimated at ${Math.round(cfg.pct*100)}% of what was received, because his old payments have no cost centres. Read-only on Tally; nothing here changes cost centres.</div>
     <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Received on / expected</th><th style="text-align:right">Received / JV amount</th><th style="text-align:right">${Math.round(cfg.pct*100)}% to close</th><th style="text-align:right">Payments counted</th><th style="text-align:right">Gap (− = over)</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor</th><th title="Pull payments of the next bill into this one">Fetch</th></tr></thead>
-    <tbody>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.total))}</td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td><td></td></tr>`:'<tr><td colspan="9" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block.</td></tr>'}
-    ${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td><td></td></tr>`:''}</tbody></table></div>
+    <tbody><tr><td colspan="9" style="background:var(--navy);color:#fff;font-weight:700">PART 1 — Bills already received</td></tr>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.total))}</td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td><td></td></tr>`:'<tr><td colspan="9" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block, or "Make a bill" on a receipt below.</td></tr>'}
+    <tr><td colspan="9" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — Pending JVs (check pending)</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td><td></td></tr>`:''}</tbody></table></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0;font-size:12px">
       <div class="card" style="padding:10px"><b>Position</b><br>Paid to / for him (all payments): <b>${stN(res.allPaid)}</b><br>Received for him (all receipts): <b>${stN(res.allRec)}</b><br>Counted in blocks: <b>${stN(sum(res.rows,r=>r.counted))}</b> · Open: <b>${stN(res.openTotal)}</b>
         <br><span style="color:${Math.abs(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)<0.5?'var(--green)':'var(--red)'}">Check: counted + open − all payments = ${stN(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)}</span></div>
@@ -201,15 +224,15 @@ function stDraw(){
       <div style="overflow:auto;max-height:420px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Open amount</th><th>Count it in</th></tr></thead><tbody>${res.open.slice(0,600).map(x=>`<tr><td>${stD(x.l.d)}${known.has(x.l.k)?'':' 🆕'}</td><td>${stE(x.l.t)} ${stE(x.l.n)}</td><td>${stE(x.l.cc||'—')}</td><td style="max-width:260px">${stE(x.l.nar)}</td><td style="text-align:right">${stN(x.rem)}</td><td><select onchange="stMoveOpen('${stE(x.l.k)}',this.value);this.value=''" style="font-size:11px;max-width:180px">${blkOpts('')}</select></td></tr>`).join('')}</tbody></table></div></details>
     <details ${SETL.shown.rec?'open':''} ontoggle="SETL.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Receipts not linked to a bill (${unRec.length} · ${stN(unRec.reduce((s,l)=>s+l.a,0))})</summary>
       <div style="font-size:11px;color:var(--text3);margin:4px 0">These are credits in his ledger that no project settlement is linked to (refunds, transfers…). Choose a block only if the receipt really belongs to that bill; it then adds to that block's total.</div>
-      <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Belongs to</th></tr></thead><tbody>${unRec.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="">Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}" ${cfg.recv[l.k]===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>`;
+      <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Belongs to</th></tr></thead><tbody>${unRec.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="-">Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}" ${cfg.recv[l.k]===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select> <button class="btn btn-sm" title="This receipt is a bill received that no project is linked to" onclick="stRecToBill('${stE(l.k)}')">Make a bill</button></td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function stLinesHtml(r,blkOpts){
-  const rows=[]; r.receipts.forEach(x=>rows.push(`<tr style="background:#eef6ee"><td>${stD(x.d)}</td><td>${stE(x.t)} ${stE(x.n)}</td><td>${stE(x.cc||'—')}</td><td>Receipt</td><td style="text-align:right">${stN(x.a)}</td><td style="text-align:right">—</td><td></td></tr>`));
+  const rows=[]; r.receipts.forEach(x=>rows.push(`<tr style="background:#eef6ee"><td>${stD(x.d)}</td><td>${stE(x.t)} ${stE(x.n)}</td><td>${stE(x.cc||'—')}</td><td>Receipt${r.b.guids.has(x.g)?' (linked to the project settlement)':''}</td><td style="text-align:right">${stN(x.a)}</td><td style="text-align:right">—</td><td>${r.b.guids.has(x.g)?'':`<select onchange="stRecv('${stE(x.k)}',this.value)" style="font-size:11px;max-width:170px"><option value="-">Not counted</option>${(SETL._blocks||[]).map(b=>`<option value="${stE(b.id)}" ${b.id===r.b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select>`}</td></tr>`));
   r.pieces.forEach(p=>rows.push(`<tr><td>${stD(p.l.d)}</td><td>${stE(p.l.t)} ${stE(p.l.n)}</td><td>${stE(p.l.cc||'—')}</td><td style="max-width:240px">${stE(p.l.nar)}${p.from?` <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">fetched from ${stE((SETL._byId&&SETL._byId[p.from])||'next bill')}</span>`:''}</td><td style="text-align:right">${stN(p.a)}</td><td style="text-align:right">${stN(p.int)}</td>
     <td><select onchange="stMovePiece('${stE(p.k)}','${stE(p.orig)}',this.value)" style="font-size:11px;max-width:170px">${blkOpts(p.orig)}</select></td></tr>`));
   return `<div style="overflow:auto;max-height:380px;padding:6px 10px"><table class="tbl" style="width:100%;font-size:11.5px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th style="text-align:right">Interest</th><th>Move to</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="7" style="color:var(--text3)">Nothing counted here yet.</td></tr>'}</tbody></table></div>`;
 }
-const _stIds=()=>{ const {blocks}=stModel(); SETL._byId={}; blocks.forEach(b=>SETL._byId[b.id]=b.label.substring(0,28)); };
+const _stIds=()=>{ const {blocks}=stModel(); SETL._blocks=blocks; SETL._byId={}; blocks.forEach(b=>SETL._byId[b.id]=b.label.substring(0,28)); };
 
 // ───────── actions ─────────
 function stRedraw(){ _stIds(); stSave(); stDraw(); }
@@ -219,6 +242,8 @@ function stSetDate(id,v){ const cfg=stC(SETL.cid); if(v) cfg.date[id]=v; else de
 function stSetAmt(id,v){ const cfg=stC(SETL.cid); cfg.jvAmt[id]=Number(v)||0; stRedraw(); }
 function stFetch(id,on){ const cfg=stC(SETL.cid); if(on) cfg.fetch[id]=true; else delete cfg.fetch[id]; stRedraw(); }
 function stRecv(k,b){ const cfg=stC(SETL.cid); if(b) cfg.recv[k]=b; else delete cfg.recv[k]; stRedraw(); }
+function stRecToBill(k){ const l=SETL.lines.find(x=>x.k===k); if(!l) return; const lab=prompt('Name for this bill (e.g. the work it belongs to; leave blank if unknown):','Bill received '+stD(l.d)+' · '+l.t+' '+l.n); if(lab===null) return;
+  const cfg=stC(SETL.cid); const id='m'+Date.now().toString(36); cfg.manual.push({id,type:'bill',label:(lab.trim()||('Bill '+l.d)),date:l.d,amt:0,ccs:l.cc?[l.cc]:[]}); cfg.recv[k]=id; stRedraw(); }
 function stSnap(){ const cfg=stC(SETL.cid); cfg.prev=JSON.stringify(cfg.alloc); }
 function stMoveOpen(k,b){ if(!b) return; const cfg=stC(SETL.cid); const l=SETL.lines.find(x=>x.k===k); if(!l) return;
   const used=(cfg.alloc[k]||[]).reduce((s,e)=>s+e.a,0); const rem=stR2(l.a-used); if(rem<=0) return;

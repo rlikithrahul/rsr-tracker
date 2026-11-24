@@ -7,6 +7,7 @@
 // CONTRACTORS
 // ═══════════════════════════════════════════════════════
 function renderConts(){
+  { const sp=document.getElementById('cont-settle-page'); if(sp) sp.classList.add('hidden'); }
   const el=document.getElementById('cont-list');
   if(!D.contractors.length){el.innerHTML='<div class="empty"><div class="empty-icon">👷</div><div class="empty-text">No contractors yet.</div></div>';return;}
   el.innerHTML=D.contractors.filter(c=>!isArchived(c)).map(c=>{
@@ -43,6 +44,7 @@ function openContractorProfile(cid, pushHistory=true){
 
   if(pushHistory && typeof pushContractorHistory === 'function') pushContractorHistory(cid);
 
+  { const sp=document.getElementById('cont-settle-page'); if(sp) sp.classList.add('hidden'); }
   document.getElementById('cont-list').classList.add('hidden');
   let profileEl = document.getElementById('cont-profile');
   if(!profileEl){
