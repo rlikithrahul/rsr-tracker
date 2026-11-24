@@ -207,6 +207,9 @@ function renderContractorProfile(cid){
     <!-- Tally reconciliation, earlier work, interest by FY (Super Admin only) -->
     ${typeof renderContractorExtrasBlock==='function'?renderContractorExtrasBlock(c.id, {appNet:rawNet, ledger}):''}
 
+    <!-- Settlement by bills (Super Admin only, switched on per contractor) -->
+    ${typeof renderSettlementCard==='function'?renderSettlementCard(c.id):''}
+
     <!-- Expected JVs -->
     ${expectedJVs.length?`
     <div class="card" style="margin-bottom:14px;border-left:4px solid #7c3aed">
