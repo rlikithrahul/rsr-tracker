@@ -27,17 +27,28 @@ function stInterest(a, from, to, rate, comp){
   return tot;
 }
 const stR2 = n => Math.round((Number(n)||0)*100)/100;
-function stCfgDefault(){ return { on:false, rate:0.24, pct:0.7, comp:true, manual:[], date:{}, jvAmt:{}, recv:{}, alloc:{}, fetch:{}, known:null, prev:null }; }
+function stCfgDefault(){ return { on:false, rate:0.24, pct:0.7, comp:true, manual:[], date:{}, jvAmt:{}, recv:{}, alloc:{}, hold:{}, notBill:{}, fetch:{}, known:null, prev:null }; }
 
+// a settlement recorded in a project but not linked to a Tally receipt: find his ledger credit of the same amount (nearest date) so it is not counted twice
+function stMatchReceipt(lines,claimed,amt,date){
+  if(!(amt>0)) return null; const sums=new Map(), dt=new Map();
+  lines.forEach(l=>{ if(l.dir!=='cr') return; sums.set(l.g,(sums.get(l.g)||0)+l.a); dt.set(l.g,l.d); });
+  let best=null, bd=Infinity; const t=stParse(date);
+  sums.forEach((v,g)=>{ if(claimed.has(g)||Math.abs(v-amt)>1) return; const dd=(t!=null&&stParse(dt.get(g))!=null)?Math.abs(stParse(dt.get(g))-t):0; if(dd<bd){ bd=dd; best=g; } });
+  return best;
+}
 // blocks of one contractor: one per project with settlements (bill), one per project with a JV and no receipt yet (pending JV), plus manual ones
-function stBlocksOf(cid, cfg){
-  const out=[]; const projs=(D.projects||[]).filter(p=>p.contractorId===cid && !(typeof isArchived==='function' && isArchived(p)));
+function stBlocksOf(cid, cfg, lines){
+  lines=lines||[]; const out=[];
+  const claimed=new Set(); (cfg.manual||[]).forEach(m=>{ if(m.g) claimed.add(m.g); });
+  (D.projects||[]).forEach(p=>(p.settlements||[]).forEach(s=>{ if(typeof rcGuids==='function') rcGuids(s).forEach(g=>claimed.add(g)); })); const projs=(D.projects||[]).filter(p=>p.contractorId===cid && !(typeof isArchived==='function' && isArchived(p)));
   for(const p of projs){
     const sets=(p.settlements||[]).filter(s=>!(typeof isArchived==='function' && isArchived(s)));
     const names=(typeof tvLinkInfo==='function' && tvLinkInfo(p)) ? tvLinkInfo(p).names : [];
     if(sets.length){
       const id='b'+p.id, guids=new Set(); let virt=0, last='';
-      sets.forEach(s=>{ const g=(typeof rcGuids==='function')?rcGuids(s):[]; g.forEach(x=>guids.add(x)); if(!g.length) virt+=Number(s.amount)||0; const d=s.date||s.tvDate||''; if(d>last) last=d; });
+      sets.forEach(s=>{ const g=(typeof rcGuids==='function')?rcGuids(s):[]; g.forEach(x=>guids.add(x)); const d=s.date||s.tvDate||''; if(d>last) last=d;
+        if(!g.length){ const m=stMatchReceipt(lines,claimed,Number(s.amount)||0,d); if(m){ guids.add(m); claimed.add(m); } else virt+=Number(s.amount)||0; } });
       out.push({id, type:'bill', pid:p.id, label:p.name||'(project)', date:cfg.date[id]||last, ccs:names, guids, virt});
     }
     const settled=sets.reduce((s,x)=>s+(Number(x.amount)||0),0), left=(Number(p.jvAmount)||0)-settled;
@@ -45,7 +56,7 @@ function stBlocksOf(cid, cfg){
       const id='j'+p.id; out.push({id, type:'jv', pid:p.id, label:'JV · '+(p.name||'')+(sets.length?' (balance)':''), date:cfg.date[id]||'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):left, guids:new Set(), virt:0});
     }
   }
-  (cfg.manual||[]).forEach(m=>out.push({id:m.id, type:m.type, pid:null, label:m.label, date:cfg.date[m.id]||m.date||'', ccs:m.ccs||[], amt:cfg.jvAmt[m.id]!=null?Number(cfg.jvAmt[m.id]):Number(m.amt)||0, guids:new Set(), virt:0, manual:true}));
+  (cfg.manual||[]).forEach(m=>out.push({id:m.id, type:m.type, pid:null, label:m.label, date:cfg.date[m.id]||m.date||'', ccs:m.ccs||[], amt:cfg.jvAmt[m.id]!=null?Number(cfg.jvAmt[m.id]):Number(m.amt)||0, guids:new Set(m.g?[m.g]:[]), virt:0, manual:true}));
   out.sort((a,b)=>(a.type==='jv')-(b.type==='jv') || (a.date||'9999').localeCompare(b.date||'9999') || a.label.localeCompare(b.label));
   return out;
 }
@@ -74,8 +85,9 @@ function stCompute(lines, blocks, cfg){
   recs.forEach(r=>{ const b=stRecBlock(r,blocks,cfg,guidBlk,ctx); if(b) rBlk.set(r.k,b); else unRec.push(r); });
   const billAmt=new Map(blocks.map(b=>[b.id,b.virt||0])); const recTot=new Map(blocks.map(b=>[b.id,b.virt||0])); rBlk.forEach((b,k)=>{ const r=recs.find(x=>x.k===k); recTot.set(b,(recTot.get(b)||0)+r.a); if(guidBlk.get(r.g)===b) billAmt.set(b,(billAmt.get(b)||0)+r.a); });
   // base pieces from the saved assignment
-  const pcs=[]; const openRem=new Map();
-  pays.forEach(l=>{ let used=0; (cfg.alloc[l.k]||[]).forEach(e=>{ if(!byId.has(e.b)) return; const a=Math.min(e.a, l.a-used); if(a>0.004){ used+=a; pcs.push({k:l.k,l,a,b:e.b,orig:e.b,from:null}); } });
+  const pcs=[]; const openRem=new Map(); const auto=stAutoLayer(lines,blocks,cfg);
+  pays.forEach(l=>{ let used=0; (cfg.alloc[l.k]||[]).forEach(e=>{ if(!byId.has(e.b)) return; const a=Math.min(e.a, l.a-used); if(a>0.004){ used+=a; pcs.push({k:l.k,l,a,b:e.b,orig:e.b,from:null,pin:true}); } });
+    (auto[l.k]||[]).forEach(e=>{ const a=Math.min(e.a, l.a-used); if(a>0.004){ used+=a; pcs.push({k:l.k,l,a,b:e.b,orig:e.b,from:null,pin:false}); } });
     const rem=stR2(l.a-used); if(rem>0.004) openRem.set(l.k,rem); });
   const bills=blocks.filter(b=>b.type==='bill');
   const dateOf=id=>{ const b=byId.get(id); return b?b.date:''; };
@@ -102,19 +114,23 @@ function stCompute(lines, blocks, cfg){
   return {rows:res, open, unRec, openTotal:open.reduce((s,x)=>s+x.rem,0), allPaid:pays.reduce((s,l)=>s+l.a,0), allRec:recs.reduce((s,l)=>s+l.a,0)};
 }
 
-// auto-assign what is Open: own cost centre first (all blocks), then oldest-first for bills (JV-reserved cost centres untouched). Splits the last payment.
-function stAutoAssign(lines, blocks, cfg){
+// automatic layer, recomputed every time (so a payment added later in older days simply falls into place by date):
+// own cost centre first (all blocks), then oldest-first for bills (JV-reserved cost centres untouched); the last payment is split.
+// Payments you moved by hand (cfg.alloc, pinned) are never touched; payments you sent to Open (cfg.hold) stay Open.
+function stAutoLayer(lines, blocks, cfg){
+  const auto={}; if(cfg.autoOff) return auto;
   const byId=new Map(blocks.map(b=>[b.id,b])); const guidBlk=new Map(); blocks.forEach(b=>b.guids.forEach(g=>guidBlk.set(g,b.id))); const ctx=stCtx(lines,blocks);
   const pays=lines.filter(l=>l.dir==='dr').sort((a,b)=>a.d.localeCompare(b.d)||a.k.localeCompare(b.k));
-  const rem=new Map(); pays.forEach(l=>{ const u=(cfg.alloc[l.k]||[]).filter(e=>byId.has(e.b)).reduce((s,e)=>s+e.a,0); rem.set(l.k,stR2(l.a-u)); });
+  const rem=new Map(); pays.forEach(l=>{ const u=(cfg.alloc[l.k]||[]).filter(e=>byId.has(e.b)).reduce((s,e)=>s+e.a,0); rem.set(l.k,(cfg.hold&&cfg.hold[l.k])?0:stR2(l.a-u)); });
   const tot=new Map(blocks.map(b=>[b.id,b.type==='bill'?(b.virt||0):(b.amt||0)]));
   lines.filter(l=>l.dir==='cr').forEach(r=>{ const id=stRecBlock(r,blocks,cfg,guidBlk,ctx); if(id) tot.set(id,(tot.get(id)||0)+r.a); });
   const left=new Map(); blocks.forEach(b=>{ const c=pays.reduce((s,l)=>s+(cfg.alloc[l.k]||[]).filter(e=>e.b===b.id).reduce((x,e)=>x+e.a,0),0); left.set(b.id,stR2((tot.get(b.id)||0)*cfg.pct-c)); });
-  const put=(l,b,a)=>{ const arr=cfg.alloc[l.k]=cfg.alloc[l.k]||[]; const e=arr.find(x=>x.b===b.id); if(e) e.a=stR2(e.a+a); else arr.push({b:b.id,a:stR2(a)}); rem.set(l.k,stR2(rem.get(l.k)-a)); left.set(b.id,stR2(left.get(b.id)-a)); };
-  const ccSet=b=>new Set(b.ccs||[]); const jvCC=new Set(); blocks.filter(b=>b.type==='jv').forEach(b=>(b.ccs||[]).forEach(c=>jvCC.add(c)));
+  const put=(l,b,a)=>{ const arr=auto[l.k]=auto[l.k]||[]; const e=arr.find(x=>x.b===b.id); if(e) e.a=stR2(e.a+a); else arr.push({b:b.id,a:stR2(a)}); rem.set(l.k,stR2(rem.get(l.k)-a)); left.set(b.id,stR2(left.get(b.id)-a)); };
+  const jvCC=new Set(); blocks.filter(b=>b.type==='jv').forEach(b=>(b.ccs||[]).forEach(c=>jvCC.add(c)));
   const take=(b,filter)=>{ for(const l of pays){ if(left.get(b.id)<=0.004) break; const r=rem.get(l.k); if(r<=0.004||!filter(l)) continue; put(l,b,Math.min(r,left.get(b.id))); } };
-  blocks.forEach(b=>{ const s=ccSet(b); if(!s.size) return; take(b,l=>s.has(l.cc)&&(b.type==='jv'||!b.date||l.d<=b.date)); });
+  blocks.forEach(b=>{ const s=new Set(b.ccs||[]); if(!s.size) return; take(b,l=>s.has(l.cc)&&(b.type==='jv'||!b.date||l.d<=b.date)); });
   blocks.filter(b=>b.type==='bill').forEach(b=>take(b,l=>!jvCC.has(l.cc)&&(!b.date||l.d<=b.date)));
+  return auto;
 }
 
 // ───────── persistence ─────────
@@ -122,7 +138,7 @@ async function stLoad(){
   if(SETL.cfg) return SETL.cfg; let v=null; try{ v=await getSetting(SETL_KEY,null); }catch(e){ throw e; }
   SETL.cfg=(v&&typeof v==='object'&&v.c&&typeof v.c==='object')?v:{c:{}}; return SETL.cfg;
 }
-function stC(cid){ const o=SETL.cfg.c[cid]=Object.assign(stCfgDefault(),SETL.cfg.c[cid]||{}); return o; }
+function stC(cid){ const o=SETL.cfg.c[cid]=Object.assign(stCfgDefault(),SETL.cfg.c[cid]||{}); if(!o.hold) o.hold={}; if(!o.notBill) o.notBill={}; return o; }
 let _stSaveT=null;
 function stSave(){ clearTimeout(_stSaveT); _stSaveT=setTimeout(async()=>{ try{ await saveSetting(SETL_KEY,SETL.cfg); }catch(e){ toast('Could not save the settlement choices: '+e.message,'error'); } },500); }
 function stIsAdmin(){ return !!(typeof CU!=='undefined' && CU && CU.isSuperAdmin); }
@@ -187,7 +203,7 @@ async function stUnlock(cid){
 }
 
 // ───────── drawing ─────────
-function stModel(){ const cid=SETL.cid, cfg=stC(cid); const blocks=stBlocksOf(cid,cfg); return {cfg,blocks,res:stCompute(SETL.lines,blocks,cfg)}; }
+function stModel(){ const cid=SETL.cid, cfg=stC(cid); const blocks=stBlocksOf(cid,cfg,SETL.lines); return {cfg,blocks,res:stCompute(SETL.lines,blocks,cfg)}; }
 function stDraw(){
   const cid=SETL.cid, body=document.getElementById('st-body-'+cid); if(!body) return; _stIds();
   const {cfg,blocks,res}=stModel(); const known=new Set(cfg.known||[]);
@@ -205,6 +221,9 @@ function stDraw(){
       ${open?`<tr><td colspan="11" style="padding:0">${stLinesHtml(r,blkOpts)}</td></tr>`:''}`; };
   const sum=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
   const unRec=res.unRec;
+  const linkedG=new Set(); blocks.forEach(b=>b.guids.forEach(g=>linkedG.add(g)));
+  const cand=SETL.lines.filter(l=>l.dir==='cr'&&!linkedG.has(l.g)&&l.a>=100000&&/bill|gen\s*code|gvmc|cheque|check recei|part pay/i.test(l.nar||'')&&!cfg.notBill[l.k]);
+  const lastBill=bills.reduce((m,r)=>r.b.date>m?r.b.date:m,''); const openBefore=res.open.filter(x=>lastBill&&x.l.d<=lastBill), openAfter=res.open.filter(x=>!lastBill||x.l.d>lastBill);
   const newOpen=res.open.filter(x=>!known.has(x.l.k)), newRec=unRec.filter(l=>!known.has(l.k));
   body.innerHTML=`
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:12px">
@@ -213,16 +232,18 @@ function stDraw(){
       <label><input type="checkbox" ${cfg.comp?'checked':''} onchange="stSetting('comp',this.checked)"> add interest to principal each 31 March</label>
       <span style="margin-left:auto"></span>
       <button class="btn btn-sm" onclick="stReload('${cid}')">↻ Refresh from Tally</button>
-      <button class="btn btn-sm" onclick="stAutoBtn()">⚙️ Auto-assign open payments</button>
-      <button class="btn btn-sm" onclick="stUndoBtn()" ${cfg.prev?'':'disabled'}>↩ Undo last bulk change</button>
+      <button class="btn btn-sm" onclick="stResetMoves()" title="Forget every payment you moved by hand; everything goes back to the by-date rule">↺ Reset my moves</button>
+      <button class="btn btn-sm" onclick="stUndoBtn()" ${cfg.prev?'':'disabled'}>↩ Undo last reset</button>
       <button class="btn btn-sm" onclick="stAddBlock()">＋ Add block</button>
       <button class="btn btn-sm" onclick="stExcel()">⬇ Excel</button></div>
+    ${cand.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px"><b>These receipts look like bills received, but no project is linked to them:</b>${cand.map(l=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid var(--border)"><span style="min-width:90px">${stD(l.d)}</span><span style="min-width:110px;text-align:right"><b>${stN(l.a)}</b></span><span style="flex:1;min-width:200px">${stE(l.t)} ${stE(l.n)} · ${stE(l.cc||'no cost centre')} · ${stE((l.nar||'').substring(0,90))}</span><button class="btn btn-sm btn-primary" onclick="stRecToBill('${stE(l.k)}')">Make a bill</button><button class="btn btn-sm" onclick="stNotBill('${stE(l.k)}')">Not a bill</button></div>`).join('')}</div>`:''}
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Each bill = one project (part bills together). Estimated at ${Math.round(cfg.pct*100)}% of what was received, because his old payments have no cost centres. Read-only on Tally; nothing here changes cost centres.</div>
     <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Received on / expected</th><th style="text-align:right">Bill received / JV amount</th><th style="text-align:right">Other receipts since the previous bill</th><th style="text-align:right">Total received</th><th style="text-align:right">${Math.round(cfg.pct*100)}% of total</th><th style="text-align:right">Payments counted</th><th style="text-align:right">Gap (− = over)</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor</th><th title="Pull payments of the next bill into this one">Fetch</th></tr></thead>
     <tbody><tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 1 — Bills already received</td></tr>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.bill))}</td><td style="text-align:right">${stN(sum(bills,r=>r.others))}</td><td style="text-align:right">${stN(sum(bills,r=>r.total))}</td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td><td></td></tr>`:'<tr><td colspan="11" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block, or "Make a bill" on a receipt below.</td></tr>'}
     <tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — Pending JVs (check pending)</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.others))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.total))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td><td></td></tr>`:''}</tbody></table></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0;font-size:12px">
       <div class="card" style="padding:10px"><b>Position</b><br>Paid to / for him (all payments): <b>${stN(res.allPaid)}</b><br>Received for him (all receipts): <b>${stN(res.allRec)}</b><br>Counted in blocks: <b>${stN(sum(res.rows,r=>r.counted))}</b> · Open: <b>${stN(res.openTotal)}</b>
+        <br>Open before the last bill (${stD(lastBill)}): <b>${stN(openBefore.reduce((s,x)=>s+x.rem,0))}</b> · after it: <b>${stN(openAfter.reduce((s,x)=>s+x.rem,0))}</b>
         <br><span style="color:${Math.abs(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)<0.5?'var(--green)':'var(--red)'}">Check: counted + open − all payments = ${stN(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)}</span></div>
       <div class="card" style="padding:10px"><b>We owe him on bills received</b><br><span style="font-size:18px;font-weight:800">${stN(sum(bills,r=>r.due))}</span><br>after ${Math.round(cfg.pct*100)}% payments and interest<br><span style="color:var(--text3)">Can still fund on pending JVs: <b>${stN(sum(jvs,r=>r.canFund))}</b></span></div></div>
     ${newOpen.length||newRec.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px">🆕 ${newOpen.length} new open payment${newOpen.length===1?'':'s'} and ${newRec.length} new receipt${newRec.length===1?'':'s'} since you last marked things seen. <button class="btn btn-sm" onclick="stSeen()">Mark all seen</button></div>`:''}
@@ -235,10 +256,10 @@ function stDraw(){
 function stLinesHtml(r,blkOpts){
   const rows=[]; r.receipts.forEach(x=>rows.push(`<tr style="background:#eef6ee"><td>${stD(x.d)}</td><td>${stE(x.t)} ${stE(x.n)}</td><td>${stE(x.cc||'—')}</td><td>Receipt${r.b.guids.has(x.g)?' (linked to the project settlement)':''}</td><td style="text-align:right">${stN(x.a)}</td><td style="text-align:right">—</td><td>${r.b.guids.has(x.g)?'':`<select onchange="stRecv('${stE(x.k)}',this.value)" style="font-size:11px;max-width:170px"><option value="-">Not counted</option>${(SETL._blocks||[]).map(b=>`<option value="${stE(b.id)}" ${b.id===r.b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select>`}</td></tr>`));
   r.pieces.forEach(p=>rows.push(`<tr><td>${stD(p.l.d)}</td><td>${stE(p.l.t)} ${stE(p.l.n)}</td><td>${stE(p.l.cc||'—')}</td><td style="max-width:240px">${stE(p.l.nar)}${p.from?` <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">fetched from ${stE((SETL._byId&&SETL._byId[p.from])||'next bill')}</span>`:''}</td><td style="text-align:right">${stN(p.a)}</td><td style="text-align:right">${stN(p.int)}</td>
-    <td><select onchange="stMovePiece('${stE(p.k)}','${stE(p.orig)}',this.value)" style="font-size:11px;max-width:170px">${blkOpts(p.orig)}</select></td></tr>`));
+    <td><select onchange="stMovePiece('${stE(p.k)}','${stE(p.orig)}',this.value,${p.pin?'true':'false'},${stR2(p.a)})" style="font-size:11px;max-width:170px">${blkOpts(p.orig)}</select></td></tr>`));
   return `<div style="overflow:auto;max-height:380px;padding:6px 10px"><table class="tbl" style="width:100%;font-size:11.5px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th style="text-align:right">Interest</th><th>Move to</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="7" style="color:var(--text3)">Nothing counted here yet.</td></tr>'}</tbody></table></div>`;
 }
-const _stIds=()=>{ const {blocks}=stModel(); SETL._blocks=blocks; SETL._byId={}; blocks.forEach(b=>SETL._byId[b.id]=b.label.substring(0,28)); };
+const _stIds=()=>{ const {blocks,res}=stModel(); SETL._res=res; SETL._blocks=blocks; SETL._byId={}; blocks.forEach(b=>SETL._byId[b.id]=b.label.substring(0,28)); };
 
 // ───────── actions ─────────
 function stRedraw(){ _stIds(); stSave(); stDraw(); }
@@ -248,17 +269,22 @@ function stSetDate(id,v){ const cfg=stC(SETL.cid); if(v) cfg.date[id]=v; else de
 function stSetAmt(id,v){ const cfg=stC(SETL.cid); cfg.jvAmt[id]=Number(v)||0; stRedraw(); }
 function stFetch(id,on){ const cfg=stC(SETL.cid); if(on) cfg.fetch[id]=true; else delete cfg.fetch[id]; stRedraw(); }
 function stRecv(k,b){ const cfg=stC(SETL.cid); if(b) cfg.recv[k]=b; else delete cfg.recv[k]; stRedraw(); }
-function stRecToBill(k){ const l=SETL.lines.find(x=>x.k===k); if(!l) return; const lab=prompt('Name for this bill (e.g. the work it belongs to; leave blank if unknown):','Bill received '+stD(l.d)+' · '+l.t+' '+l.n); if(lab===null) return;
-  const cfg=stC(SETL.cid); const id='m'+Date.now().toString(36); cfg.manual.push({id,type:'bill',label:(lab.trim()||('Bill '+l.d)),date:l.d,amt:0,ccs:l.cc?[l.cc]:[]}); cfg.recv[k]=id; stRedraw(); }
-function stSnap(){ const cfg=stC(SETL.cid); cfg.prev=JSON.stringify(cfg.alloc); }
-function stMoveOpen(k,b){ if(!b) return; const cfg=stC(SETL.cid); const l=SETL.lines.find(x=>x.k===k); if(!l) return;
-  const used=(cfg.alloc[k]||[]).reduce((s,e)=>s+e.a,0); const rem=stR2(l.a-used); if(rem<=0) return;
-  const arr=cfg.alloc[k]=cfg.alloc[k]||[]; const e=arr.find(x=>x.b===b); if(e) e.a=stR2(e.a+rem); else arr.push({b,a:rem}); stRedraw(); }
-function stMovePiece(k,from,to){ const cfg=stC(SETL.cid); const arr=cfg.alloc[k]||[]; const i=arr.findIndex(x=>x.b===from); if(i<0) return; const a=arr[i].a; arr.splice(i,1);
-  if(to){ const e=arr.find(x=>x.b===to); if(e) e.a=stR2(e.a+a); else arr.push({b:to,a}); } if(!arr.length) delete cfg.alloc[k]; else cfg.alloc[k]=arr; stRedraw(); }
-function stAutoBtn(){ const cfg=stC(SETL.cid); const blocks=stBlocksOf(SETL.cid,cfg); stSnap(); stAutoAssign(SETL.lines,blocks,cfg); toast('Open payments assigned by the 70% rule (own cost centre first, then oldest first). You can move any of them, or press Undo.','ok',5000); stRedraw(); }
-function stUndoBtn(){ const cfg=stC(SETL.cid); if(!cfg.prev) return; cfg.alloc=JSON.parse(cfg.prev); cfg.prev=null; stRedraw(); }
+function stRecToBill(k){ const l=SETL.lines.find(x=>x.k===k); if(!l) return; const lab=prompt('Name for this bill (e.g. the work it belongs to; leave blank if unknown):',(l.cc?l.cc+' · ':'')+'bill received '+stD(l.d)+' · '+l.t+' '+l.n); if(lab===null) return;
+  const cfg=stC(SETL.cid); const id='m'+Date.now().toString(36); cfg.manual.push({id,type:'bill',label:(lab.trim()||('Bill '+l.d)),date:l.d,amt:0,ccs:l.cc?[l.cc]:[],g:l.g}); stRedraw(); }
+function stSnap(){ const cfg=stC(SETL.cid); cfg.prev=JSON.stringify({alloc:cfg.alloc,hold:cfg.hold}); }
+// Open → a block: pin the open amount there (a manual move)
+function stMoveOpen(k,b){ if(!b) return; const cfg=stC(SETL.cid); const x=SETL._res&&SETL._res.open.find(o=>o.l.k===k); if(!x) return; const rem=stR2(x.rem); if(rem<=0) return;
+  const arr=cfg.alloc[k]=cfg.alloc[k]||[]; const e=arr.find(z=>z.b===b); if(e) e.a=stR2(e.a+rem); else arr.push({b,a:rem}); delete cfg.hold[k]; stRedraw(); }
+// a counted payment → another block (pinned) or Open (kept out of the automatic rule)
+function stMovePiece(k,from,to,pin,amt){ const cfg=stC(SETL.cid); const arr=cfg.alloc[k]=cfg.alloc[k]||[];
+  if(pin){ const i=arr.findIndex(x=>x.b===from); if(i>=0){ amt=arr[i].a; arr.splice(i,1); } }
+  if(to){ const e=arr.find(x=>x.b===to); if(e) e.a=stR2(e.a+amt); else arr.push({b:to,a:stR2(amt)}); }
+  else cfg.hold[k]=true;
+  if(!arr.length) delete cfg.alloc[k]; stRedraw(); }
+function stResetMoves(){ if(!confirm('Forget every payment you moved by hand? Payments go back to the by-date rule. You can undo this once.')) return; const cfg=stC(SETL.cid); stSnap(); cfg.alloc={}; cfg.hold={}; stRedraw(); }
+function stUndoBtn(){ const cfg=stC(SETL.cid); if(!cfg.prev) return; const o=JSON.parse(cfg.prev); cfg.alloc=o.alloc||{}; cfg.hold=o.hold||{}; cfg.prev=null; stRedraw(); }
 function stSeen(){ const cfg=stC(SETL.cid); cfg.known=SETL.lines.map(l=>l.k); stRedraw(); }
+function stNotBill(k){ const cfg=stC(SETL.cid); cfg.notBill[k]=true; stRedraw(); }
 async function stAddBlock(){
   const label=prompt('Name of the new block (a bill or a JV not found in the projects):'); if(!label||!label.trim()) return;
   const t=(prompt('Type "bill" (money received) or "jv" (JV expected):','bill')||'').trim().toLowerCase(); if(t!=='bill'&&t!=='jv') { toast('Type must be bill or jv','error'); return; }

@@ -257,13 +257,24 @@ async function _tlDbRun(){
 
 // ───────── statement table with tick-boxes + interest ─────────
 // st = {rows:[{vch_date,vch_type,vch_number,narration,ledger,amount,synthetic}], opening, openingDate, title}
+// every statement (ledger, contractor, cost centres…) has a From / To date filter. Rows before From are folded into the opening balance, so the running balance stays right.
 function _tlStatement(st, target){
-  TL.stmt=st; const rows=st.rows; let bal=Number(st.opening)||0, dr=0, cr=0;
+  if(!st._all) Object.assign(st,{_all:{rows:st.rows,opening:st.opening,openingDate:st.openingDate,title:st.title},_f:'',_t:''});
+  const A=st._all, f=st._f, t=st._t; let rows=A.rows, opening=A.opening, od=A.openingDate;
+  if(f||t){ let pre=0; rows=A.rows.filter(r=>{ const d=r.vch_date||''; if(f&&d<f){ pre+=Number(r.amount)||0; return false; } if(t&&d>t) return false; return true; });
+    if(f){ opening=(Number(A.opening)||0)+pre; od=f; } }
+  st.rows=rows; st.opening=(A.opening==null&&!f)?null:opening; st.openingDate=od;
+  st.title=A.title+((f||t)?' ('+(f?_tlDate(f):'start')+' to '+(t?_tlDate(t):'today')+')':'');
+  _tlStatementDraw(st,target);
+}
+function _tlStmtRange(clear){ const st=TL.stmt; if(!st) return; st._f=clear?'':tlv('sf-f'); st._t=clear?'':tlv('sf-t'); const tgt=document.getElementById('sf-box')&&document.getElementById('sf-box').parentNode; _tlStatement(st, st._target||tgt); }
+function _tlStatementDraw(st, target){
+  st._target=target; TL.stmt=st; const rows=st.rows; let bal=Number(st.opening)||0, dr=0, cr=0;
   const showL=rows.some(r=>r.ledger||r.ledger_name);
   const body=rows.map((r,i)=>{ const a=Number(r.amount)||0; bal+=a; if(a<0) dr+=-a; else cr+=a;
     return `<tr${r.synthetic?' style="background:var(--surface2)"':''}><td><input type="checkbox" class="tl-ck" data-i="${i}" checked></td><td>${_tlDate(r.vch_date)}${r.source==='fy2425'?' <span title="FY2024-25 company" style="font-size:9px;color:var(--text3)">·24-25</span>':''}</td><td>${_tlE(r.vch_type)} ${_tlE(r.vch_number||'')}</td>${showL?`<td>${_tlE(r.ledger||r.ledger_name||'')}${r.cc_name?`<div style="font-size:10px;color:var(--text3)">${_tlE(r.cc_name)}</div>`:''}</td>`:''}<td style="max-width:300px">${_tlE(r.narration||r.party_ledger||'')}</td><td style="text-align:right">${a<0?_tlN(-a):''}</td><td style="text-align:right">${a>0?_tlN(a):''}</td><td style="text-align:right;white-space:nowrap">${_tlAmt(bal)}</td></tr>`; }).join('');
   const hasOpen=st.opening!=null;
-  target.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><div style="font-weight:700">${_tlE(st.title||'')}</div><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadStatement('xlsx')">⬇ Excel</button><button class="btn btn-sm" onclick="tlDownloadStatement('pdf')">⬇ PDF</button></div>
+  target.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><div style="font-weight:700">${_tlE(st.title||'')}</div><span id="sf-box" style="display:flex;gap:6px;align-items:end;font-size:11px"><label>From<br><input type="date" id="sf-f" value="${_tlA(st._f||'')}"></label><label>To<br><input type="date" id="sf-t" value="${_tlA(st._t||'')}"></label><button class="btn btn-sm" onclick="_tlStmtRange()">Show</button>${(st._f||st._t)?'<button class="btn btn-sm" onclick="_tlStmtRange(true)">Clear</button>':''}</span><span style="margin-left:auto"></span><button class="btn btn-sm" onclick="tlDownloadStatement('xlsx')">⬇ Excel</button><button class="btn btn-sm" onclick="tlDownloadStatement('pdf')">⬇ PDF</button></div>
    ${st.interest?`<div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
      <b>Interest</b>
      <label>Calculate up to<br><input type="date" id="ti-asof" value="${_tlToday()}" title="Interest runs up to this date (for example a settlement date)"></label>
