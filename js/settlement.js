@@ -11,8 +11,8 @@
 // Everything you decide (which block a payment is counted in, fetch switches, dates) is kept in the settings table, key rsr_settlement_v1.
 // Moves are never destructive: "Open" and "Move to" simply change the assignment; "Reset" keeps a one-step undo.
 // ═══════════════════════════════════════════════════════
-const ST_KEY = 'rsr_settlement_v1';
-let ST = { cfg:null, cid:null, lines:[], loaded:false, loading:false, err:'', openBlk:{}, shown:{} };
+const SETL_KEY = 'rsr_settlement_v1';
+let SETL = { cfg:null, cid:null, lines:[], loaded:false, loading:false, err:'', openBlk:{}, shown:{} };
 
 // ───────── pure engine (no DOM) ─────────
 function stParse(d){ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d||''); return m?Date.UTC(+m[1],+m[2]-1,+m[3]):null; }
@@ -103,12 +103,12 @@ function stAutoAssign(lines, blocks, cfg){
 
 // ───────── persistence ─────────
 async function stLoad(){
-  if(ST.cfg) return ST.cfg; let v=null; try{ v=await getSetting(ST_KEY,null); }catch(e){ throw e; }
-  ST.cfg=(v&&typeof v==='object'&&v.c&&typeof v.c==='object')?v:{c:{}}; return ST.cfg;
+  if(SETL.cfg) return SETL.cfg; let v=null; try{ v=await getSetting(SETL_KEY,null); }catch(e){ throw e; }
+  SETL.cfg=(v&&typeof v==='object'&&v.c&&typeof v.c==='object')?v:{c:{}}; return SETL.cfg;
 }
-function stC(cid){ const o=ST.cfg.c[cid]=Object.assign(stCfgDefault(),ST.cfg.c[cid]||{}); return o; }
+function stC(cid){ const o=SETL.cfg.c[cid]=Object.assign(stCfgDefault(),SETL.cfg.c[cid]||{}); return o; }
 let _stSaveT=null;
-function stSave(){ clearTimeout(_stSaveT); _stSaveT=setTimeout(async()=>{ try{ await saveSetting(ST_KEY,ST.cfg); }catch(e){ toast('Could not save the settlement choices: '+e.message,'error'); } },500); }
+function stSave(){ clearTimeout(_stSaveT); _stSaveT=setTimeout(async()=>{ try{ await saveSetting(SETL_KEY,SETL.cfg); }catch(e){ toast('Could not save the settlement choices: '+e.message,'error'); } },500); }
 function stIsAdmin(){ return !!(typeof CU!=='undefined' && CU && CU.isSuperAdmin); }
 const stE = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const stN = n => (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -127,8 +127,8 @@ async function stFill(cid){
   const head=`<div class="st" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">⚖️ Settlement by bills
     <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" ${cfg.on?'checked':''} onchange="stToggle('${cid}',this.checked)"> Use for this contractor</label></div>`;
   if(!cfg.on){ el.innerHTML=head+`<div style="font-size:12px;color:var(--text3)">Off. Switch it on for contractors whose old payments have no cost centres. It never changes Tally or cost centres; it is a separate account kept only in this app.</div>`; return; }
-  ST.cid=cid; el.innerHTML=head+`<div id="st-body-${cid}"></div>`;
-  if(ST.loaded && ST.loadedCid===cid) stDraw(); else stReload(cid);
+  SETL.cid=cid; el.innerHTML=head+`<div id="st-body-${cid}"></div>`;
+  if(SETL.loaded && SETL.loadedCid===cid) stDraw(); else stReload(cid);
 }
 function stToggle(cid,on){ const cfg=stC(cid); cfg.on=!!on; stSave(); stFill(cid); }
 
@@ -137,20 +137,20 @@ async function stReload(cid){
   if(typeof TL==='undefined' || !TL.token){
     body.innerHTML=`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Unlock Tally Live once to read his ledger (read-only).</div>
       <div style="display:flex;gap:8px;max-width:420px"><input id="st-pw" type="password" placeholder="Your password" onkeydown="if(event.key==='Enter')stUnlock('${cid}')" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:var(--rs)"><button class="btn btn-primary btn-sm" onclick="stUnlock('${cid}')">Unlock</button></div><div id="st-err" style="color:var(--red);font-size:12px;margin-top:6px"></div>`; return; }
-  body.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">⏳ Reading his Tally ledger…</div>'; ST.loading=true;
+  body.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">⏳ Reading his Tally ledger…</div>'; SETL.loading=true;
   try{
     const r=await tlApi('contractor_cc_statement',{contractor:c.name,history:true});
-    if(!r.ledgers||!r.ledgers.length){ body.innerHTML='<div style="font-size:12px;color:var(--text3)">No Tally ledgers are linked to this contractor yet (Tally Live → Linking).</div>'; ST.loading=false; return; }
+    if(!r.ledgers||!r.ledgers.length){ body.innerHTML='<div style="font-size:12px;color:var(--text3)">No Tally ledgers are linked to this contractor yet (Tally Live → Linking).</div>'; SETL.loading=false; return; }
     const out=[]; const h0=TL.hist; TL.hist=true;
     try{ for(const l of r.ledgers){ const own=r.rows.filter(x=>x.ledger===l.name); const br=_tlBridge([l],own);
       br.rows.forEach((x,i)=>{ if(x.synthetic) return; const parts=(x.ccs&&x.ccs.length)?x.ccs:[{cc:'',amount:Number(x.amount)||0}];
         parts.forEach((p,j)=>{ const amt=Number(p.amount)||0; if(Math.abs(amt)<0.005) return; const g=x.guid||('s'+i+l.name);
           out.push({k:g+'|'+(p.cc||'')+'|'+j, g, d:x.vch_date, t:x.vch_type||'', n:x.vch_number||'', led:x.ledger||l.name, nar:x.narration||'', cc:p.cc||'', a:Math.abs(amt), dir:amt<0?'dr':'cr'}); }); }); } }
     finally{ TL.hist=h0; }
-    out.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0); ST.lines=out; ST.loaded=true; ST.loadedCid=cid; ST.loading=false; ST.err='';
+    out.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0); SETL.lines=out; SETL.loaded=true; SETL.loadedCid=cid; SETL.loading=false; SETL.err='';
     const cfg=stC(cid); if(!cfg.known){ cfg.known=out.map(l=>l.k); stSave(); }
     stDraw();
-  }catch(e){ ST.loading=false; if(e&&e.message==='SESSION'){ stReload(cid); return; } body.innerHTML='<div style="color:var(--red);font-size:12px">'+stE(e.message||e)+'</div>'; }
+  }catch(e){ SETL.loading=false; if(e&&e.message==='SESSION'){ stReload(cid); return; } body.innerHTML='<div style="color:var(--red);font-size:12px">'+stE(e.message||e)+'</div>'; }
 }
 async function stUnlock(cid){
   const er=document.getElementById('st-err'); if(er) er.textContent='Checking…';
@@ -158,14 +158,14 @@ async function stUnlock(cid){
 }
 
 // ───────── drawing ─────────
-function stModel(){ const cid=ST.cid, cfg=stC(cid); const blocks=stBlocksOf(cid,cfg); return {cfg,blocks,res:stCompute(ST.lines,blocks,cfg)}; }
+function stModel(){ const cid=SETL.cid, cfg=stC(cid); const blocks=stBlocksOf(cid,cfg); return {cfg,blocks,res:stCompute(SETL.lines,blocks,cfg)}; }
 function stDraw(){
-  const cid=ST.cid, body=document.getElementById('st-body-'+cid); if(!body) return; _stIds();
+  const cid=SETL.cid, body=document.getElementById('st-body-'+cid); if(!body) return; _stIds();
   const {cfg,blocks,res}=stModel(); const known=new Set(cfg.known||[]);
   const blkOpts=(sel)=>`<option value="">Open (not counted)</option>`+blocks.map(b=>`<option value="${stE(b.id)}" ${sel===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('');
   const bills=res.rows.filter(r=>r.b.type==='bill'), jvs=res.rows.filter(r=>r.b.type==='jv');
   const nextOf=id=>{ const i=bills.findIndex(r=>r.b.id===id); return i>=0&&i<bills.length-1; };
-  const tr=r=>{ const b=r.b, jv=b.type==='jv'; const open=!!ST.openBlk[b.id];
+  const tr=r=>{ const b=r.b, jv=b.type==='jv'; const open=!!SETL.openBlk[b.id];
     const dateCell=`<input type="date" value="${stE(b.date)}" onchange="stSetDate('${b.id}',this.value)" style="width:128px;font-size:12px">`;
     const totCell=jv?`<input type="number" value="${stE(b.amt)}" onchange="stSetAmt('${b.id}',this.value)" style="width:110px;font-size:12px;text-align:right">`:stN(r.total);
     return `<tr style="${open?'background:var(--surface2)':''}"><td><a href="#" onclick="event.preventDefault();stOpenBlk('${b.id}')" style="font-weight:700">${open?'▾':'▸'} ${stE(b.label.substring(0,46))}</a>${b.date?'':' <span style="color:var(--amber);font-size:11px">· no date</span>'}</td>
@@ -197,47 +197,47 @@ function stDraw(){
         <br><span style="color:${Math.abs(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)<0.5?'var(--green)':'var(--red)'}">Check: counted + open − all payments = ${stN(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)}</span></div>
       <div class="card" style="padding:10px"><b>We owe him on bills received</b><br><span style="font-size:18px;font-weight:800">${stN(sum(bills,r=>r.due))}</span><br>after ${Math.round(cfg.pct*100)}% payments and interest<br><span style="color:var(--text3)">Can still fund on pending JVs: <b>${stN(sum(jvs,r=>r.canFund))}</b></span></div></div>
     ${newOpen.length||newRec.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px">🆕 ${newOpen.length} new open payment${newOpen.length===1?'':'s'} and ${newRec.length} new receipt${newRec.length===1?'':'s'} since you last marked things seen. <button class="btn btn-sm" onclick="stSeen()">Mark all seen</button></div>`:''}
-    <details ${res.open.length&&ST.shown.open?'open':''} ontoggle="ST.shown.open=this.open"><summary style="cursor:pointer;font-weight:700">Open payments — not counted in any block (${res.open.length} · ${stN(res.openTotal)})</summary>
+    <details ${res.open.length&&SETL.shown.open?'open':''} ontoggle="SETL.shown.open=this.open"><summary style="cursor:pointer;font-weight:700">Open payments — not counted in any block (${res.open.length} · ${stN(res.openTotal)})</summary>
       <div style="overflow:auto;max-height:420px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Open amount</th><th>Count it in</th></tr></thead><tbody>${res.open.slice(0,600).map(x=>`<tr><td>${stD(x.l.d)}${known.has(x.l.k)?'':' 🆕'}</td><td>${stE(x.l.t)} ${stE(x.l.n)}</td><td>${stE(x.l.cc||'—')}</td><td style="max-width:260px">${stE(x.l.nar)}</td><td style="text-align:right">${stN(x.rem)}</td><td><select onchange="stMoveOpen('${stE(x.l.k)}',this.value);this.value=''" style="font-size:11px;max-width:180px">${blkOpts('')}</select></td></tr>`).join('')}</tbody></table></div></details>
-    <details ${ST.shown.rec?'open':''} ontoggle="ST.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Receipts not linked to a bill (${unRec.length} · ${stN(unRec.reduce((s,l)=>s+l.a,0))})</summary>
+    <details ${SETL.shown.rec?'open':''} ontoggle="SETL.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Receipts not linked to a bill (${unRec.length} · ${stN(unRec.reduce((s,l)=>s+l.a,0))})</summary>
       <div style="font-size:11px;color:var(--text3);margin:4px 0">These are credits in his ledger that no project settlement is linked to (refunds, transfers…). Choose a block only if the receipt really belongs to that bill; it then adds to that block's total.</div>
       <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Belongs to</th></tr></thead><tbody>${unRec.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="">Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}" ${cfg.recv[l.k]===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function stLinesHtml(r,blkOpts){
   const rows=[]; r.receipts.forEach(x=>rows.push(`<tr style="background:#eef6ee"><td>${stD(x.d)}</td><td>${stE(x.t)} ${stE(x.n)}</td><td>${stE(x.cc||'—')}</td><td>Receipt</td><td style="text-align:right">${stN(x.a)}</td><td style="text-align:right">—</td><td></td></tr>`));
-  r.pieces.forEach(p=>rows.push(`<tr><td>${stD(p.l.d)}</td><td>${stE(p.l.t)} ${stE(p.l.n)}</td><td>${stE(p.l.cc||'—')}</td><td style="max-width:240px">${stE(p.l.nar)}${p.from?` <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">fetched from ${stE((ST._byId&&ST._byId[p.from])||'next bill')}</span>`:''}</td><td style="text-align:right">${stN(p.a)}</td><td style="text-align:right">${stN(p.int)}</td>
+  r.pieces.forEach(p=>rows.push(`<tr><td>${stD(p.l.d)}</td><td>${stE(p.l.t)} ${stE(p.l.n)}</td><td>${stE(p.l.cc||'—')}</td><td style="max-width:240px">${stE(p.l.nar)}${p.from?` <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">fetched from ${stE((SETL._byId&&SETL._byId[p.from])||'next bill')}</span>`:''}</td><td style="text-align:right">${stN(p.a)}</td><td style="text-align:right">${stN(p.int)}</td>
     <td><select onchange="stMovePiece('${stE(p.k)}','${stE(p.orig)}',this.value)" style="font-size:11px;max-width:170px">${blkOpts(p.orig)}</select></td></tr>`));
   return `<div style="overflow:auto;max-height:380px;padding:6px 10px"><table class="tbl" style="width:100%;font-size:11.5px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th style="text-align:right">Interest</th><th>Move to</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="7" style="color:var(--text3)">Nothing counted here yet.</td></tr>'}</tbody></table></div>`;
 }
-const _stIds=()=>{ const {blocks}=stModel(); ST._byId={}; blocks.forEach(b=>ST._byId[b.id]=b.label.substring(0,28)); };
+const _stIds=()=>{ const {blocks}=stModel(); SETL._byId={}; blocks.forEach(b=>SETL._byId[b.id]=b.label.substring(0,28)); };
 
 // ───────── actions ─────────
 function stRedraw(){ _stIds(); stSave(); stDraw(); }
-function stOpenBlk(id){ ST.openBlk[id]=!ST.openBlk[id]; _stIds(); stDraw(); }
-function stSetting(k,v){ const cfg=stC(ST.cid); if(typeof v==='number'&&!isFinite(v)) return; cfg[k]=v; stRedraw(); }
-function stSetDate(id,v){ const cfg=stC(ST.cid); if(v) cfg.date[id]=v; else delete cfg.date[id]; stRedraw(); }
-function stSetAmt(id,v){ const cfg=stC(ST.cid); cfg.jvAmt[id]=Number(v)||0; stRedraw(); }
-function stFetch(id,on){ const cfg=stC(ST.cid); if(on) cfg.fetch[id]=true; else delete cfg.fetch[id]; stRedraw(); }
-function stRecv(k,b){ const cfg=stC(ST.cid); if(b) cfg.recv[k]=b; else delete cfg.recv[k]; stRedraw(); }
-function stSnap(){ const cfg=stC(ST.cid); cfg.prev=JSON.stringify(cfg.alloc); }
-function stMoveOpen(k,b){ if(!b) return; const cfg=stC(ST.cid); const l=ST.lines.find(x=>x.k===k); if(!l) return;
+function stOpenBlk(id){ SETL.openBlk[id]=!SETL.openBlk[id]; _stIds(); stDraw(); }
+function stSetting(k,v){ const cfg=stC(SETL.cid); if(typeof v==='number'&&!isFinite(v)) return; cfg[k]=v; stRedraw(); }
+function stSetDate(id,v){ const cfg=stC(SETL.cid); if(v) cfg.date[id]=v; else delete cfg.date[id]; stRedraw(); }
+function stSetAmt(id,v){ const cfg=stC(SETL.cid); cfg.jvAmt[id]=Number(v)||0; stRedraw(); }
+function stFetch(id,on){ const cfg=stC(SETL.cid); if(on) cfg.fetch[id]=true; else delete cfg.fetch[id]; stRedraw(); }
+function stRecv(k,b){ const cfg=stC(SETL.cid); if(b) cfg.recv[k]=b; else delete cfg.recv[k]; stRedraw(); }
+function stSnap(){ const cfg=stC(SETL.cid); cfg.prev=JSON.stringify(cfg.alloc); }
+function stMoveOpen(k,b){ if(!b) return; const cfg=stC(SETL.cid); const l=SETL.lines.find(x=>x.k===k); if(!l) return;
   const used=(cfg.alloc[k]||[]).reduce((s,e)=>s+e.a,0); const rem=stR2(l.a-used); if(rem<=0) return;
   const arr=cfg.alloc[k]=cfg.alloc[k]||[]; const e=arr.find(x=>x.b===b); if(e) e.a=stR2(e.a+rem); else arr.push({b,a:rem}); stRedraw(); }
-function stMovePiece(k,from,to){ const cfg=stC(ST.cid); const arr=cfg.alloc[k]||[]; const i=arr.findIndex(x=>x.b===from); if(i<0) return; const a=arr[i].a; arr.splice(i,1);
+function stMovePiece(k,from,to){ const cfg=stC(SETL.cid); const arr=cfg.alloc[k]||[]; const i=arr.findIndex(x=>x.b===from); if(i<0) return; const a=arr[i].a; arr.splice(i,1);
   if(to){ const e=arr.find(x=>x.b===to); if(e) e.a=stR2(e.a+a); else arr.push({b:to,a}); } if(!arr.length) delete cfg.alloc[k]; else cfg.alloc[k]=arr; stRedraw(); }
-function stAutoBtn(){ const cfg=stC(ST.cid); const blocks=stBlocksOf(ST.cid,cfg); stSnap(); stAutoAssign(ST.lines,blocks,cfg); toast('Open payments assigned by the 70% rule (own cost centre first, then oldest first). You can move any of them, or press Undo.','ok',5000); stRedraw(); }
-function stUndoBtn(){ const cfg=stC(ST.cid); if(!cfg.prev) return; cfg.alloc=JSON.parse(cfg.prev); cfg.prev=null; stRedraw(); }
-function stSeen(){ const cfg=stC(ST.cid); cfg.known=ST.lines.map(l=>l.k); stRedraw(); }
+function stAutoBtn(){ const cfg=stC(SETL.cid); const blocks=stBlocksOf(SETL.cid,cfg); stSnap(); stAutoAssign(SETL.lines,blocks,cfg); toast('Open payments assigned by the 70% rule (own cost centre first, then oldest first). You can move any of them, or press Undo.','ok',5000); stRedraw(); }
+function stUndoBtn(){ const cfg=stC(SETL.cid); if(!cfg.prev) return; cfg.alloc=JSON.parse(cfg.prev); cfg.prev=null; stRedraw(); }
+function stSeen(){ const cfg=stC(SETL.cid); cfg.known=SETL.lines.map(l=>l.k); stRedraw(); }
 async function stAddBlock(){
   const label=prompt('Name of the new block (a bill or a JV not found in the projects):'); if(!label||!label.trim()) return;
   const t=(prompt('Type "bill" (money received) or "jv" (JV expected):','bill')||'').trim().toLowerCase(); if(t!=='bill'&&t!=='jv') { toast('Type must be bill or jv','error'); return; }
   const date=prompt('Date received / expected (YYYY-MM-DD), blank if not known:','')||''; const amt=t==='jv'?Number(prompt('Expected JV amount:','0'))||0:0;
-  const cfg=stC(ST.cid); cfg.manual.push({id:'m'+Date.now().toString(36),type:t,label:label.trim(),date:date.trim(),amt,ccs:[]}); stRedraw();
+  const cfg=stC(SETL.cid); cfg.manual.push({id:'m'+Date.now().toString(36),type:t,label:label.trim(),date:date.trim(),amt,ccs:[]}); stRedraw();
 }
 
 // ───────── Excel ─────────
 function stExcel(){
-  const {cfg,blocks,res}=stModel(); const c=(D.contractors||[]).find(x=>x.id===ST.cid)||{name:''}; const wb=XLSX.utils.book_new();
+  const {cfg,blocks,res}=stModel(); const c=(D.contractors||[]).find(x=>x.id===SETL.cid)||{name:''}; const wb=XLSX.utils.book_new();
   const sheet=(aoa,w)=>{ const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=w.map(x=>({wch:x})); return ws; };
   const s=[[c.name+' — settlement by bills ('+Math.round(cfg.pct*100)+'%, interest '+(cfg.rate*100)+'%'+(cfg.comp?', compounded each 31 March':', simple')+')'],[],['Block','Type','Date','Received / JV amount','To close','Counted','Gap','Interest','Due to contractor / can fund']];
   res.rows.forEach(r=>s.push([r.b.label,r.b.type==='jv'?'Pending JV':'Bill',r.b.date,stR2(r.total),r.target,stR2(r.counted),r.gap,stR2(r.interest),r.b.type==='jv'?r.canFund:r.due]));
@@ -247,7 +247,7 @@ function stExcel(){
   res.rows.forEach(r=>{ let nm=(r.b.type==='jv'?'JV ':'')+r.b.label.replace(/[\\\/\?\*\[\]:]/g,' ').substring(0,26); let n=nm,i=2; while(used.has(n)) n=nm.substring(0,24)+'~'+(i++); used.add(n);
     const a=[[r.b.label+' — '+stD(r.b.date)],['Total',stR2(r.total),'To close',r.target,'Counted',stR2(r.counted),'Interest',stR2(r.interest),'Due',r.due==null?r.canFund:r.due],[],['Date','Voucher','Cost centre','Narration','Role','Amount counted','Interest','Fetched from']];
     r.receipts.forEach(x=>a.push([x.d,x.t+' '+x.n,x.cc,x.nar,'Receipt',x.a,'','']));
-    r.pieces.forEach(p=>a.push([p.l.d,p.l.t+' '+p.l.n,p.l.cc,p.l.nar,'Payment',stR2(p.a),stR2(p.int),p.from?(ST._byId&&ST._byId[p.from]||'next bill'):'']));
+    r.pieces.forEach(p=>a.push([p.l.d,p.l.t+' '+p.l.n,p.l.cc,p.l.nar,'Payment',stR2(p.a),stR2(p.int),p.from?(SETL._byId&&SETL._byId[p.from]||'next bill'):'']));
     XLSX.utils.book_append_sheet(wb,sheet(a,[12,20,34,50,10,16,14,22]),n); });
   const o=[['Date','Voucher','Cost centre','Narration','Open amount']]; res.open.forEach(x=>o.push([x.l.d,x.l.t+' '+x.l.n,x.l.cc,x.l.nar,stR2(x.rem)]));
   XLSX.utils.book_append_sheet(wb,sheet(o,[12,20,34,50,16]),'Open payments');
