@@ -50,13 +50,19 @@ function stBlocksOf(cid, cfg){
   return out;
 }
 
-// which block a receipt belongs to: its project's settlement link, else your choice ('-' = not counted), else its cost centre if only one bill/JV has it
-function stRecBlock(r, blocks, cfg, guidBlk){
+// which block a receipt belongs to — same rule as the workbook:
+//   1. the bill its project settlement is linked to;  2. your choice ('-' = not counted);
+//   3. otherwise it is clubbed with the NEXT bill received on or after its date (so a bill's block = every receipt since the previous bill, plus the bill).
+//   Receipts after the last bill stay unclubbed until a later bill arrives.
+function stCtx(lines,blocks){ const pos=new Map(); lines.forEach((l,i)=>pos.set(l.k,i)); const bpos=new Map();
+  blocks.forEach(b=>{ if(b.guids&&b.guids.size){ let m=Infinity; lines.forEach((l,i)=>{ if(b.guids.has(l.g)&&i<m) m=i; }); if(m<Infinity) bpos.set(b.id,m); } }); return {pos,bpos}; }
+function stRecBlock(r, blocks, cfg, guidBlk, ctx){
   const byId=new Map(blocks.map(b=>[b.id,b]));
   if(guidBlk.has(r.g)) return guidBlk.get(r.g);
   const v=cfg.recv[r.k]; if(v==='-') return null; if(v&&byId.has(v)) return v;
-  if(r.cc){ const m=blocks.filter(b=>(b.ccs||[]).includes(r.cc)); const bills=m.filter(b=>b.type==='bill'); if(bills.length===1) return bills[0].id; if(!bills.length&&m.length===1) return m[0].id; }
-  return null;
+  const ok=b=>b.type==='bill'&&b.date&&(b.date>r.d||(b.date===r.d&&(!ctx||!ctx.bpos.has(b.id)||ctx.pos.get(r.k)<ctx.bpos.get(b.id))));   // same day: before the bill's own entry → in it, after → next bill
+  const nxt=blocks.filter(ok).sort((x,y)=>x.date.localeCompare(y.date))[0];
+  return nxt?nxt.id:null;
 }
 // the whole calculation. lines: [{k,g,d,t,n,led,nar,cc,a,dir:'dr'|'cr'}]
 function stCompute(lines, blocks, cfg){
@@ -64,9 +70,9 @@ function stCompute(lines, blocks, cfg){
   const pays=lines.filter(l=>l.dir==='dr').sort((a,b)=>a.d.localeCompare(b.d)||a.k.localeCompare(b.k));
   const recs=lines.filter(l=>l.dir==='cr');
   // receipts → blocks
-  const rBlk=new Map(); const unRec=[];
-  recs.forEach(r=>{ const b=stRecBlock(r,blocks,cfg,guidBlk); if(b) rBlk.set(r.k,b); else unRec.push(r); });
-  const recTot=new Map(blocks.map(b=>[b.id,b.virt||0])); rBlk.forEach((b,k)=>{ const r=recs.find(x=>x.k===k); recTot.set(b,(recTot.get(b)||0)+r.a); });
+  const ctx=stCtx(lines,blocks); const rBlk=new Map(); const unRec=[];
+  recs.forEach(r=>{ const b=stRecBlock(r,blocks,cfg,guidBlk,ctx); if(b) rBlk.set(r.k,b); else unRec.push(r); });
+  const billAmt=new Map(blocks.map(b=>[b.id,b.virt||0])); const recTot=new Map(blocks.map(b=>[b.id,b.virt||0])); rBlk.forEach((b,k)=>{ const r=recs.find(x=>x.k===k); recTot.set(b,(recTot.get(b)||0)+r.a); if(guidBlk.get(r.g)===b) billAmt.set(b,(billAmt.get(b)||0)+r.a); });
   // base pieces from the saved assignment
   const pcs=[]; const openRem=new Map();
   pays.forEach(l=>{ let used=0; (cfg.alloc[l.k]||[]).forEach(e=>{ if(!byId.has(e.b)) return; const a=Math.min(e.a, l.a-used); if(a>0.004){ used+=a; pcs.push({k:l.k,l,a,b:e.b,orig:e.b,from:null}); } });
@@ -88,7 +94,7 @@ function stCompute(lines, blocks, cfg){
     const counted=mine.reduce((s,p)=>s+p.a,0);
     const interest=mine.reduce((s,p)=>s+(p.int=intOf(p,b.id)),0);
     const target=stR2(total*cfg.pct);
-    return {b, total, target, counted, gap:stR2(target-counted), interest, due:b.type==='bill'?stR2(total-counted-interest):null, canFund:b.type==='jv'?Math.max(0,stR2(target-counted)):null,
+    return {b, bill:b.type==='bill'?(billAmt.get(b.id)||0):(b.amt||0), others:total-(b.type==='bill'?(billAmt.get(b.id)||0):(b.amt||0)), total, target, counted, gap:stR2(target-counted), interest, due:b.type==='bill'?stR2(total-counted-interest):null, canFund:b.type==='jv'?Math.max(0,stR2(target-counted)):null,
       pieces:mine, receipts:recs.filter(r=>rBlk.get(r.k)===b.id), fetchedIn:mine.filter(p=>p.from).reduce((s,p)=>s+p.a,0), fetchedOut:0};
   });
   pcs.filter(p=>p.from).forEach(p=>{ const r=res.find(x=>x.b.id===p.from); if(r) r.fetchedOut+=p.a; });
@@ -98,11 +104,11 @@ function stCompute(lines, blocks, cfg){
 
 // auto-assign what is Open: own cost centre first (all blocks), then oldest-first for bills (JV-reserved cost centres untouched). Splits the last payment.
 function stAutoAssign(lines, blocks, cfg){
-  const byId=new Map(blocks.map(b=>[b.id,b])); const guidBlk=new Map(); blocks.forEach(b=>b.guids.forEach(g=>guidBlk.set(g,b.id)));
+  const byId=new Map(blocks.map(b=>[b.id,b])); const guidBlk=new Map(); blocks.forEach(b=>b.guids.forEach(g=>guidBlk.set(g,b.id))); const ctx=stCtx(lines,blocks);
   const pays=lines.filter(l=>l.dir==='dr').sort((a,b)=>a.d.localeCompare(b.d)||a.k.localeCompare(b.k));
   const rem=new Map(); pays.forEach(l=>{ const u=(cfg.alloc[l.k]||[]).filter(e=>byId.has(e.b)).reduce((s,e)=>s+e.a,0); rem.set(l.k,stR2(l.a-u)); });
   const tot=new Map(blocks.map(b=>[b.id,b.type==='bill'?(b.virt||0):(b.amt||0)]));
-  lines.filter(l=>l.dir==='cr').forEach(r=>{ const id=stRecBlock(r,blocks,cfg,guidBlk); if(id) tot.set(id,(tot.get(id)||0)+r.a); });
+  lines.filter(l=>l.dir==='cr').forEach(r=>{ const id=stRecBlock(r,blocks,cfg,guidBlk,ctx); if(id) tot.set(id,(tot.get(id)||0)+r.a); });
   const left=new Map(); blocks.forEach(b=>{ const c=pays.reduce((s,l)=>s+(cfg.alloc[l.k]||[]).filter(e=>e.b===b.id).reduce((x,e)=>x+e.a,0),0); left.set(b.id,stR2((tot.get(b.id)||0)*cfg.pct-c)); });
   const put=(l,b,a)=>{ const arr=cfg.alloc[l.k]=cfg.alloc[l.k]||[]; const e=arr.find(x=>x.b===b.id); if(e) e.a=stR2(e.a+a); else arr.push({b:b.id,a:stR2(a)}); rem.set(l.k,stR2(rem.get(l.k)-a)); left.set(b.id,stR2(left.get(b.id)-a)); };
   const ccSet=b=>new Set(b.ccs||[]); const jvCC=new Set(); blocks.filter(b=>b.type==='jv').forEach(b=>(b.ccs||[]).forEach(c=>jvCC.add(c)));
@@ -190,13 +196,13 @@ function stDraw(){
   const nextOf=id=>{ const i=bills.findIndex(r=>r.b.id===id); return i>=0&&i<bills.length-1; };
   const tr=r=>{ const b=r.b, jv=b.type==='jv'; const open=!!SETL.openBlk[b.id];
     const dateCell=`<input type="date" value="${stE(b.date)}" onchange="stSetDate('${b.id}',this.value)" style="width:128px;font-size:12px">`;
-    const totCell=jv?`<input type="number" value="${stE(b.amt)}" onchange="stSetAmt('${b.id}',this.value)" style="width:110px;font-size:12px;text-align:right">`:stN(r.total);
+    const totCell=jv?`<input type="number" value="${stE(b.amt)}" onchange="stSetAmt('${b.id}',this.value)" style="width:110px;font-size:12px;text-align:right">`:stN(r.bill);
     return `<tr style="${open?'background:var(--surface2)':''}"><td><a href="#" onclick="event.preventDefault();stOpenBlk('${b.id}')" style="font-weight:700">${open?'▾':'▸'} ${stE(b.label.substring(0,46))}</a>${b.date?'':' <span style="color:var(--amber);font-size:11px">· no date</span>'}</td>
-      <td>${dateCell}</td><td style="text-align:right">${totCell}</td><td style="text-align:right">${stN(r.target)}</td><td style="text-align:right">${stN(r.counted)}</td>
+      <td>${dateCell}</td><td style="text-align:right">${totCell}</td><td style="text-align:right">${stN(r.others)}</td><td style="text-align:right;font-weight:600">${stN(r.total)}</td><td style="text-align:right">${stN(r.target)}</td><td style="text-align:right">${stN(r.counted)}</td>
       <td style="text-align:right;${r.gap<-0.005?'color:var(--red)':''}">${stN(r.gap)}</td><td style="text-align:right">${stN(r.interest)}</td>
       <td style="text-align:right;font-weight:700;color:${jv?'var(--text)':(r.due>0.5?'var(--green)':'var(--text2)')}">${jv?stN(r.canFund)+' <span style="font-weight:400;font-size:10px">can fund</span>':stN(r.due)}</td>
       <td style="text-align:center">${(!jv&&nextOf(b.id))?`<input type="checkbox" title="Pull the oldest payments of the NEXT bill into this bill until its due is ~0" ${cfg.fetch[b.id]?'checked':''} onchange="stFetch('${b.id}',this.checked)">`:''}${r.fetchedIn>0?`<div style="font-size:10px;color:var(--text3)">in ${stN(r.fetchedIn)}</div>`:''}${r.fetchedOut>0?`<div style="font-size:10px;color:var(--text3)">out ${stN(r.fetchedOut)}</div>`:''}</td></tr>
-      ${open?`<tr><td colspan="9" style="padding:0">${stLinesHtml(r,blkOpts)}</td></tr>`:''}`; };
+      ${open?`<tr><td colspan="11" style="padding:0">${stLinesHtml(r,blkOpts)}</td></tr>`:''}`; };
   const sum=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
   const unRec=res.unRec;
   const newOpen=res.open.filter(x=>!known.has(x.l.k)), newRec=unRec.filter(l=>!known.has(l.k));
@@ -212,9 +218,9 @@ function stDraw(){
       <button class="btn btn-sm" onclick="stAddBlock()">＋ Add block</button>
       <button class="btn btn-sm" onclick="stExcel()">⬇ Excel</button></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Each bill = one project (part bills together). Estimated at ${Math.round(cfg.pct*100)}% of what was received, because his old payments have no cost centres. Read-only on Tally; nothing here changes cost centres.</div>
-    <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Received on / expected</th><th style="text-align:right">Received / JV amount</th><th style="text-align:right">${Math.round(cfg.pct*100)}% to close</th><th style="text-align:right">Payments counted</th><th style="text-align:right">Gap (− = over)</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor</th><th title="Pull payments of the next bill into this one">Fetch</th></tr></thead>
-    <tbody><tr><td colspan="9" style="background:var(--navy);color:#fff;font-weight:700">PART 1 — Bills already received</td></tr>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.total))}</td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td><td></td></tr>`:'<tr><td colspan="9" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block, or "Make a bill" on a receipt below.</td></tr>'}
-    <tr><td colspan="9" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — Pending JVs (check pending)</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td><td></td></tr>`:''}</tbody></table></div>
+    <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Received on / expected</th><th style="text-align:right">Bill received / JV amount</th><th style="text-align:right">Other receipts since the previous bill</th><th style="text-align:right">Total received</th><th style="text-align:right">${Math.round(cfg.pct*100)}% of total</th><th style="text-align:right">Payments counted</th><th style="text-align:right">Gap (− = over)</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor</th><th title="Pull payments of the next bill into this one">Fetch</th></tr></thead>
+    <tbody><tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 1 — Bills already received</td></tr>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.bill))}</td><td style="text-align:right">${stN(sum(bills,r=>r.others))}</td><td style="text-align:right">${stN(sum(bills,r=>r.total))}</td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td><td></td></tr>`:'<tr><td colspan="11" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block, or "Make a bill" on a receipt below.</td></tr>'}
+    <tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — Pending JVs (check pending)</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.others))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.total))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.counted))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td><td></td></tr>`:''}</tbody></table></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0;font-size:12px">
       <div class="card" style="padding:10px"><b>Position</b><br>Paid to / for him (all payments): <b>${stN(res.allPaid)}</b><br>Received for him (all receipts): <b>${stN(res.allRec)}</b><br>Counted in blocks: <b>${stN(sum(res.rows,r=>r.counted))}</b> · Open: <b>${stN(res.openTotal)}</b>
         <br><span style="color:${Math.abs(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)<0.5?'var(--green)':'var(--red)'}">Check: counted + open − all payments = ${stN(sum(res.rows,r=>r.counted)+res.openTotal-res.allPaid)}</span></div>
@@ -222,8 +228,8 @@ function stDraw(){
     ${newOpen.length||newRec.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px">🆕 ${newOpen.length} new open payment${newOpen.length===1?'':'s'} and ${newRec.length} new receipt${newRec.length===1?'':'s'} since you last marked things seen. <button class="btn btn-sm" onclick="stSeen()">Mark all seen</button></div>`:''}
     <details ${res.open.length&&SETL.shown.open?'open':''} ontoggle="SETL.shown.open=this.open"><summary style="cursor:pointer;font-weight:700">Open payments — not counted in any block (${res.open.length} · ${stN(res.openTotal)})</summary>
       <div style="overflow:auto;max-height:420px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Open amount</th><th>Count it in</th></tr></thead><tbody>${res.open.slice(0,600).map(x=>`<tr><td>${stD(x.l.d)}${known.has(x.l.k)?'':' 🆕'}</td><td>${stE(x.l.t)} ${stE(x.l.n)}</td><td>${stE(x.l.cc||'—')}</td><td style="max-width:260px">${stE(x.l.nar)}</td><td style="text-align:right">${stN(x.rem)}</td><td><select onchange="stMoveOpen('${stE(x.l.k)}',this.value);this.value=''" style="font-size:11px;max-width:180px">${blkOpts('')}</select></td></tr>`).join('')}</tbody></table></div></details>
-    <details ${SETL.shown.rec?'open':''} ontoggle="SETL.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Receipts not linked to a bill (${unRec.length} · ${stN(unRec.reduce((s,l)=>s+l.a,0))})</summary>
-      <div style="font-size:11px;color:var(--text3);margin:4px 0">These are credits in his ledger that no project settlement is linked to (refunds, transfers…). Choose a block only if the receipt really belongs to that bill; it then adds to that block's total.</div>
+    <details ${SETL.shown.rec?'open':''} ontoggle="SETL.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Receipts not clubbed into any bill (${unRec.length} · ${stN(unRec.reduce((s,l)=>s+l.a,0))})</summary>
+      <div style="font-size:11px;color:var(--text3);margin:4px 0">Credits in his ledger that no bill has taken yet: received after the last bill, or you marked them Not counted. Receipts before a bill are clubbed into it automatically (like the workbook); choose a block here to override.</div>
       <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Belongs to</th></tr></thead><tbody>${unRec.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="-">Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}" ${cfg.recv[l.k]===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select> <button class="btn btn-sm" title="This receipt is a bill received that no project is linked to" onclick="stRecToBill('${stE(l.k)}')">Make a bill</button></td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function stLinesHtml(r,blkOpts){
@@ -264,10 +270,10 @@ async function stAddBlock(){
 function stExcel(){
   const {cfg,blocks,res}=stModel(); const c=(D.contractors||[]).find(x=>x.id===SETL.cid)||{name:''}; const wb=XLSX.utils.book_new();
   const sheet=(aoa,w)=>{ const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=w.map(x=>({wch:x})); return ws; };
-  const s=[[c.name+' — settlement by bills ('+Math.round(cfg.pct*100)+'%, interest '+(cfg.rate*100)+'%'+(cfg.comp?', compounded each 31 March':', simple')+')'],[],['Block','Type','Date','Received / JV amount','To close','Counted','Gap','Interest','Due to contractor / can fund']];
-  res.rows.forEach(r=>s.push([r.b.label,r.b.type==='jv'?'Pending JV':'Bill',r.b.date,stR2(r.total),r.target,stR2(r.counted),r.gap,stR2(r.interest),r.b.type==='jv'?r.canFund:r.due]));
+  const s=[[c.name+' — settlement by bills ('+Math.round(cfg.pct*100)+'%, interest '+(cfg.rate*100)+'%'+(cfg.comp?', compounded each 31 March':', simple')+')'],[],['Block','Type','Date','Bill received / JV amount','Other receipts clubbed','Total received','70% to close','Counted','Gap','Interest','Due to contractor / can fund']];
+  res.rows.forEach(r=>s.push([r.b.label,r.b.type==='jv'?'Pending JV':'Bill',r.b.date,stR2(r.bill),stR2(r.others),stR2(r.total),r.target,stR2(r.counted),r.gap,stR2(r.interest),r.b.type==='jv'?r.canFund:r.due]));
   s.push([],['Open payments (not counted)',,,,,stR2(res.openTotal)]);
-  XLSX.utils.book_append_sheet(wb,sheet(s,[48,12,12,18,14,14,14,14,22]),'Summary');
+  XLSX.utils.book_append_sheet(wb,sheet(s,[48,12,12,18,18,16,14,14,14,14,22]),'Summary');
   const used=new Set(['Summary']);
   res.rows.forEach(r=>{ let nm=(r.b.type==='jv'?'JV ':'')+r.b.label.replace(/[\\\/\?\*\[\]:]/g,' ').substring(0,26); let n=nm,i=2; while(used.has(n)) n=nm.substring(0,24)+'~'+(i++); used.add(n);
     const a=[[r.b.label+' — '+stD(r.b.date)],['Total',stR2(r.total),'To close',r.target,'Counted',stR2(r.counted),'Interest',stR2(r.interest),'Due',r.due==null?r.canFund:r.due],[],['Date','Voucher','Cost centre','Narration','Role','Amount counted','Interest','Fetched from']];
