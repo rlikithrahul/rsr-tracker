@@ -53,29 +53,37 @@ function stBlocksOf(cid, cfg, lines){
     }
     const settled=sets.reduce((s,x)=>s+(Number(x.amount)||0),0), left=(Number(p.jvAmount)||0)-settled;
     if((Number(p.jvAmount)||0)>0 && p.jvDate && left>1){
-      const id='j'+p.id; out.push({id, type:'jv', pid:p.id, label:'JV · '+(p.name||'')+(sets.length?' (balance)':''), date:cfg.date[id]||'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):left, guids:new Set(), virt:0});
+      const id='j'+p.id; out.push({id, type:'jv', pid:p.id, label:'JV · '+(p.name||'')+(sets.length?' (balance)':''), date:cfg.date[id]||p.jvDate||'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):left, guids:new Set(), virt:0});
+    }
+    const stt=(typeof projStatus==='function')?projStatus(p):(p.status||'active'), ag=(typeof agAmt==='function')?(Number(agAmt(p))||0):0;
+    if((stt==='active'||stt==='onhold') && ag>0){
+      const rem=ag-Math.max(Number(p.jvAmount)||0, settled);   // what is still to be billed on the agreement
+      if(rem>1){ const id='r'+p.id; out.push({id, type:'run', pid:p.id, label:'Running · '+(p.name||''), date:'', ccs:names, amt:cfg.jvAmt[id]!=null?Number(cfg.jvAmt[id]):rem, guids:new Set(), virt:0}); }
     }
   }
   (cfg.manual||[]).forEach(m=>out.push({id:m.id, type:m.type, pid:null, label:m.label, date:cfg.date[m.id]||m.date||'', ccs:m.ccs||[], amt:cfg.jvAmt[m.id]!=null?Number(cfg.jvAmt[m.id]):Number(m.amt)||0, guids:new Set(m.g?[m.g]:[]), virt:0, manual:true}));
-  out.sort((a,b)=>(a.type==='jv')-(b.type==='jv') || (a.date||'9999').localeCompare(b.date||'9999') || a.label.localeCompare(b.label));
+  const _o={bill:0,jv:1,run:2}; out.sort((a,b)=>(_o[a.type]||0)-(_o[b.type]||0) || (a.date||'9999').localeCompare(b.date||'9999') || a.label.localeCompare(b.label));
   return out;
 }
 
 function stIsTender(cfg,cc){ if(!cc) return false; if(cfg.tenderCC&&cfg.tenderCC[cc]!=null) return !!cfg.tenderCC[cc]; return /tender|\bemd\b|\bfsd\b/i.test(cc); }
 
 // ───────── THE RULE (as his father wants it) ─────────
-// For every bill received, in date order:  target = bill amount × the bill's %  (70% to start with).
-// Walk his payments and the other receipts (refunds, transfers, cheques) in DATE ORDER from the oldest one not used yet; payments add to the
-// running net, receipts reduce it, until payments − receipts = target (the last payment is split). A bigger % fetches more, going forward
-// into the next bills' payments if needed. Interest (compounded each 31 March) runs from each payment's date to the bill's date; a receipt
-// earns negative interest the same way. Nothing from the bill's own period is clubbed into the bill amount.
-//   due to contractor = bill amount − (payments − receipts counted) − interest
-// Tender cost centres are left out unless cfg.incTender. Pending JVs take only the payments of their own cost centres.
+// Three sections, handled in this order: 1) bills received (by bill date)  2) JVs / check pending (by JV date)  3) running works (remaining agreement).
+// For every block: target = its amount × the block's %  (70% to start, changeable per block).
+// His payments and the other receipts (refunds, transfers, cheques) are walked in DATE ORDER from the oldest one not used yet; payments add to the
+// net, receipts reduce it, until payments − receipts is within a few rupees of the target (whole transactions only, never split). A bigger % takes
+// more; what an earlier block leaves moves up to the next one. Interest (compounded each 31 March) runs from each payment's date to the bill date
+// (bills received) or to today (JVs, running works: a rough figure); receipts earn negative interest the same way.
+//   due = block amount − (payments − receipts counted) − interest
+// By cost centre only if "own cost centre first" is ticked. Tender cost centres are left out unless cfg.incTender; when included they are taken by date too.
 // What you move by hand (cfg.alloc / cfg.recv) is pinned and never touched; cfg.hold keeps a payment out of the walk.
+function stToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function stCompute(lines, blocks, cfg){
   const byId=new Map(blocks.map(b=>[b.id,b])); const billG=new Set(); blocks.forEach(b=>b.guids.forEach(g=>billG.add(g)));
   const byDate=(a,b)=>a.d.localeCompare(b.d)||a.k.localeCompare(b.k);
-  const bills=blocks.filter(b=>b.type==='bill'&&b.date).sort((x,y)=>x.date.localeCompare(y.date)||x.label.localeCompare(y.label)), jvs=blocks.filter(b=>b.type==='jv');
+  const _o={bill:0,jv:1,run:2}, asOn=cfg.asOn||stToday(), tol=(cfg.tol!=null&&isFinite(cfg.tol))?Number(cfg.tol):50;
+  const seq=blocks.filter(b=>b.type!=='bill'||b.date).sort((x,y)=>(_o[x.type]-_o[y.type])||(x.date||'9999').localeCompare(y.date||'9999')||x.label.localeCompare(y.label));
   const pays=lines.filter(l=>l.dir==='dr').sort(byDate), recs=lines.filter(l=>l.dir==='cr'&&!billG.has(l.g)).sort(byDate);
   const billAmt=new Map(blocks.map(b=>[b.id,b.virt||0]));
   lines.forEach(l=>{ if(l.dir==='cr'&&billG.has(l.g)){ const b=blocks.find(x=>x.guids.has(l.g)); if(b) billAmt.set(b.id,(billAmt.get(b.id)||0)+l.a); } });
@@ -87,28 +95,38 @@ function stCompute(lines, blocks, cfg){
   pays.forEach(l=>{ let used=0; (cfg.alloc[l.k]||[]).forEach(e=>{ if(!byId.has(e.b)) return; const a=Math.min(e.a,l.a-used); if(a>0.004){ used+=a; pcs.push({k:l.k,l,a,sign:1,b:e.b,pin:true}); } }); payRem.set(l.k,stR2(l.a-used)); });
   recs.forEach(l=>{ const v=cfg.recv[l.k]; if(v&&byId.has(v)){ pcs.push({k:l.k,l,a:l.a,sign:-1,b:v,pin:true}); recUsed.add(l.k); } });
   const net=new Map(blocks.map(b=>[b.id,0])); pcs.forEach(p=>net.set(p.b,net.get(p.b)+p.sign*p.a));
-  const jvCC=new Set(); jvs.forEach(b=>(b.ccs||[]).forEach(c=>jvCC.add(c)));
   const canPay=l=>!(cfg.hold&&cfg.hold[l.k])&&tenderOK(l)&&payRem.get(l.k)>0.004;
   const canRec=l=>cfg.recv[l.k]!=='-'&&!recUsed.has(l.k)&&tenderOK(l);
-  const addP=(l,b,a)=>{ pcs.push({k:l.k,l,a,sign:1,b:b.id,pin:false}); payRem.set(l.k,stR2(payRem.get(l.k)-a)); net.set(b.id,net.get(b.id)+a); };
+  const addP=(l,b)=>{ const a=payRem.get(l.k); pcs.push({k:l.k,l,a,sign:1,b:b.id,pin:false}); payRem.set(l.k,0); net.set(b.id,net.get(b.id)+a); };
   const addR=(l,b)=>{ pcs.push({k:l.k,l,a:l.a,sign:-1,b:b.id,pin:false}); recUsed.add(l.k); net.set(b.id,net.get(b.id)-l.a); };
-  const ownPass=b=>{ const s=new Set(b.ccs||[]); if(!s.size) return; for(const l of pays){ const t=target(b)-net.get(b.id); if(t<=0.004) break; if(canPay(l)&&s.has(l.cc)) addP(l,b,Math.min(payRem.get(l.k),t)); } };
-  jvs.forEach(ownPass); if(cfg.ownCC) bills.forEach(ownPass);
-  bills.forEach(b=>{
-    const items=[...pays.filter(l=>canPay(l)&&!jvCC.has(l.cc)).map(l=>({l,s:1})),...recs.filter(canRec).map(l=>({l,s:-1}))].sort((x,y)=>byDate(x.l,y.l));
-    for(const it of items){ const t=target(b)-net.get(b.id); if(t<=0.004) break;
-      if(it.s===1){ if(canPay(it.l)) addP(it.l,b,Math.min(payRem.get(it.l.k),t)); } else if(canRec(it.l)) addR(it.l,b); } });
+  if(cfg.ownCC) seq.forEach(b=>{ const s=new Set(b.ccs||[]); if(!s.size) return; for(const l of pays){ const g=target(b)-net.get(b.id); if(Math.abs(g)<=tol) break; if(canPay(l)&&s.has(l.cc)&&payRem.get(l.k)<=g+tol) addP(l,b); } });
+  seq.forEach(b=>{
+    const items=[...pays.filter(canPay).map(l=>({l,s:1})),...recs.filter(canRec).map(l=>({l,s:-1}))].sort((x,y)=>byDate(x.l,y.l)); const taken=[];
+    for(const it of items){ const g=target(b)-net.get(b.id); if(Math.abs(g)<=tol||g<-tol) break;
+      if(it.s===1){ if(canPay(it.l)&&payRem.get(it.l.k)<=g+tol){ addP(it.l,b); taken.push(it); } }
+      else if(canRec(it.l)){ addR(it.l,b); taken.push(it); } }
+    while(taken.length&&taken[taken.length-1].s===-1){ const it=taken.pop(); const i=pcs.map(p=>p.k+'|'+p.b+'|'+p.sign).lastIndexOf(it.l.k+'|'+b.id+'|-1'); if(i>=0){ pcs.splice(i,1); recUsed.delete(it.l.k); net.set(b.id,net.get(b.id)+it.l.a); } }   // receipts after the last payment do not help
+    // fine-tune: the date walk cannot split a payment, so look for one payment, two payments, or a payment less a receipt that closes what is left (within the tolerance)
+    for(let it=0;it<4;it++){ const g=target(b)-net.get(b.id); if(Math.abs(g)<=tol) break;
+      const Pall=pays.filter(canPay), P=Pall.filter(l=>payRem.get(l.k)<=g+tol), R=recs.filter(canRec); let best=null, bg=Math.abs(g);
+      const consider=(its,d)=>{ const ng=Math.abs(g-d); if(ng<bg-0.004){ bg=ng; best=its; } };
+      P.forEach(p=>consider([{l:p,s:1}],payRem.get(p.k)));
+      for(let i=0;i<P.length;i++) for(let j=i+1;j<P.length;j++){ const d=payRem.get(P[i].k)+payRem.get(P[j].k); if(d<=g+tol) consider([{l:P[i],s:1},{l:P[j],s:1}],d); }
+      R.forEach(r=>Pall.forEach(p=>{ const d=payRem.get(p.k)-r.a; if(d>0&&d<=g+tol) consider([{l:r,s:-1},{l:p,s:1}],d); }));
+      if(!best||bg>tol) break; best.forEach(x=>x.s===1?addP(x.l,b):addR(x.l,b)); }
+  });
   const rows=blocks.map(b=>{
-    const mine=pcs.filter(p=>p.b===b.id).sort((x,y)=>byDate(x.l,y.l)); const bd=b.date;
+    const mine=pcs.filter(p=>p.b===b.id).sort((x,y)=>byDate(x.l,y.l)); const bd=(b.type==='bill')?b.date:asOn;
     mine.forEach(p=>{ p.int=(bd&&p.l.d<=bd)?stInterest(p.a,p.l.d,bd,cfg.rate,cfg.comp):0; });
     const pay=mine.filter(p=>p.sign>0).reduce((s,p)=>s+p.a,0), rec=mine.filter(p=>p.sign<0).reduce((s,p)=>s+p.a,0), ints=mine.reduce((s,p)=>s+p.sign*p.int,0);
     const amt=amtOf(b), tg=target(b), n=pay-rec;
-    return {b, bill:amt, pct:pct(b), target:tg, pay, rec, net:n, gap:stR2(tg-n), interest:stR2(ints), due:b.type==='bill'?stR2(amt-n-ints):null, canFund:b.type==='jv'?Math.max(0,stR2(tg-n)):null, pieces:mine};
+    return {b, bill:amt, pct:pct(b), target:tg, pay, rec, net:n, gap:stR2(tg-n), interest:stR2(ints), due:stR2(amt-n-ints), until:bd, pieces:mine};
   });
   const openPays=pays.filter(l=>payRem.get(l.k)>0.004).map(l=>({l,rem:payRem.get(l.k)}));
   const openRecs=recs.filter(l=>!recUsed.has(l.k));
+  const allCred=lines.filter(l=>l.dir==='cr').reduce((s,l)=>s+l.a,0);
   return {rows, openPays, openRecs, openPayTotal:openPays.reduce((s,x)=>s+x.rem,0), openRecTotal:openRecs.reduce((s,l)=>s+l.a,0),
-    allPaid:pays.reduce((s,l)=>s+l.a,0), allOther:recs.reduce((s,l)=>s+l.a,0), allBills:[...billAmt.values()].reduce((s,v)=>s+v,0)};
+    allPaid:pays.reduce((s,l)=>s+l.a,0), allOther:recs.reduce((s,l)=>s+l.a,0), allCred, allBills:allCred-recs.reduce((s,l)=>s+l.a,0), asOn};
 }
 
 // ───────── persistence ─────────
@@ -185,20 +203,20 @@ function stModel(){ const cid=SETL.cid, cfg=stC(cid); const blocks=stBlocksOf(ci
 function stDraw(){
   const cid=SETL.cid, body=document.getElementById('st-body-'+cid); if(!body) return; _stIds();
   const {cfg,blocks,res}=stModel(); const known=new Set(cfg.known||[]);
-  const blkOpts=(sel)=>`<option value="">Open (not counted)</option>`+blocks.map(b=>`<option value="${stE(b.id)}" ${sel===b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('');
+  const blkOpts=(sel)=>`<option value="">Open (not counted)</option>`+blocks.map(b=>`<option value="${stE(b.id)}" ${sel===b.id?'selected':''}>${b.type==='jv'?'JV':b.type==='run'?'Running':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('');
   const pctPct=x=>Math.round(x*1000)/10;
-  const bills=res.rows.filter(r=>r.b.type==='bill'), jvs=res.rows.filter(r=>r.b.type==='jv');
+  const bills=res.rows.filter(r=>r.b.type==='bill'), jvs=res.rows.filter(r=>r.b.type==='jv'), runs=res.rows.filter(r=>r.b.type==='run');
   const sum=(rows,f)=>rows.reduce((s,r)=>s+(f(r)||0),0);
-  const tr=r=>{ const b=r.b, jv=b.type==='jv'; const open=!!SETL.openBlk[b.id];
+  const tr=r=>{ const b=r.b, jv=b.type!=='bill'; const open=!!SETL.openBlk[b.id];
     const amtCell=jv?`<input type="number" value="${stE(b.amt)}" onchange="stSetAmt('${b.id}',this.value)" style="width:110px;font-size:12px;text-align:right">`:stN(r.bill);
     return `<tr style="${open?'background:var(--surface2)':''}"><td><a href="#" onclick="event.preventDefault();stOpenBlk('${b.id}')" style="font-weight:700">${open?'▾':'▸'} ${stE(b.label.substring(0,46))}</a>${b.date?'':' <span style="color:var(--amber);font-size:11px">· no date</span>'}</td>
-      <td><input type="date" value="${stE(b.date)}" onchange="stSetDate('${b.id}',this.value)" style="width:128px;font-size:12px"></td>
+      <td>${b.type==='run'?'<span style="color:var(--text3);font-size:11px">till '+stD(res.asOn)+'</span>':`<input type="date" value="${stE(b.date)}" onchange="stSetDate('${b.id}',this.value)" style="width:128px;font-size:12px">`}</td>
       <td style="text-align:right">${amtCell}</td>
       <td style="text-align:center"><input type="number" step="0.5" min="0" max="100" value="${pctPct(r.pct)}" onchange="stSetPct('${b.id}',this.value)" style="width:58px;font-size:12px;text-align:right">%</td>
       <td style="text-align:right">${stN(r.target)}</td><td style="text-align:right">${stN(r.pay)}</td><td style="text-align:right">${stN(r.rec)}</td>
       <td style="text-align:right;font-weight:600">${stN(r.net)}</td><td style="text-align:right;${r.gap>0.5?'color:var(--amber)':''}" title="${r.gap>0.5?'Short: not enough eligible payments to reach the target':''}">${stN(r.gap)}</td>
       <td style="text-align:right">${stN(r.interest)}</td>
-      <td style="text-align:right;font-weight:700;color:${jv?'var(--text)':(r.due>0.5?'var(--green)':'var(--text2)')}">${jv?stN(r.canFund)+' <span style="font-weight:400;font-size:10px">can fund</span>':stN(r.due)}</td></tr>
+      <td style="text-align:right;font-weight:700;color:${r.due>0.5?'var(--green)':'var(--text2)'}">${stN(r.due)}</td></tr>
       ${open?`<tr><td colspan="11" style="padding:0">${stLinesHtml(r,blkOpts)}</td></tr>`:''}`; };
   const linkedG=new Set(); blocks.forEach(b=>b.guids.forEach(g=>linkedG.add(g)));
   const cand=SETL.lines.filter(l=>l.dir==='cr'&&!linkedG.has(l.g)&&l.a>=100000&&/bill|gen\s*code|gvmc|cheque|check recei|part pay/i.test(l.nar||'')&&!cfg.notBill[l.k]);
@@ -209,6 +227,8 @@ function stDraw(){
     <div style="display:flex;gap:10px 14px;flex-wrap:wrap;align-items:end;margin-bottom:10px;font-size:12px">
       <label>Interest % a year<br><input type="number" step="0.01" value="${stR2(cfg.rate*100)}" onchange="stSetting('rate',this.value/100)" style="width:70px"></label>
       <label>Payments to fetch for a bill, % of the bill<br><input type="number" step="0.5" value="${pctPct(cfg.pct)}" onchange="stSetting('pct',this.value/100)" style="width:70px"> <span style="color:var(--text3)">(any bill can have its own % below)</span></label>
+      <label>Interest till (JVs & running works)<br><input type="date" value="${stE(res.asOn)}" onchange="stSetting('asOn',this.value)" style="width:130px"></label>
+      <label title="A block is fetched until payments − receipts is within this many rupees of its target. Transactions are never split.">Tolerance ₹<br><input type="number" step="1" min="0" value="${stE(cfg.tol!=null?cfg.tol:50)}" onchange="stSetting('tol',Number(this.value))" style="width:64px"></label>
       <label style="display:flex;gap:4px;align-items:end"><input type="checkbox" ${cfg.comp?'checked':''} onchange="stSetting('comp',this.checked)"> add interest to principal every 31 March</label>
       <label style="display:flex;gap:4px;align-items:end" title="Tender cost centres (EMD / FSD / tender money) are left out unless you tick this"><input type="checkbox" ${cfg.incTender?'checked':''} onchange="stSetting('incTender',this.checked)"> include tender cost centres</label>
       <label style="display:flex;gap:4px;align-items:end" title="Before the date walk, each bill first takes the payments of its own cost centre"><input type="checkbox" ${cfg.ownCC?'checked':''} onchange="stSetting('ownCC',this.checked)"> own cost centre first</label>
@@ -221,25 +241,30 @@ function stDraw(){
     <details style="margin-bottom:8px;font-size:12px"><summary style="cursor:pointer;font-weight:600">Which cost centres are tender cost centres? (${ccs.filter(c=>stIsTender(cfg,c)).length} marked)</summary>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2px 12px;margin-top:6px">${ccs.map(c=>`<label style="display:flex;gap:6px"><input type="checkbox" ${stIsTender(cfg,c)?'checked':''} onchange="stTenderCC(this.getAttribute('data-c'),this.checked)" data-c="${stE(c)}"> ${stE(c)}</label>`).join('')||'<span style="color:var(--text3)">No cost centres in his ledger.</span>'}</div></details>
     ${cand.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px"><b>These receipts look like bills received, but no project is linked to them:</b>${cand.map(l=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid var(--border)"><span style="min-width:90px">${stD(l.d)}</span><span style="min-width:110px;text-align:right"><b>${stN(l.a)}</b></span><span style="flex:1;min-width:200px">${stE(l.t)} ${stE(l.n)} · ${stE(l.cc||'no cost centre')} · ${stE((l.nar||'').substring(0,90))}</span><button class="btn btn-sm btn-primary" onclick="stRecToBill('${stE(l.k)}')">Make a bill</button><button class="btn btn-sm" onclick="stNotBill('${stE(l.k)}')">Not a bill</button></div>`).join('')}</div>`:''}
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">For each bill, in date order: his payments and the other receipts are taken oldest first until <b>payments − receipts = the bill's %</b> of the bill amount (going forward into later payments if needed); interest runs from each payment to the bill date. The bill amount is never topped up with other receipts. Estimated, because his old payments have no cost centres. Read-only on Tally; nothing here changes cost centres.</div>
-    <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Bill date</th><th style="text-align:right">Bill / JV amount</th><th>Fetch %</th><th style="text-align:right">Target (amount × %)</th><th style="text-align:right">Payments fetched</th><th style="text-align:right">Receipts fetched</th><th style="text-align:right">Net counted</th><th style="text-align:right">Gap to target</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor</th></tr></thead>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Bills received first (by bill date), then JVs / check pending, then running works: each takes his payments and the other receipts <b>in date order</b> until <b>payments − receipts ≈ its %</b> of the amount (within the tolerance, whole transactions only). What one block leaves moves up to the next. Interest runs from each payment to the bill date (JVs and running works: to the date above). Estimated, because his old payments have no cost centres. Read-only on Tally; nothing here changes cost centres.</div>
+    <div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Block</th><th>Date</th><th style="text-align:right">Bill / JV / left on agreement</th><th>Fetch %</th><th style="text-align:right">Target (amount × %)</th><th style="text-align:right">Payments fetched</th><th style="text-align:right">Receipts fetched</th><th style="text-align:right">Net counted</th><th style="text-align:right">Gap to target</th><th style="text-align:right">Interest</th><th style="text-align:right">Due to contractor (amount − net − interest)</th></tr></thead>
     <tbody><tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 1 — Bills already received</td></tr>${bills.map(tr).join('')}${bills.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Bills received</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.bill))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.target))}</td><td style="text-align:right">${stN(sum(bills,r=>r.pay))}</td><td style="text-align:right">${stN(sum(bills,r=>r.rec))}</td><td style="text-align:right">${stN(sum(bills,r=>r.net))}</td><td></td><td style="text-align:right">${stN(sum(bills,r=>r.interest))}</td><td style="text-align:right">${stN(sum(bills,r=>r.due))}</td></tr>`:'<tr><td colspan="11" style="color:var(--text3)">No project of this contractor has a recorded settlement yet. Use ＋ Add block, or "Make a bill" on a receipt.</td></tr>'}
-    <tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — Pending JVs (check pending) · only the payments of their own cost centres</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Pending JVs</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.b.amt))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.pay))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.rec))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.net))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.canFund))} can fund</td></tr>`:''}</tbody></table></div>
+    <tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 2 — JVs / check pending · JV received from the government, money not yet received · interest till ${stD(res.asOn)}</td></tr>${jvs.map(tr).join('')}${jvs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>JVs / check pending</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.bill))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.target))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.pay))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.rec))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.net))}</td><td></td><td style="text-align:right">${stN(sum(jvs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(jvs,r=>r.due))}</td></tr>`:'<tr><td colspan="11" style="color:var(--text3)">No pending JV.</td></tr>'}
+    <tr><td colspan="11" style="background:var(--navy);color:#fff;font-weight:700">PART 3 — Running works · remaining agreement amount · interest till ${stD(res.asOn)}</td></tr>${runs.map(tr).join('')}${runs.length?`<tr style="font-weight:700;background:var(--surface2)"><td>Running works</td><td></td><td style="text-align:right">${stN(sum(runs,r=>r.bill))}</td><td></td><td style="text-align:right">${stN(sum(runs,r=>r.target))}</td><td style="text-align:right">${stN(sum(runs,r=>r.pay))}</td><td style="text-align:right">${stN(sum(runs,r=>r.rec))}</td><td style="text-align:right">${stN(sum(runs,r=>r.net))}</td><td></td><td style="text-align:right">${stN(sum(runs,r=>r.interest))}</td><td style="text-align:right">${stN(sum(runs,r=>r.due))}</td></tr>`:'<tr><td colspan="11" style="color:var(--text3)">No running work with agreement amount left.</td></tr>'}</tbody></table></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;margin:12px 0;font-size:12px">
-      <div class="card" style="padding:10px"><b>Position</b><br>All payments to / for him: <b>${stN(res.allPaid)}</b><br>Bills received: <b>${stN(res.allBills)}</b> · other receipts: <b>${stN(res.allOther)}</b><br>Counted in blocks (payments − receipts): <b>${stN(counted)}</b><br>Still open: payments <b>${stN(res.openPayTotal)}</b> · receipts <b>${stN(res.openRecTotal)}</b>
+      <div class="card" style="padding:10px"><b>Position</b><br>All payments to / for him: <b>${stN(res.allPaid)}</b><br>Bills received: <b>${stN(res.allBills)}</b> · other receipts: <b>${stN(res.allOther)}</b><br>Fetched into blocks (payments − receipts): <b>${stN(counted)}</b><br>Still open: payments <b>${stN(res.openPayTotal)}</b> · receipts <b>${stN(res.openRecTotal)}</b>
         <br><span style="color:${Math.abs(counted+res.openPayTotal-res.openRecTotal-(res.allPaid-res.allOther))<0.5?'var(--green)':'var(--red)'}">Check: counted + open payments − open receipts − (all payments − other receipts) = ${stN(counted+res.openPayTotal-res.openRecTotal-(res.allPaid-res.allOther))}</span></div>
-      <div class="card" style="padding:10px"><b>We owe him on bills received</b><br><span style="font-size:18px;font-weight:800">${stN(sum(bills,r=>r.due))}</span><br>after the fetched payments, receipts and interest<br><span style="color:var(--text3)">Can still fund on pending JVs: <b>${stN(sum(jvs,r=>r.canFund))}</b></span></div></div>
+      <div class="card" style="padding:10px"><b>Closing position</b><br>Tally closing (payments − all receipts): <b>${stN(res.allPaid-res.allCred)}</b> ${res.allPaid-res.allCred>=0?'owed by him':'owed to him'}
+        <br>Due to contractor on bills received: <b>${stN(sum(bills,r=>r.due))}</b> <span style="color:var(--text3)">(interest ${stN(sum(bills,r=>r.interest))} posted)</span>
+        <br>JVs / check pending: <b>${stN(sum(jvs,r=>r.due))}</b> <span style="color:var(--text3)">(interest ${stN(sum(jvs,r=>r.interest))})</span>
+        <br>Running works left: <b>${stN(sum(runs,r=>r.due))}</b> <span style="color:var(--text3)">(interest ${stN(sum(runs,r=>r.interest))})</span>
+        <br><span style="color:var(--text3)">Not fetched by any block: payments ${stN(res.openPayTotal)} − receipts ${stN(res.openRecTotal)}</span></div></div>
     ${newOpen.length||newRec.length?`<div class="card" style="padding:10px;margin-bottom:10px;border-left:4px solid var(--amber);font-size:12px">🆕 ${newOpen.length} new open payment${newOpen.length===1?'':'s'} and ${newRec.length} new open receipt${newRec.length===1?'':'s'} since you last marked things seen (they are already placed by date). <button class="btn btn-sm" onclick="stSeen()">Mark all seen</button></div>`:''}
     <details ${SETL.shown.open?'open':''} ontoggle="SETL.shown.open=this.open"><summary style="cursor:pointer;font-weight:700">Open payments — not needed by any bill yet (${res.openPays.length} · ${stN(res.openPayTotal)})</summary>
       <div style="overflow:auto;max-height:420px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Open amount</th><th>Count it in</th></tr></thead><tbody>${res.openPays.slice(0,600).map(x=>`<tr><td>${stD(x.l.d)}${known.has(x.l.k)?'':' 🆕'}</td><td>${stE(x.l.t)} ${stE(x.l.n)}</td><td>${stE(x.l.cc||'—')}${(!cfg.incTender&&stIsTender(cfg,x.l.cc))?' <span style="font-size:10px;color:var(--amber)">tender · left out</span>':''}${cfg.hold[x.l.k]?' <span style="font-size:10px;color:var(--text3)">kept out by you</span>':''}</td><td style="max-width:260px">${stE(x.l.nar)}</td><td style="text-align:right">${stN(x.rem)}</td><td><select onchange="stMoveOpen('${stE(x.l.k)}',this.value);this.value=''" style="font-size:11px;max-width:180px">${blkOpts('')}</select></td></tr>`).join('')}</tbody></table></div></details>
     <details ${SETL.shown.rec?'open':''} ontoggle="SETL.shown.rec=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">Other receipts not used (${res.openRecs.length} · ${stN(res.openRecTotal)})</summary>
       <div style="font-size:11px;color:var(--text3);margin:4px 0">Refunds, transfers, cheques that are not bills. A bill uses them (oldest first) when it needs more room for payments; the rest wait here. Choose a block to use one for that bill, or "Not counted" to keep it out.</div>
-      <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Use for</th></tr></thead><tbody>${res.openRecs.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}${(!cfg.incTender&&stIsTender(cfg,l.cc))?' <span style="font-size:10px;color:var(--amber)">tender · left out</span>':''}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="">Automatic (by date)</option><option value="-" ${cfg.recv[l.k]==='-'?'selected':''}>Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}">${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>`;
+      <div style="overflow:auto;max-height:360px"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th style="text-align:right">Amount</th><th>Use for</th></tr></thead><tbody>${res.openRecs.map(l=>`<tr><td>${stD(l.d)}${known.has(l.k)?'':' 🆕'}</td><td>${stE(l.t)} ${stE(l.n)}</td><td>${stE(l.cc||'—')}${(!cfg.incTender&&stIsTender(cfg,l.cc))?' <span style="font-size:10px;color:var(--amber)">tender · left out</span>':''}</td><td style="max-width:260px">${stE(l.nar)}</td><td style="text-align:right">${stN(l.a)}</td><td><select onchange="stRecv('${stE(l.k)}',this.value)" style="font-size:11px;max-width:180px"><option value="">Automatic (by date)</option><option value="-" ${cfg.recv[l.k]==='-'?'selected':''}>Not counted</option>${blocks.map(b=>`<option value="${stE(b.id)}">${b.type==='jv'?'JV':b.type==='run'?'Running':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function stLinesHtml(r,blkOpts){
   const rows=r.pieces.map(p=>`<tr style="${p.sign<0?'background:#eef6ee':''}"><td>${stD(p.l.d)}</td><td>${stE(p.l.t)} ${stE(p.l.n)}</td><td>${stE(p.l.cc||'—')}</td><td style="max-width:240px">${stE(p.l.nar)}${p.pin?' <span style="background:var(--navy);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">moved by you</span>':''}${(r.b.date&&p.l.d>r.b.date)?' <span style="background:var(--amber);color:#fff;border-radius:6px;padding:0 6px;font-size:10px">after the bill date · no interest</span>':''}</td>
     <td>${p.sign<0?'Receipt':'Payment'}</td><td style="text-align:right">${p.sign<0?'−':''}${stN(p.a)}</td><td style="text-align:right">${p.sign<0?'−':''}${stN(p.int)}</td>
-    <td>${p.sign<0?`<select onchange="stRecv('${stE(p.k)}',this.value)" style="font-size:11px;max-width:170px"><option value="">Automatic (by date)</option><option value="-">Not counted</option>${(SETL._blocks||[]).map(b=>`<option value="${stE(b.id)}" ${b.id===r.b.id?'selected':''}>${b.type==='jv'?'JV':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select>`
+    <td>${p.sign<0?`<select onchange="stRecv('${stE(p.k)}',this.value)" style="font-size:11px;max-width:170px"><option value="">Automatic (by date)</option><option value="-">Not counted</option>${(SETL._blocks||[]).map(b=>`<option value="${stE(b.id)}" ${b.id===r.b.id?'selected':''}>${b.type==='jv'?'JV':b.type==='run'?'Running':'Bill'} · ${stE(b.label.substring(0,40))}</option>`).join('')}</select>`
       :`<select onchange="stMovePiece('${stE(p.k)}','${stE(r.b.id)}',this.value,${p.pin?'true':'false'},${stR2(p.a)})" style="font-size:11px;max-width:170px">${blkOpts(r.b.id)}</select>`}</td></tr>`);
   return `<div style="overflow:auto;max-height:380px;padding:6px 10px"><table class="tbl" style="width:100%;font-size:11.5px"><thead><tr><th>Date</th><th>Voucher</th><th>Cost centre</th><th>Narration</th><th>Role</th><th style="text-align:right">Amount</th><th style="text-align:right">Interest</th><th>Move to</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="8" style="color:var(--text3)">Nothing fetched for this block.</td></tr>'}</tbody></table></div>`;
 }
@@ -281,13 +306,13 @@ async function stAddBlock(){
 function stExcel(){
   const {cfg,blocks,res}=stModel(); const c=(D.contractors||[]).find(x=>x.id===SETL.cid)||{name:''}; const wb=XLSX.utils.book_new();
   const sheet=(aoa,w)=>{ const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=w.map(x=>({wch:x})); return ws; };
-  const s=[[c.name+' — settlement by bills (interest '+(cfg.rate*100)+'%'+(cfg.comp?', compounded each 31 March':', simple')+(cfg.incTender?', tender cost centres included':', tender cost centres left out')+')'],[],['Block','Type','Bill date','Bill / JV amount','Fetch %','Target','Payments fetched','Receipts fetched','Net counted','Gap','Interest','Due to contractor / can fund']];
-  res.rows.forEach(r=>s.push([r.b.label,r.b.type==='jv'?'Pending JV':'Bill',r.b.date,stR2(r.bill),r.pct*100,r.target,stR2(r.pay),stR2(r.rec),stR2(r.net),r.gap,stR2(r.interest),r.b.type==='jv'?r.canFund:r.due]));
+  const s=[[c.name+' — settlement by bills (interest '+(cfg.rate*100)+'%'+(cfg.comp?', compounded each 31 March':', simple')+(cfg.incTender?', tender cost centres included':', tender cost centres left out')+')'],[],['Block','Type','Bill date','Bill / JV amount','Fetch %','Target','Payments fetched','Receipts fetched','Net counted','Gap','Interest','Due to contractor']];
+  res.rows.forEach(r=>s.push([r.b.label,r.b.type==='bill'?'Bill received':r.b.type==='jv'?'JV / check pending':'Running work',r.b.date||('till '+res.asOn),stR2(r.bill),r.pct*100,r.target,stR2(r.pay),stR2(r.rec),stR2(r.net),r.gap,stR2(r.interest),r.due]));
   s.push([],['Open payments',,,,,,,,stR2(res.openPayTotal)],['Other receipts not used',,,,,,,,stR2(res.openRecTotal)]);
   XLSX.utils.book_append_sheet(wb,sheet(s,[48,12,12,18,9,14,16,16,16,14,14,22]),'Summary');
   const used=new Set(['Summary']);
-  res.rows.forEach(r=>{ let nm=(r.b.type==='jv'?'JV ':'')+r.b.label.replace(/[\\\/\?\*\[\]:]/g,' ').substring(0,26); let n=nm,i=2; while(used.has(n)) n=nm.substring(0,24)+'~'+(i++); used.add(n);
-    const a=[[r.b.label+' — '+stD(r.b.date)],['Bill amount',stR2(r.bill),'Fetch %',r.pct*100,'Target',r.target,'Net counted',stR2(r.net),'Interest',stR2(r.interest),'Due',r.due==null?r.canFund:r.due],[],['Date','Voucher','Cost centre','Narration','Role','Amount','Interest','Note']];
+  res.rows.forEach(r=>{ let nm=(r.b.type==='jv'?'JV ':r.b.type==='run'?'Run ':'')+r.b.label.replace(/[\\\/\?\*\[\]:]/g,' ').substring(0,26); let n=nm,i=2; while(used.has(n)) n=nm.substring(0,24)+'~'+(i++); used.add(n);
+    const a=[[r.b.label+' — '+stD(r.b.date)],['Bill amount',stR2(r.bill),'Fetch %',r.pct*100,'Target',r.target,'Net counted',stR2(r.net),'Interest',stR2(r.interest),'Due',r.due],[],['Date','Voucher','Cost centre','Narration','Role','Amount','Interest','Note']];
     r.pieces.forEach(p=>a.push([p.l.d,p.l.t+' '+p.l.n,p.l.cc,p.l.nar,p.sign<0?'Receipt':'Payment',p.sign*stR2(p.a),p.sign*stR2(p.int),(p.pin?'moved by you ':'')+((r.b.date&&p.l.d>r.b.date)?'after bill date, no interest':'')]));
     XLSX.utils.book_append_sheet(wb,sheet(a,[12,20,34,50,10,16,14,28]),n); });
   const o=[['Date','Voucher','Cost centre','Narration','Role','Open amount']]; res.openPays.forEach(x=>o.push([x.l.d,x.l.t+' '+x.l.n,x.l.cc,x.l.nar,'Payment',stR2(x.rem)])); res.openRecs.forEach(l=>o.push([l.d,l.t+' '+l.n,l.cc,l.nar,'Receipt',-stR2(l.a)]));
